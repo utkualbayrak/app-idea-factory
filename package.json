@@ -1,0 +1,21 @@
+{
+  "name": "app-idea-factory",
+  "private": true,
+  "packageManager": "pnpm@10.27.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api dev",
+    "build": "pnpm --filter web build && pnpm --filter api build",
+    "typecheck": "pnpm --filter web typecheck && pnpm --filter api typecheck",
+    "lint": "pnpm --filter web lint && pnpm --filter api lint"
+  }
+}

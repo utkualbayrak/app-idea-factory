@@ -1,0 +1,218 @@
+# Uygulama Fikri Fabrikası
+
+Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan erişilebilen bir React arayüzünde listeleyen ve seçilen fikir için Claude Code aracılığıyla ayrı bir GitHub reposunda uygulama iskeleti oluşturan kişisel bir otomasyon platformu.
+
+## Amaç
+
+1. Her sabah gerçek trend verilerine dayanan 10 özgün mobil uygulama fikri üretmek.
+2. Fikirleri telefondan rahatça gözden geçirmek, her birine kendi puanını (1-5 yıldız) ve notunu vermek, sıralamak ve filtrelemek.
+3. Yalnızca kullanıcının seçtiği fikirler için platform ve kapsam seçip "Geliştir" görevi atamak.
+4. "Geliştir" denince Claude Code'un otomatik olarak başlayıp o fikrin iskeletini yeni bir GitHub reposunda oluşturması.
+5. Süreci Slack (bildirim) ve GitHub Issues + Projects (görev takibi) ile entegre etmek.
+
+## Kesinleşen kararlar
+
+| Konu | Karar |
+|---|---|
+| Hosting | Cloudflare, yalnızca ücretsiz plan. Ücretli plan gerektiren hiçbir servis kullanılmayacak. |
+| Frontend | React (mobil öncelikli, PWA), Cloudflare Pages |
+| Backend | Node.js, Express; Cloudflare Workers üzerinde (`nodejs_compat` + `httpServerHandler` ile) |
+| Veritabanı | Cloudflare D1 (SQLite tabanlı, ücretsiz planda) |
+| Repo yapısı | Tek repo (monorepo): frontend, backend, workflow'lar aynı yerde |
+| GitHub | Kişisel GitHub hesabı |
+| Claude erişimi | Claude Pro aboneliği. Claude Code GitHub Actions'ta `claude setup-token` ile üretilen OAuth token ile çalışır. Ek API kredisi kullanılmayacak. |
+| İskelet çıktısı | Her fikre ayrı GitHub reposu (kişisel hesapta) |
+| Ana repo görünürlüğü | Herkese açık (public). GitHub Actions dakikaları sınırsız; kod ve workflow logları herkese görünür. |
+| İskelet repoları | Özel (private) |
+| Dil | TypeScript (frontend, API ve betikler) |
+| Arayüz koruması | Cloudflare Access (Zero Trust ücretsiz plan), yalnızca sahibin e-postası |
+| Fikir üretim saati | Her gün 06:00 Türkiye saati (03:00 UTC, cron `0 3 * * *`) |
+| Geliştirme kapsamı | Üretilen fikirlerin hiçbiri otomatik geliştirilmez. Repo ve iskelet yalnızca kullanıcının "Geliştir" dediği fikirler için oluşturulur. |
+| Geliştir tetikleme | Görev formu gönderilince iskelet üretimi onay beklemeden otomatik başlar. Claude Code yalnızca iskeleti kurar; iskeletten sonra geliştirmeye kendiliğinden devam etmez. |
+| Kullanıcı puanı | Her fikre 1-5 yıldız kullanıcı puanı ve isteğe bağlı kısa not. Claude'un ürettiği puanlardan ayrı tutulur. |
+| Puanların etkisi | Kullanıcı puanları ve notları fikir üretimini etkilemez. Amaç her gün geniş bir yelpazede fikir keşfetmek; üretim talimatına puan, not veya kullanıcı tercihi bilgisi gönderilmez. Geçmiş fikirler yalnızca tekrar kontrolü için (fikir adları) kullanılır. |
+| Bildirim | Slack ücretsiz plan, incoming webhook |
+| Görev takibi | GitHub Issues + GitHub Projects (kişisel hesapta tek pano) |
+| Bütçe limiti | Uygulama içinde bütçe limiti özelliği yapılmayacak |
+| Fikir dili | Açıklamalar Türkçe; fikrin adı İngilizce, uygulama adı gibi kısa ve akılda kalıcı (örn. "MealMate") |
+
+## Bu kararların mimariye etkisi
+
+- **Ek maliyet yok:** Cloudflare ücretsiz, GitHub Actions ücretsiz kota içinde, Claude kullanımı Pro aboneliğinden.
+- **Claude çağrıları Worker'dan yapılmaz.** Pro aboneliği doğrudan API çağrısı için kullanılamaz; API ayrı ve ücretli kredi ister. Bu yüzden Claude'un gerektiği her iş (fikir üretimi dahil) GitHub Actions içinde Claude Code ile çalışır.
+- **Zamanlayıcı GitHub Actions'ta:** Günlük fikir üretimi `schedule` (cron) tetikleyicili bir workflow'dur. Cloudflare Worker yalnızca arayüzün API'si ve veritabanı erişimi için kullanılır.
+- **Pro kullanım limitleri:** Fikir üretimi ve iskelet üretimi Pro aboneliğinin kullanım limitlerinden düşer. Aynı gün yoğun iskelet üretimi limite takılabilir; görev kuyruğu buna göre tasarlanmalı (hata durumunda "tekrar dene").
+- **Yeni repo oluşturma:** Workflow'un varsayılan `GITHUB_TOKEN`'ı başka repo oluşturamaz; repo oluşturma ve push yetkisi olan bir fine-grained Personal Access Token gerekir.
+
+## Mimari
+
+```mermaid
+flowchart TD
+    SCH[GitHub Actions: günlük cron] --> GEN[Claude Code: trend analizi + 10 fikir + puanlama]
+    GEN --> API[Cloudflare Worker: Express API]
+    UI[React arayüzü - Cloudflare Pages] <--> API
+    API <--> DB[(Cloudflare D1)]
+    API -->|workflow_dispatch| BLD[GitHub Actions: Claude Code iskelet]
+    BLD --> REPO[Yeni GitHub reposu]
+    BLD --> API
+    BLD --> ISS[Issue + Projects panosu]
+    API --> SL[Slack bildirimi]
+```
+
+### Akış 1: Günlük fikir üretimi (otomatik)
+
+1. GitHub Actions cron her sabah 06:00 Türkiye saatinde (`0 3 * * *`, UTC) tetiklenir.
+   - GitHub zamanlanmış workflow'ları yoğun saatlerde birkaç dakikadan bir saate kadar gecikebilir; fikirlerin kalkış saatinde hazır olması için 06:00 yeterli pay bırakır.
+   - Açık repolarda uzun süre (60 gün) hiç commit olmazsa GitHub zamanlanmış workflow'ları otomatik devre dışı bırakır. Önlem: günlük workflow'un sonunda küçük bir "keepalive" adımı veya periyodik kontrol.
+   - Workflow `workflow_dispatch` ile elle de tetiklenebilir olmalı (test ve kaçan günler için).
+2. Workflow, Worker API'sinden son N günün fikir adlarını çeker (tekrarı önlemek için).
+3. Workflow trend verilerini toplar (Reddit, App Store / Google Play, Product Hunt) ve bir dosyaya yazar. Bu adım basit bir Node.js betiğidir.
+4. Claude Code, trend dosyası + geçmiş fikir listesiyle çalıştırılır; tanımlı JSON şemasında 10 fikir ve puanlarını üretir.
+5. Workflow JSON'u doğrular (şema kontrolü, tekrar kontrolü) ve Worker API'sine gönderir.
+6. Worker D1'e yazar, isteğe bağlı olarak Slack'e sabah özeti atar.
+
+### Akış 2: İskelet üretimi (manuel)
+
+1. Kullanıcı arayüzde fikri seçer, görev formunu doldurur.
+2. Worker görevi D1'e `queued` olarak kaydeder ve iskelet workflow'unu `workflow_dispatch` ile tetikler.
+3. Workflow yeni özel GitHub reposunu oluşturur, bu repoda fikir ve görev parametrelerini içeren bir issue açar, issue'yu Projects panosuna "In progress" olarak ekler.
+4. Workflow Claude Code'u fikir + görev parametreleriyle çalıştırır, sonucu yeni repoya iter, issue'ya özet yorum yazar, pano durumunu "Done" (hata varsa "Failed") yapar.
+5. Workflow sonucu (repo URL'si, issue URL'si, durum, hata) Worker API'sine bildirir.
+6. Worker görevi günceller ve Slack'e repo linkiyle mesaj atar.
+
+## Bileşenler
+
+### 1. React arayüzü (`apps/web`)
+
+- Vite + React + TypeScript, mobil öncelikli, PWA olarak telefona eklenebilir.
+- Ekranlar:
+  - **Günün fikirleri:** Tarihe göre gruplanmış liste. Her kartta Claude puanı ve kullanıcının yıldız puanı. Sıralama (Claude puanı, kullanıcı puanı, tarih) ve filtreleme (kategori, puan, durum, puanlanmamışlar).
+  - **Fikir detayı:** Açıklama, hedef kitle, temel özellikler, Claude puan dökümü, ilham kaynağı, kullanıcı puanı (1-5 yıldız) ve not alanı, "Geliştir" butonu.
+  - **Görev formu:** Seçilen fikir için geliştirme parametreleri.
+  - **Görevler:** Görev durumu (queued, running, done, failed), repo ve issue linkleri, "tekrar dene".
+- Fikir aksiyonları: yıldız puanı ver, not yaz, arşivle, "Geliştir". Puan vermek hiçbir otomatik işlem başlatmaz; yalnızca "Geliştir" + görev formu iskelet üretimini başlatır.
+- Bir fikir için zaten görev varsa "Geliştir" butonu görev durumunu gösterir, ikinci repo açılmaz.
+
+### 2. API (`apps/api`)
+
+- Express + TypeScript, Cloudflare Workers üzerinde. D1'e binding ile erişir.
+- Uç noktalar (taslak):
+  - `GET /ideas`, `GET /ideas/:id`, `PATCH /ideas/:id` (kullanıcı puanı, not, arşiv)
+  - `GET /ideas/recent-names` (tekrar kontrolü için)
+  - `POST /ideas/batch` (günlük fikirleri kaydetme; yalnızca workflow çağırır)
+  - `POST /tasks`, `GET /tasks`, `POST /tasks/:id/retry`
+  - `POST /tasks/:id/result` (yalnızca workflow çağırır)
+- Workflow'un çağırdığı uçlar paylaşılan bir gizli anahtarla korunur.
+- Ücretsiz plan kısıtları: günde 100.000 istek ve çağrı başına 10 ms CPU. Worker ağır iş yapmaz; yalnızca veri okur/yazar ve dış servisleri tetikler.
+
+### 3. GitHub Actions workflow'ları (`.github/workflows`)
+
+- `daily-ideas.yml`: Günlük cron, fikir üretimi (Akış 1).
+- `build-skeleton.yml`: `workflow_dispatch`, iskelet üretimi (Akış 2).
+- Yardımcı betikler (`scripts/`): trend toplama, JSON doğrulama, API'ye gönderim. Node.js + TypeScript.
+- Claude Code resmi Claude Code GitHub Action ile çalıştırılır; talimat şablonları (`prompts/`) repoda tutulur.
+
+### 4. Fikir şeması
+
+`name` İngilizce, diğer metin alanları Türkçe:
+
+```json
+{
+  "name": "MealMate",
+  "one_liner": "Buzdolabındaki malzemelerden haftalık yemek planı çıkaran asistan",
+  "problem": "string (Türkçe)",
+  "target_audience": "string (Türkçe)",
+  "core_features": ["string (Türkçe)"],
+  "monetization": "string (Türkçe)",
+  "category": "string",
+  "inspiration_source": "string (url)",
+  "scores": {
+    "market": 1,
+    "feasibility_solo_dev": 1,
+    "originality": 1,
+    "overall": 1
+  }
+}
+```
+
+### 5. Görev formu alanları
+
+- Platform: iOS (Swift), Android (Kotlin), çapraz platform (React Native / Expo, Flutter)
+- Backend gerekli mi: yok / Supabase / Firebase / özel API
+- Kimlik doğrulama: yok / e-posta / sosyal giriş
+- MVP özellikleri: fikirdeki özelliklerden seçim + serbest ekleme (3-5 önerilir)
+- Tasarım tercihi: açık/koyu tema, minimal/renkli
+- Ek notlar: serbest metin
+
+### 6. İskelet reposu beklentileri
+
+- Repo özel (private) oluşturulur.
+- Repo adı fikrin İngilizce adından türetilir (örn. `mealmate-app`); çakışma olursa sonek eklenir.
+- İçerik: çalışan proje yapısı, navigasyon, MVP ekranlarının örnek halleri, README (fikir özeti, kurulum, mimari), temel lint/format ayarları.
+- Fikrin tam JSON'u yeni repoda `IDEA.md` olarak saklanır.
+
+### 7. Entegrasyonlar
+
+- **Slack (ücretsiz plan):** Tek kanal, incoming webhook. Sabah fikir özeti (en yüksek puanlı 3 fikir, arayüz linkiyle), görev tamamlandı/başarısız bildirimleri. Ücretsiz planda mesaj geçmişi 90 gün; fikirler D1'de saklandığı için sorun değil. Slack mesajlarını Worker gönderir (günlük özet dahil, workflow fikirleri kaydettikten sonra).
+- **GitHub Issues + Projects:**
+  - Kişisel hesapta tek bir Projects panosu (örn. "App Idea Factory"), durumlar: Queued, In progress, Done, Failed.
+  - Her iskelet görevi, iskelet reposunda bir issue olarak açılır ve panoya eklenir. Issue içeriği: fikir özeti, görev parametreleri, ana repodaki ilgili workflow çalıştırmasının linki.
+  - Issue'lar ve pano güncellemeleri iskelet workflow'u tarafından yapılır (Worker değil).
+  - Projects (v2) GraphQL API ile yönetilir; kişisel hesaptaki projeye erişim için gereken token türü ve yetkileri Faz 0'da doğrulanmalı.
+- **İleride:** İskelet repolarında Claude Code GitHub Action kurulup issue'lardaki `@claude` etiketleriyle geliştirmeye devam edilebilir. Not: iskelet repoları özel olduğu için oradaki çalışmalar GitHub Actions ücretsiz aylık dakika kotasından düşer.
+
+## Veri modeli (D1, taslak)
+
+- **ideas:** id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_source, scores (json), user_rating (1-5, boş olabilir), user_note, status (new / archived / in_development / developed)
+- **tasks:** id, idea_id, created_at, updated_at, params (json), status (queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
+- **trend_snapshots:** id, fetched_at, source, payload (json)
+
+## Önerilen klasör yapısı
+
+```
+/
+├── CLAUDE.md
+├── docs/
+│   └── PROJE.md
+├── apps/
+│   ├── web/          (React + Vite)
+│   └── api/          (Express, Cloudflare Worker, D1 migration'ları)
+├── scripts/          (trend toplama, doğrulama, API istemcisi)
+├── prompts/          (Claude Code talimat şablonları)
+└── .github/
+    └── workflows/
+```
+
+## Güvenlik
+
+- Arayüz ve API Cloudflare Access arkasında olmalı; yalnızca sahibin e-postası giriş yapabilir.
+- GitHub Actions'ın API'ye yaptığı çağrılar Access'i Cloudflare Access service token ile geçer; ayrıca uygulama seviyesinde paylaşılan anahtar kontrolü yapılır.
+- Ana repo açık olduğu için:
+  - Hiçbir gizli bilgi, API adresi dışındaki iç yapılandırma veya kişisel veri repoya yazılmaz.
+  - Workflow loglarına secret veya token yazdırılmaz; Claude Code çıktısında hassas bilgi olmamalı.
+  - Fork'lardan gelen PR'lar secrets'a erişmemeli; `pull_request_target` kullanılmaz.
+  - `workflow_dispatch` yalnızca repoya yazma yetkisi olanlarca tetiklenebilir.
+- Gizli bilgiler yalnızca Cloudflare secrets ve GitHub Actions secrets içinde tutulur; frontend'e gönderilmez, repoya yazılmaz:
+  - `CLAUDE_CODE_OAUTH_TOKEN` (GitHub)
+  - Repo oluşturma yetkili fine-grained PAT (GitHub ve Worker)
+  - Workflow ↔ Worker paylaşılan anahtarı (her ikisi)
+  - Cloudflare Access service token (GitHub)
+  - Slack webhook URL'si (Worker)
+- PAT mümkün olan en dar yetkiyle oluşturulur: özel repo oluşturma, içerik yazma, issue yazma, Projects yazma.
+
+## Yol haritası
+
+1. **Faz 0 - Kurulum:** Monorepo iskeleti, Cloudflare Pages + Worker + D1 bağlantısı, GitHub secrets, Claude Code token.
+2. **Faz 1 - Fikir hattı:** D1 şeması, API uçları, trend toplama betikleri, `daily-ideas.yml`.
+3. **Faz 2 - Arayüz:** Erişim koruması, fikir listesi, detay ekranı, beğen/arşivle.
+4. **Faz 3 - Görev ve iskelet:** Görev formu, `build-skeleton.yml`, repo ve issue oluşturma, sonuç geri bildirimi, tekrar dene.
+5. **Faz 4 - Entegrasyonlar:** Slack bildirimleri, Projects panosu (issue açma Faz 3'te gelir).
+6. **Faz 5 - İyileştirmeler:** Daha iyi tekrar kontrolü, yeni trend kaynakları, Slack'ten görev atama, iskelet repolarında `@claude` ile geliştirmeye devam.
+
+## Açık sorular
+
+Şu an açık soru yok. Yeni kararlar gerektikçe buraya eklenir.
+
+## Claude Code için not
+
+Bu dosya projenin başlangıç planıdır. Açık sorulardaki kararlar kullanıcıyla netleşmeden ilgili kısımları kodlama; varsayım yapma, sor. Kararlar alındıkça "Kesinleşen kararlar" tablosunu ve "Açık sorular" listesini güncelle. Faz 0'dan başla ve her fazın sonunda kullanıcıya neyin çalıştığını nasıl test edeceğini göster.
