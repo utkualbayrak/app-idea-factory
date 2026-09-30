@@ -54,14 +54,14 @@ export function IdeaDetailPage() {
   if (!idea) return <p className="py-10 text-center text-muted-foreground">Yükleniyor…</p>;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <Link to="/" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" />
         Fikirler
       </Link>
 
       <div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold">{idea.name}</h1>
           <Badge variant="secondary">{idea.category}</Badge>
         </div>
@@ -70,7 +70,7 @@ export function IdeaDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm text-muted-foreground uppercase tracking-wide">Claude puan dökümü</CardTitle>
+          <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Claude puan dökümü</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <ScoreBar label="Pazar" value={idea.scores.market} />
@@ -80,55 +80,54 @@ export function IdeaDetailPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <div>
-          <h2 className="mb-1 text-sm font-medium text-muted-foreground uppercase tracking-wide">Problem</h2>
-          <p>{idea.problem}</p>
-        </div>
-        <div>
-          <h2 className="mb-1 text-sm font-medium text-muted-foreground uppercase tracking-wide">Hedef kitle</h2>
-          <p>{idea.target_audience}</p>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <InfoCard title="Problem">{idea.problem}</InfoCard>
+        <InfoCard title="Hedef kitle">{idea.target_audience}</InfoCard>
       </div>
 
-      <div>
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground uppercase tracking-wide">Temel özellikler</h2>
+      <InfoCard title="Temel özellikler">
         <ul className="list-disc space-y-1 pl-5">
           {idea.core_features.map((feature) => (
             <li key={feature}>{feature}</li>
           ))}
         </ul>
-      </div>
+      </InfoCard>
 
-      <div className="grid gap-6 sm:grid-cols-2">
-        <div>
-          <h2 className="mb-1 text-sm font-medium text-muted-foreground uppercase tracking-wide">Gelir modeli</h2>
-          <p>{idea.monetization}</p>
-        </div>
-        <div>
-          <h2 className="mb-1 text-sm font-medium text-muted-foreground uppercase tracking-wide">İlham kaynağı</h2>
-          <a href={idea.inspiration_source} target="_blank" rel="noreferrer" className="text-primary underline underline-offset-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <InfoCard title="Gelir modeli">{idea.monetization}</InfoCard>
+        <InfoCard title="İlham kaynağı">
+          <a
+            href={idea.inspiration_source}
+            target="_blank"
+            rel="noreferrer"
+            className="block truncate text-primary underline underline-offset-4"
+            title={idea.inspiration_source}
+          >
             {idea.inspiration_source}
           </a>
-        </div>
+        </InfoCard>
       </div>
 
-      <div>
-        <h2 className="mb-2 text-sm font-medium text-muted-foreground uppercase tracking-wide">Senin puanın</h2>
+      <InfoCard title="Senin puanın">
         <StarRating value={idea.user_rating} onChange={handleRate} size="lg" />
-      </div>
+      </InfoCard>
 
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="note" className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-          Not
-        </Label>
-        <Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} rows={4} placeholder="Kısa bir not ekle…" />
-        <Button onClick={handleSaveNote} disabled={saving} className="w-fit">
-          {saving ? "Kaydediliyor…" : "Notu kaydet"}
-        </Button>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Not</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          <Label htmlFor="note" className="sr-only">
+            Not
+          </Label>
+          <Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} rows={4} placeholder="Kısa bir not ekle…" />
+          <Button onClick={handleSaveNote} disabled={saving} className="w-fit">
+            {saving ? "Kaydediliyor…" : "Notu kaydet"}
+          </Button>
+        </CardContent>
+      </Card>
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3">
         <Button variant="outline" onClick={handleToggleArchive}>
           {idea.status === "archived" ? "Arşivden çıkar" : "Arşivle"}
         </Button>
@@ -140,9 +139,20 @@ export function IdeaDetailPage() {
   );
 }
 
+function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
+  );
+}
+
 function ScoreBar({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
   return (
-    <div className="grid grid-cols-[140px_1fr_40px] items-center gap-3 text-sm">
+    <div className="grid grid-cols-[minmax(100px,140px)_1fr_40px] items-center gap-3 text-sm">
       <span className={highlight ? "font-semibold text-foreground" : "text-muted-foreground"}>{label}</span>
       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-primary" style={{ width: `${value * 10}%` }} />

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchIdeas, type Idea, type IdeaStatus } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -12,6 +13,8 @@ const STATUS_LABELS: Record<IdeaStatus, string> = {
   developed: "Geliştirildi",
 };
 
+const SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
 export function IdeaListPage() {
   const [ideas, setIdeas] = useState<Idea[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +23,11 @@ export function IdeaListPage() {
   const [status, setStatus] = useState<IdeaStatus | "all">("all");
   const [minRating, setMinRating] = useState("0");
   const [onlyUnrated, setOnlyUnrated] = useState(false);
+  const [minMarket, setMinMarket] = useState("0");
+  const [minFeasibility, setMinFeasibility] = useState("0");
+  const [minOriginality, setMinOriginality] = useState("0");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => {
     fetchIdeas()
@@ -40,9 +48,15 @@ export function IdeaListPage() {
     if (status !== "all") result = result.filter((idea) => idea.status === status);
     if (minRating !== "0") result = result.filter((idea) => (idea.user_rating ?? 0) >= Number(minRating));
     if (onlyUnrated) result = result.filter((idea) => idea.user_rating == null);
+    if (minMarket !== "0") result = result.filter((idea) => idea.scores.market >= Number(minMarket));
+    if (minFeasibility !== "0")
+      result = result.filter((idea) => idea.scores.feasibility_solo_dev >= Number(minFeasibility));
+    if (minOriginality !== "0") result = result.filter((idea) => idea.scores.originality >= Number(minOriginality));
+    if (dateFrom) result = result.filter((idea) => idea.batch_date >= dateFrom);
+    if (dateTo) result = result.filter((idea) => idea.batch_date <= dateTo);
 
     return result;
-  }, [ideas, category, status, minRating, onlyUnrated]);
+  }, [ideas, category, status, minRating, onlyUnrated, minMarket, minFeasibility, minOriginality, dateFrom, dateTo]);
 
   const groups = useMemo(() => {
     const map = new Map<string, Idea[]>();
@@ -59,11 +73,11 @@ export function IdeaListPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end gap-4 rounded-lg border bg-card p-4">
+      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         <div className="flex flex-col gap-1.5">
           <Label>Kategori</Label>
           <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -80,7 +94,7 @@ export function IdeaListPage() {
         <div className="flex flex-col gap-1.5">
           <Label>Durum</Label>
           <Select value={status} onValueChange={(v) => setStatus(v as IdeaStatus | "all")}>
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -95,9 +109,9 @@ export function IdeaListPage() {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label>Min. puan</Label>
+          <Label>Min. kullanıcı puanı</Label>
           <Select value={minRating} onValueChange={setMinRating}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -111,7 +125,68 @@ export function IdeaListPage() {
           </Select>
         </div>
 
-        <div className="flex items-center gap-2 pb-1.5">
+        <div className="flex flex-col gap-1.5">
+          <Label>Min. pazar puanı</Label>
+          <Select value={minMarket} onValueChange={setMinMarket}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">Hepsi</SelectItem>
+              {SCORE_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n}+
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label>Min. uygulanabilirlik</Label>
+          <Select value={minFeasibility} onValueChange={setMinFeasibility}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">Hepsi</SelectItem>
+              {SCORE_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n}+
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label>Min. özgünlük</Label>
+          <Select value={minOriginality} onValueChange={setMinOriginality}>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">Hepsi</SelectItem>
+              {SCORE_OPTIONS.map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n}+
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="date-from">Başlangıç tarihi</Label>
+          <Input id="date-from" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="date-to">Bitiş tarihi</Label>
+          <Input id="date-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </div>
+
+        <div className="col-span-2 flex items-center gap-2 self-end pb-1.5 sm:col-span-1">
           <Checkbox id="only-unrated" checked={onlyUnrated} onCheckedChange={(c) => setOnlyUnrated(c === true)} />
           <Label htmlFor="only-unrated" className="font-normal">
             Yalnızca puanlanmamışlar
