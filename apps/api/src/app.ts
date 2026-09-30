@@ -17,9 +17,14 @@ const app = express();
 // cookie'si de her ikisi için ayrı) — tarayıcıdan doğrudan çağrılabilmesi
 // için CORS gerekiyor. docs/PROJE.md mimarisi UI<->API'nin doğrudan
 // konuştuğunu varsayıyor (proxy yok).
+// WEB_ORIGIN virgülle ayrılmış birden fazla origin içerebilir (örn. workers.dev
+// adresi + özel domain) — istek origini listede varsa aynen yansıtılır.
 app.use(
   cors({
-    origin: (_origin, callback) => callback(null, (env as unknown as Env).WEB_ORIGIN),
+    origin: (origin, callback) => {
+      const allowed = (env as unknown as Env).WEB_ORIGIN.split(",").map((o) => o.trim());
+      callback(null, origin != null && allowed.includes(origin) ? origin : allowed[0]);
+    },
     credentials: true,
   }),
 );
