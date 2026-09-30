@@ -1,0 +1,17 @@
+{
+  "name": "scripts",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "collect-trends": "tsx collect-trends.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "oxlint": "^1.86.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

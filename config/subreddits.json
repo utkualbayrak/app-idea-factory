@@ -1,0 +1,61 @@
+{
+  "groups": [
+    {
+      "id": "reddit_ideas",
+      "label": "Doğrudan fikir/talep toplulukları",
+      "method": "top",
+      "time": "day",
+      "perSubredditLimit": 10,
+      "groupCap": 15,
+      "subreddits": ["SomebodyMakeThis", "AppIdeas", "Lightbulb", "Startup_Ideas", "SideProject"]
+    },
+    {
+      "id": "reddit_founders",
+      "label": "Kurucu ve iş toplulukları",
+      "method": "top",
+      "time": "day",
+      "perSubredditLimit": 10,
+      "groupCap": 15,
+      "subreddits": [
+        "indiehackers",
+        "microsaas",
+        "SaaS",
+        "startups",
+        "Entrepreneur",
+        "EntrepreneurRideAlong",
+        "smallbusiness"
+      ]
+    },
+    {
+      "id": "reddit_mobile",
+      "label": "Mobil uygulama kullanıcıları",
+      "method": "top",
+      "time": "day",
+      "perSubredditLimit": 10,
+      "groupCap": 15,
+      "subreddits": ["androidapps", "iosapps", "productivity"]
+    },
+    {
+      "id": "reddit_painpoints",
+      "label": "Niş dert toplulukları",
+      "method": "search",
+      "sort": "new",
+      "time": "week",
+      "perSubredditLimit": 15,
+      "groupCap": 20,
+      "searchTerms": ["is there an app", "app that", "wish there was", "why is there no app"],
+      "subreddits": [
+        "ADHD",
+        "personalfinance",
+        "loseit",
+        "Fitness",
+        "GetStudying",
+        "Parenting",
+        "digitalnomad",
+        "houseplants",
+        "Cooking",
+        "travel"
+      ]
+    }
+  ]
+}

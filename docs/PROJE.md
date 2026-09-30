@@ -71,6 +71,22 @@ flowchart TD
 5. Workflow JSON'u doğrular (şema kontrolü, tekrar kontrolü) ve Worker API'sine gönderir.
 6. Worker D1'e yazar, isteğe bağlı olarak Slack'e sabah özeti atar.
 
+#### Trend toplama detayları (Faz 1, 2026-09-30 kararı)
+
+`scripts/collect-trends.ts` (ve `scripts/lib/*`) üç bağımsız kaynaktan veri toplar; biri hata verirse diğerleri devam eder, hata o kaynağın `error` alanına yazılır (ham hata workflow log'unda görünür, ayrıca ileride `trend_snapshots` tablosuna da yazılabilir — bu betik henüz D1'e yazmıyor, sadece bir JSON dosyası üretiyor).
+
+- **Reddit** — resmi API kullanılmıyor, public `.json`/`.rss` endpoint'leri. Subreddit listesi kodda değil `config/subreddits.json`'da, 4 grup halinde:
+  - *Doğrudan fikir toplulukları* (SomebodyMakeThis, AppIdeas, Lightbulb, Startup_Ideas, SideProject) — günün en çok oy alanları (`top`, `t=day`).
+  - *Kurucu/iş toplulukları* (indiehackers, microsaas, SaaS, startups, Entrepreneur, EntrepreneurRideAlong, smallbusiness) — günün en çok oy alanları.
+  - *Mobil kullanıcı toplulukları* (androidapps, iosapps, productivity) — günün en çok oy alanları.
+  - *Niş "dert" toplulukları* (ADHD, personalfinance, loseit, Fitness, GetStudying, Parenting, digitalnomad, houseplants, Cooking, travel) — `top` yerine subreddit içi arama (`search`, `sort=new`, `t=week`), "is there an app / app that / wish there was / why is there no app" ifadeleri OR'lanarak tek istekte aranıyor.
+  - Her istek `.json` ile denenir, 403/429 gibi bir hata gelirse aynı adresin `.rss` (Atom) sürümüne düşülür (score/yorum sayısı olmadan, sadece başlık+link). **Doğrulanmış risk:** bu ortamın IP'sinden hem `.json` (403) hem `.rss` (429, çok düşük rate-limit) engellendi/kısıtlandı — GitHub Actions runner'ının IP'si farklı davranabilir ama garanti değil; ilk gerçek workflow çalıştırmasında doğrulanmalı. Kalıcı olarak engellenirse resmi Reddit API'sine (OAuth app + yeni secret) geçmek gerekecek.
+  - İstekler arası 1.5 sn bekleme var, kullanıcı adı/kişisel bilgi trend özetine dahil edilmiyor.
+- **App Store** — Apple'ın resmi, auth gerektirmeyen `rss.applemarketingtools.com` top-charts feed'i (top-free + top-paid, `us` + `tr`) ve puanlar için `itunes.apple.com/lookup` (bulk, ücretsiz, auth'suz). Bu ikisinden "düşük puanlı ama popüler" uygulamalar (≥1000 oy, en düşük puanlılar) ayrıca öne çıkarılıyor. **Test edildi, çalışmıyor:** Apple'ın eski "customer reviews" RSS'i (`itunes.apple.com/.../rss/customerreviews/...`) artık boş feed dönüyor (entry yok) — gerçek yorum metni toplama özelliği bu yüzden yok, sadece puan/oy sayısı sinyali kullanılıyor.
+- **Product Hunt** — resmi GraphQL API v2 (`api.producthunt.com/v2/api/graphql`), `PRODUCTHUNT_TOKEN` (read-only developer token, bkz. Güvenlik bölümü) ile son 24 saatin lansmanları oy sırasına göre çekiliyor. Token yoksa veya istek başarısız olursa kaynak atlanır, hat durmaz.
+- **Google Play atlandı:** ücretsiz/resmi bir trend API'si yok, scraping kırılgan olurdu. Faz 5'e not düşüldü (bkz. Yol haritası).
+- Ham veri Claude'a olduğu gibi gönderilmiyor; her kaynak/grup için en ilgili ~10-20 öğe seçilip kısa bir özet dosyasına (`scripts/output/trend-summary.<tarih>.json`, gitignore'lu) yazılıyor.
+
 ### Akış 2: İskelet üretimi (manuel)
 
 1. Kullanıcı arayüzde fikri seçer, görev formunu doldurur.
@@ -194,10 +210,11 @@ flowchart TD
   - `workflow_dispatch` yalnızca repoya yazma yetkisi olanlarca tetiklenebilir.
 - Gizli bilgiler yalnızca Cloudflare secrets ve GitHub Actions secrets içinde tutulur; frontend'e gönderilmez, repoya yazılmaz:
   - `CLAUDE_CODE_OAUTH_TOKEN` (GitHub)
-  - Repo oluşturma yetkili fine-grained PAT (GitHub ve Worker)
-  - Workflow ↔ Worker paylaşılan anahtarı (her ikisi)
-  - Cloudflare Access service token (GitHub)
-  - Slack webhook URL'si (Worker)
+  - Repo/issue/Projects oluşturma yetkili PAT — `SKELETON_REPO_PAT` (GitHub)
+  - Workflow ↔ Worker paylaşılan anahtarı — `WORKFLOW_API_SHARED_SECRET` (GitHub ve Worker)
+  - Cloudflare Access service token — `CF_ACCESS_CLIENT_ID` + `CF_ACCESS_CLIENT_SECRET` (GitHub)
+  - Slack webhook URL'si — `SLACK_WEBHOOK_URL` (Worker)
+  - Product Hunt developer token — `PRODUCTHUNT_TOKEN` (GitHub, Faz 1, 2026-09-30). Salt okuma, OAuth akışı yok; Product Hunt API dashboard'undan alınır. Trend toplama betiği (`scripts/collect-trends.ts`) token yoksa Product Hunt kaynağını atlar, hattı durdurmaz.
 - PAT mümkün olan en dar yetkiyle oluşturulur: özel repo oluşturma, içerik yazma, issue yazma, Projects yazma.
   - **Not (Faz 0, 2026-09-30):** GitHub'ın fine-grained PAT'ları kullanıcı hesabı seviyesindeki Projects (v2) panosunu desteklemiyor (Account permissions listesinde yok). Bu yüzden `SKELETON_REPO_PAT` fine-grained yerine **classic PAT**, `repo` + `project` scope'larıyla oluşturuldu. Daha geniş kapsamlı ama tek token ile repo/issue/Projects hepsi çalışıyor. Fine-grained'e Projects v2 desteği gelirse daraltılabilir.
 
@@ -208,7 +225,7 @@ flowchart TD
 3. **Faz 2 - Arayüz:** Erişim koruması, fikir listesi, detay ekranı, beğen/arşivle.
 4. **Faz 3 - Görev ve iskelet:** Görev formu, `build-skeleton.yml`, repo ve issue oluşturma, sonuç geri bildirimi, tekrar dene.
 5. **Faz 4 - Entegrasyonlar:** Slack bildirimleri, Projects panosu (issue açma Faz 3'te gelir).
-6. **Faz 5 - İyileştirmeler:** Daha iyi tekrar kontrolü, yeni trend kaynakları, Slack'ten görev atama, iskelet repolarında `@claude` ile geliştirmeye devam.
+6. **Faz 5 - İyileştirmeler:** Daha iyi tekrar kontrolü, yeni trend kaynakları (Google Play için verimli/ücretsiz bir veri kaynağı bul — Faz 1'de resmi/ücretsiz bir API bulunamadığı için atlandı), Slack'ten görev atama, iskelet repolarında `@claude` ile geliştirmeye devam.
 
 ## Açık sorular
 
