@@ -27,6 +27,8 @@ pnpm typecheck          # web + api + scripts
 pnpm lint               # web + api + scripts (oxlint)
 
 # deploy (real Cloudflare resources — costs nothing on free tier, but is a live change)
+# As of 2026-09-30, a push to main auto-deploys both via .github/workflows/deploy.yml —
+# manual deploy below is only for out-of-band deploys (e.g. testing a branch).
 pnpm --filter web deploy    # builds then `wrangler deploy` (static assets)
 pnpm --filter api deploy    # `wrangler deploy` (the Express Worker)
 
@@ -48,6 +50,7 @@ There are no automated tests yet — nothing in Faz 0/1's scope needs more than 
 - **D1 database:** `app-idea-factory-db` (id in `apps/api/wrangler.jsonc`). Schema landed in Faz 1 (see below).
 - **Web app:** `apps/web`, deployed at https://app-idea-factory.utkualbayrakrak.workers.dev — still the unmodified Vite+React+TS starter page; real screens come in Faz 2. Deployed as a Cloudflare Workers **static-assets** site (`apps/web/wrangler.jsonc`, `@cloudflare/vite-plugin`) — this is Cloudflare's current mechanism for what `docs/PROJE.md` calls "Cloudflare Pages" (Cloudflare merged Pages into Workers in 2026); same free tier, same product intent, just deployed with `wrangler deploy` instead of a separate `pages` command.
 - **Package manager:** pnpm workspaces (`pnpm-workspace.yaml`: `apps/*`, `scripts`). `wrangler`/`@cloudflare/vite-plugin`/`esbuild` build scripts are pre-approved via `pnpm.onlyBuiltDependencies` in the root `package.json` — needed for `wrangler dev`/`deploy` to work after a fresh `pnpm install`.
+- **Auto-deploy on push (added 2026-09-30):** `.github/workflows/deploy.yml` runs on every push to `main` (+ `workflow_dispatch`), two parallel jobs (`deploy-api`, `deploy-web`) each just running that package's own `pnpm run deploy` script with `CLOUDFLARE_API_TOKEN` (GitHub secret, a scoped API token — not the local OAuth login) and `CLOUDFLARE_ACCOUNT_ID` (hardcoded in the workflow file, not a secret — account IDs aren't sensitive). **This does NOT run D1 migrations** — `apps/api/migrations/*.sql` still needs `npx wrangler d1 migrations apply app-idea-factory-db --remote` run by hand (from `apps/api`) whenever a push includes a new migration; the deploy workflow deploying new code that expects a not-yet-applied schema change will break production until the migration is applied. Sequence migrations before pushing, not after.
 
 ### Faz 0 — secrets and access (done)
 
