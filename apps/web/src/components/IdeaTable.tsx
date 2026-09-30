@@ -84,20 +84,32 @@ function OneLinerCell({ text }: { text: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <div className="line-clamp-1 cursor-default text-sm text-muted-foreground">{text}</div>
+        <div className="truncate cursor-default text-sm text-muted-foreground">{text}</div>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs">{text}</TooltipContent>
     </Tooltip>
   );
 }
 
+// table-fixed ile eşleşen sabit sütun genişlikleri — masaüstü tabloda hiçbir
+// zaman sağa scroll çıkmasın diye (bkz. "Fikir" sütunundaki one_liner'ın
+// table-layout: auto altında sütunu genişletip tabloyu taşırdığı bug).
+const COLUMN_WIDTHS: Record<string, string> = {
+  name: "w-[28%]",
+  category: "w-[12%]",
+  claude_score: "w-[15%]",
+  user_rating: "w-[17%]",
+  combined_score: "w-[15%]",
+  status: "w-[13%]",
+};
+
 const columns: ColumnDef<Idea>[] = [
   {
     accessorKey: "name",
     header: "Fikir",
     cell: ({ row }) => (
-      <div>
-        <div className="font-medium">{row.original.name}</div>
+      <div className="min-w-0">
+        <div className="truncate font-medium">{row.original.name}</div>
         <OneLinerCell text={row.original.one_liner} />
       </div>
     ),
@@ -177,12 +189,12 @@ export function IdeaTable({ ideas }: { ideas: Idea[] }) {
     <div className="flex flex-col gap-2">
       {/* Masaüstü: tablo, tum sutunlar */}
       <div className="hidden rounded-lg border md:block">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead key={header.id} className={COLUMN_WIDTHS[header.column.id]}>
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 ))}
@@ -197,7 +209,9 @@ export function IdeaTable({ ideas }: { ideas: Idea[] }) {
                 onClick={() => navigate(`/ideas/${row.original.id}`)}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                  <TableCell key={cell.id} className={cell.column.id === "name" ? "min-w-0" : undefined}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
                 ))}
               </TableRow>
             ))}
