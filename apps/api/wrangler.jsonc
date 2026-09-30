@@ -5,7 +5,7 @@
   "compatibility_date": "2025-09-30",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "WEB_ORIGIN": "https://ideas.utkualbayrakrak.dev,https://app-idea-factory.utkualbayrakrak.workers.dev"
+    "WEB_ORIGIN": "https://ideas.utkualbayrak.dev,https://app-idea-factory.utkualbayrakrak.workers.dev"
   },
   "d1_databases": [
     {
