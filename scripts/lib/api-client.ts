@@ -23,26 +23,36 @@ function authHeaders(): Record<string, string> {
   return headers;
 }
 
-export async function fetchRecentNames(days = 90): Promise<string[]> {
-  const res = await fetch(`${BASE_URL}/ideas/recent-names?days=${days}`, { headers: authHeaders() });
-  if (!res.ok) {
-    throw new Error(`GET /ideas/recent-names HTTP ${res.status}: ${await res.text()}`);
+async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
+  const res = await fetch(url, init);
+  const contentType = res.headers.get("content-type") ?? "";
+
+  if (!res.ok || !contentType.includes("application/json")) {
+    const bodySnippet = (await res.text()).slice(0, 500);
+    throw new Error(
+      [
+        `İstek başarısız: ${url}`,
+        `status=${res.status} redirected=${res.redirected} final_url=${res.url}`,
+        `content-type=${contentType || "(yok)"} cf-ray=${res.headers.get("cf-ray") ?? "(yok)"}`,
+        `body (ilk 500 karakter): ${bodySnippet}`,
+      ].join("\n"),
+    );
   }
 
-  const body = (await res.json()) as { names: string[] };
+  return res.json() as Promise<T>;
+}
+
+export async function fetchRecentNames(days = 90): Promise<string[]> {
+  const body = await fetchJson<{ names: string[] }>(`${BASE_URL}/ideas/recent-names?days=${days}`, {
+    headers: authHeaders(),
+  });
   return body.names;
 }
 
 export async function submitIdeasBatch(batchDate: string, ideas: unknown[]): Promise<unknown> {
-  const res = await fetch(`${BASE_URL}/ideas/batch`, {
+  return fetchJson(`${BASE_URL}/ideas/batch`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ batch_date: batchDate, ideas }),
   });
-
-  if (!res.ok) {
-    throw new Error(`POST /ideas/batch HTTP ${res.status}: ${await res.text()}`);
-  }
-
-  return res.json();
 }
