@@ -6,16 +6,19 @@ import {
   type SortingState,
   flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { Idea } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StarRating } from "@/components/StarRating";
+
+const PAGE_SIZE = 8;
 
 const STATUS_LABELS: Record<Idea["status"], string> = {
   new: "Yeni",
@@ -113,14 +116,17 @@ export function IdeaTable({ ideas }: { ideas: Idea[] }) {
     onSortingChange: setSorting,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: PAGE_SIZE } },
   });
 
   const rows = table.getRowModel().rows;
+  const showPagination = table.getPageCount() > 1;
 
   return (
-    <>
-      {/* Masaüstü: tablo */}
-      <div className="hidden overflow-x-auto rounded-lg border md:block">
+    <div className="flex flex-col gap-2">
+      {/* Masaüstü: tablo, tum sutunlar */}
+      <div className="hidden rounded-lg border md:block">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -145,7 +151,7 @@ export function IdeaTable({ ideas }: { ideas: Idea[] }) {
         </Table>
       </div>
 
-      {/* Mobil: kart listesi (tablo yerine, TanStack'in siraladigi sirayla) */}
+      {/* Mobil: sadece ad + kategori + Claude puanı (gerisi detay sayfasında) */}
       <div className="flex flex-col gap-2 md:hidden">
         {rows.map((row) => {
           const idea = row.original;
@@ -154,26 +160,35 @@ export function IdeaTable({ ideas }: { ideas: Idea[] }) {
               key={row.id}
               type="button"
               onClick={() => navigate(`/ideas/${idea.id}`)}
-              className="flex flex-col gap-2 rounded-lg border bg-card p-3 text-left"
+              className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="font-medium">{idea.name}</div>
-                  <div className="line-clamp-2 text-sm text-muted-foreground">{idea.one_liner}</div>
-                </div>
-                <ClaudeScoreCell idea={idea} />
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="truncate font-medium">{idea.name}</span>
+                <Badge variant="secondary" className="shrink-0">
+                  {idea.category}
+                </Badge>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{idea.category}</Badge>
-                  <StatusBadge status={idea.status} />
-                </div>
-                <StarRating value={idea.user_rating} />
+              <div className="shrink-0">
+                <ClaudeScoreCell idea={idea} />
               </div>
             </button>
           );
         })}
       </div>
-    </>
+
+      {showPagination && (
+        <div className="flex items-center justify-end gap-3 pt-1">
+          <span className="text-sm text-muted-foreground">
+            Sayfa {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+          </span>
+          <Button variant="outline" size="icon" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()}>
+            <ArrowLeft className="size-4" />
+          </Button>
+          <Button variant="outline" size="icon" disabled={!table.getCanNextPage()} onClick={() => table.nextPage()}>
+            <ArrowRight className="size-4" />
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

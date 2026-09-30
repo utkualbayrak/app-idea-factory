@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "https://app-idea-factory-api.utkualbayrakrak.workers.dev";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "https://ideas-api.utkualbayrak.dev";
 
 export type IdeaStatus = "new" | "archived" | "in_development" | "developed";
 

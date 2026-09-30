@@ -12,7 +12,7 @@ function App() {
         </Link>
         <ThemeToggle />
       </header>
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-16">
+      <main className="mx-auto max-w-6xl px-4 py-6 pb-16">
         <Routes>
           <Route path="/" element={<IdeaListPage />} />
           <Route path="/ideas/:id" element={<IdeaDetailPage />} />

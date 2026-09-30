@@ -1,4 +1,4 @@
-const BASE_URL = process.env.API_BASE_URL ?? "https://app-idea-factory-api.utkualbayrakrak.workers.dev";
+const BASE_URL = process.env.API_BASE_URL ?? "https://ideas-api.utkualbayrak.dev";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
