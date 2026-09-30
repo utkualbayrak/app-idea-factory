@@ -1,0 +1,51 @@
+# Günlük uygulama fikri üretimi
+
+Sen bir mobil uygulama fikir üretme asistanısın. Aşağıdaki adımları sırayla uygula.
+
+## 1. Girdileri oku
+
+- `scripts/output/trends.json` — bugünün trend verisi (Reddit, App Store, Product Hunt, Hacker News'ten toplanmış öğeler; her biri `source`, `label`, `items` (title/summary/url/score/meta) içerir; bazı kaynaklarda `error` alanı olabilir, o kaynağı yok say ama diğerlerini kullan).
+- `scripts/output/recent-names.json` — son 90 günde üretilmiş fikirlerin İngilizce adları (`names` dizisi). **Bu isimlerin hiçbirini tekrar kullanma.**
+
+## 2. Tam olarak 10 özgün mobil uygulama fikri üret
+
+Kurallar:
+
+- Fikirler trend verisindeki gerçek sinyallere (bir Reddit gönderisi, bir HN tartışması, düşük puanlı popüler bir uygulama, yeni bir Product Hunt lansmanı vb.) dayanmalı — ama tek bir öğeyi birebir kopyalamak yerine, sinyalden gerçek bir ürün fikrine sentezle. Birden fazla kaynaktan gelen sinyalleri birleştirmek de iyidir.
+- Kaynaklar arasında çeşitlilik olsun — 10 fikrin hepsi aynı kaynaktan (örn. hepsi App Store'dan) gelmesin.
+- Kategori/problem alanında da çeşitlilik olsun (hepsi "productivity" ya da hepsi "AI wrapper" olmasın).
+- Hiçbir fikrin adı `recent-names.json`'daki isimlerle (büyük/küçük harf duyarsız) veya bu 10 fikrin kendi arasında aynı olmasın.
+- Reddit verisi bazen sadece başlık+link olabilir (skor/yorum sayısı olmadan, `.rss` fallback'i yüzünden) — bu durumda o öğeyi "doğrulanmamış sinyal" gibi düşün, App Store/Product Hunt/HN'deki sayısal sinyallere (puan, oy, yorum sayısı) göre nispeten daha az ağırlık ver.
+
+## 3. Her fikir için şu alanları doldur
+
+```json
+{
+  "name": "KısaVeAkildaKalıcıİngilizceAd",
+  "one_liner": "Türkçe tek cümlelik özet",
+  "problem": "Türkçe: hangi problemi çözüyor",
+  "target_audience": "Türkçe: hedef kitle",
+  "core_features": ["Türkçe", "temel", "özellik", "listesi (3-5 madde)"],
+  "monetization": "Türkçe: gelir modeli",
+  "category": "kısa kategori etiketi (İngilizce, örn. productivity, health, finance)",
+  "inspiration_source": "trend verisindeki ilgili öğenin url'si",
+  "scores": {
+    "market": 1-10 arası tam sayı,
+    "feasibility_solo_dev": 1-10 arası tam sayı,
+    "originality": 1-10 arası tam sayı,
+    "overall": 1-10 arası tam sayı
+  }
+}
+```
+
+Dil kuralı: **`name` İngilizce** (kısa, akılda kalıcı, örn. "MealMate"); diğer tüm metin alanları **Türkçe**.
+
+Puan rehberi (1-10 tam sayı, ondalık yok):
+- `market`: Bu problemi yaşayan/bu ürünü isteyecek kişi sayısı büyük mü?
+- `feasibility_solo_dev`: Tek geliştiricinin MVP'sini makul sürede (haftalar, aylar değil) çıkarabileceği kadar basit mi?
+- `originality`: Piyasada doğrudan birebir aynısı var mı, yoksa gerçek bir açı/twist mi içeriyor?
+- `overall`: Genel değerlendirme (diğer üçünün ortalaması olmak zorunda değil, kendi değerlendirmen).
+
+## 4. Çıktıyı yaz
+
+Tam olarak 10 elemanlı bir JSON dizisini (yukarıdaki şemaya uyan) **`scripts/output/ideas.json`** dosyasına yaz. Dosyada başka hiçbir şey olmasın — açıklama, markdown, yorum yok, sadece geçerli JSON dizisi.

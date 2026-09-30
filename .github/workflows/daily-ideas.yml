@@ -1,0 +1,62 @@
+name: Daily Ideas
+
+on:
+  schedule:
+    # 06:00 Türkiye saati (UTC+3) = 03:00 UTC. docs/PROJE.md "Akış 1".
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch recent idea names (tekrar kontrolü için)
+        working-directory: scripts
+        run: pnpm exec tsx fetch-recent-names.ts output/recent-names.json
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Collect trend data (Reddit, App Store, Product Hunt, Hacker News)
+        working-directory: scripts
+        run: pnpm exec tsx collect-trends.ts output/trends.json
+        env:
+          PRODUCTHUNT_TOKEN: ${{ secrets.PRODUCTHUNT_TOKEN }}
+
+      - name: Generate 10 ideas with Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: "Read prompts/daily-ideas.md and follow its instructions exactly. Do not ask for confirmation or clarification — complete the task end to end and write the output file."
+          claude_args: "--max-turns 15"
+
+      - name: Validate generated ideas (şema + tekrar kontrolü)
+        working-directory: scripts
+        run: pnpm exec tsx validate-ideas.ts output/ideas.json output/recent-names.json
+
+      - name: Submit ideas batch to API
+        working-directory: scripts
+        run: pnpm exec tsx submit-ideas.ts output/ideas.json
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
