@@ -73,7 +73,7 @@ flowchart TD
 
 #### Trend toplama detayları (Faz 1, 2026-09-30 kararı)
 
-`scripts/collect-trends.ts` (ve `scripts/lib/*`) üç bağımsız kaynaktan veri toplar; biri hata verirse diğerleri devam eder, hata o kaynağın `error` alanına yazılır (ham hata workflow log'unda görünür, ayrıca ileride `trend_snapshots` tablosuna da yazılabilir — bu betik henüz D1'e yazmıyor, sadece bir JSON dosyası üretiyor).
+`scripts/collect-trends.ts` (ve `scripts/lib/*`) dört bağımsız kaynaktan veri toplar; biri hata verirse diğerleri devam eder, hata o kaynağın `error` alanına yazılır (ham hata workflow log'unda görünür, ayrıca ileride `trend_snapshots` tablosuna da yazılabilir — bu betik henüz D1'e yazmıyor, sadece bir JSON dosyası üretiyor).
 
 - **Reddit** — resmi API kullanılmıyor, public `.json`/`.rss` endpoint'leri. Subreddit listesi kodda değil `config/subreddits.json`'da, 4 grup halinde:
   - *Doğrudan fikir toplulukları* (SomebodyMakeThis, AppIdeas, Lightbulb, Startup_Ideas, SideProject) — günün en çok oy alanları (`top`, `t=day`).
@@ -86,6 +86,7 @@ flowchart TD
   - Kullanıcı adı/kişisel bilgi trend özetine dahil edilmiyor.
 - **App Store** — Apple'ın resmi, auth gerektirmeyen `rss.applemarketingtools.com` top-charts feed'i (top-free + top-paid, `us` + `tr`) ve puanlar için `itunes.apple.com/lookup` (bulk, ücretsiz, auth'suz). Bu ikisinden "düşük puanlı ama popüler" uygulamalar (≥1000 oy, en düşük puanlılar) ayrıca öne çıkarılıyor. **Test edildi, çalışmıyor:** Apple'ın eski "customer reviews" RSS'i (`itunes.apple.com/.../rss/customerreviews/...`) artık boş feed dönüyor (entry yok) — gerçek yorum metni toplama özelliği bu yüzden yok, sadece puan/oy sayısı sinyali kullanılıyor.
 - **Product Hunt** — resmi GraphQL API v2 (`api.producthunt.com/v2/api/graphql`), `PRODUCTHUNT_TOKEN` (read-only developer token, bkz. Güvenlik bölümü) ile son 24 saatin lansmanları oy sırasına göre çekiliyor. Token yoksa veya istek başarısız olursa kaynak atlanır, hat durmaz.
+- **Hacker News** (Faz 1, 2026-09-30 kararı) — resmi Algolia HN Search API (`hn.algolia.com/api/v1`), auth gerekmez. Son 24 saatin "Ask HN" gönderileri (puana göre sıralanıp kırpılıyor) + son bir haftada gönderi ve yorumlarda "is there an app", "wish there was", "why is there no app" ifadelerini içerenler (en yeniden eskiye). **Önemli teknik detay:** Algolia'nın `query` parametresi tırnaksız gönderilince kelime torbası (OR) gibi çalışıyor — "is", "there", "app" gibi yaygın kelimeler yüzünden filtre pratikte hiç uygulanmıyor, tamamen alakasız son yorumlar dönüyor (test edilip doğrulandı). Tam ifade eşleşmesi için sorgu kendi içinde çift tırnakla sarılmalı (`"is there an app"`). "app that" ifadesi tırnaklı halde bile çok gürültülü çıktı (haftada ~95 sonuç, çoğu alakasız), kullanılmıyor.
 - **Google Play atlandı:** ücretsiz/resmi bir trend API'si yok, scraping kırılgan olurdu. Faz 5'e not düşüldü (bkz. Yol haritası).
 - Ham veri Claude'a olduğu gibi gönderilmiyor; her kaynak/grup için en ilgili ~10-20 öğe seçilip kısa bir özet dosyasına (`scripts/output/trend-summary.<tarih>.json`, gitignore'lu) yazılıyor.
 

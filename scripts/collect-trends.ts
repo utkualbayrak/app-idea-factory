@@ -3,6 +3,7 @@ import path from "node:path";
 import { collectRedditGroups, type SubredditsConfig } from "./lib/reddit";
 import { collectAppStoreSection } from "./lib/appstore";
 import { collectProductHuntSection } from "./lib/producthunt";
+import { collectHackerNewsSection } from "./lib/hackernews";
 import type { TrendSummary } from "./lib/types";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -33,9 +34,18 @@ async function main() {
   console.log("Product Hunt toplaniyor...");
   const productHuntSection = await collectProductHuntSection();
 
+  console.log("Hacker News toplaniyor...");
+  const hackerNewsSection = await collectHackerNewsSection().catch((err) => ({
+    source: "hackernews",
+    label: "Hacker News (Ask HN + arama)",
+    fetchedAt: new Date().toISOString(),
+    items: [],
+    error: err instanceof Error ? err.message : String(err),
+  }));
+
   const summary: TrendSummary = {
     generatedAt: new Date().toISOString(),
-    sections: [...redditSections, appStoreSection, productHuntSection],
+    sections: [...redditSections, appStoreSection, productHuntSection, hackerNewsSection],
   };
 
   await mkdir(path.dirname(outPath), { recursive: true });

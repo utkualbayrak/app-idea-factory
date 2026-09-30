@@ -8,6 +8,7 @@
     "collect:reddit": "tsx collect-reddit.ts",
     "collect:appstore": "tsx collect-appstore.ts",
     "collect:producthunt": "tsx collect-producthunt.ts",
+    "collect:hackernews": "tsx collect-hackernews.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint"
   },
