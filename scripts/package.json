@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "collect-trends": "tsx collect-trends.ts",
+    "collect:reddit": "tsx collect-reddit.ts",
+    "collect:appstore": "tsx collect-appstore.ts",
+    "collect:producthunt": "tsx collect-producthunt.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint"
   },
