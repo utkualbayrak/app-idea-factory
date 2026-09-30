@@ -42,6 +42,7 @@ jobs:
         run: pnpm exec tsx collect-trends.ts output/trends.json
         env:
           PRODUCTHUNT_TOKEN: ${{ secrets.PRODUCTHUNT_TOKEN }}
+          SKIP_REDDIT: "true" # GECICI: pipeline'in geri kalanini hizli test etmek icin
 
       - name: Generate 10 ideas with Claude Code
         uses: anthropics/claude-code-action@v1

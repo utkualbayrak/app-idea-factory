@@ -19,8 +19,11 @@ async function main() {
 
   const config = JSON.parse(await readFile(CONFIG_PATH, "utf-8")) as SubredditsConfig;
 
-  console.log("Reddit toplaniyor...");
-  const redditSections = await collectRedditGroups(config);
+  // Reddit'in .rss fallback'i rate-limit backoff'u yuzunden yavas (bkz.
+  // docs/PROJE.md); test/debug icin SKIP_REDDIT=true ile atlanabilir.
+  const skipReddit = process.env.SKIP_REDDIT === "true";
+  console.log(skipReddit ? "Reddit atlaniyor (SKIP_REDDIT=true)..." : "Reddit toplaniyor...");
+  const redditSections = skipReddit ? [] : await collectRedditGroups(config);
 
   console.log("App Store toplaniyor...");
   const appStoreSection = await collectAppStoreSection().catch((err) => ({
