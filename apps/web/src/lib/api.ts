@@ -95,10 +95,39 @@ export function patchSettings(key: SourceSettingKey, value: boolean): Promise<{ 
   return request("/admin/settings", { method: "PATCH", body: JSON.stringify({ key, value }) });
 }
 
-export function triggerCron(): Promise<{ ok: true }> {
-  return request("/admin/trigger-cron", { method: "POST" });
+export type DispatchableWorkflow = "daily-ideas.yml" | "reevaluate-idea.yml" | "find-competitors.yml";
+
+export function triggerWorkflow(workflow: DispatchableWorkflow, inputs?: Record<string, string>): Promise<{ ok: true }> {
+  return request("/admin/trigger-workflow", { method: "POST", body: JSON.stringify({ workflow, inputs }) });
 }
 
 export function fetchCronRuns(limit = 30): Promise<{ runs: CronRun[] }> {
   return request(`/admin/cron-runs?limit=${limit}`);
+}
+
+export interface TrendSnapshot {
+  id: string;
+  fetched_at: string;
+  source: string;
+  payload: unknown;
+  cron_run_id: string | null;
+}
+
+export function fetchTrendSnapshots(cronRunId: string): Promise<{ snapshots: TrendSnapshot[] }> {
+  return request(`/admin/trend-snapshots?cron_run_id=${cronRunId}`);
+}
+
+// Grup 4: notlarla yeniden değerlendirme + rakip bulma (ikisi de arka
+// planda bir GitHub workflow'u tetikler, sonuç birkaç dakika sonra gelir).
+export interface Competitor {
+  id: string;
+  idea_id: string;
+  app_name: string;
+  url: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export function fetchCompetitors(ideaId: string): Promise<{ competitors: Competitor[] }> {
+  return request(`/ideas/${ideaId}/competitors`);
 }

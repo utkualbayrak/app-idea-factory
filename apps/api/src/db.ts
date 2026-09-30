@@ -58,3 +58,28 @@ export function serializeCronRun(row: CronRunRow): CronRun {
     source_breakdown: row.source_breakdown ? JSON.parse(row.source_breakdown) : null,
   };
 }
+
+export interface CompetitorRow {
+  id: string;
+  idea_id: string;
+  app_name: string;
+  url: string | null;
+  note: string | null;
+  created_at: string;
+}
+
+export interface TrendSnapshotRow {
+  id: string;
+  fetched_at: string;
+  source: string;
+  payload: string;
+  cron_run_id: string | null;
+}
+
+export interface TrendSnapshot extends Omit<TrendSnapshotRow, "payload"> {
+  payload: unknown;
+}
+
+export function serializeTrendSnapshot(row: TrendSnapshotRow): TrendSnapshot {
+  return { ...row, payload: JSON.parse(row.payload) };
+}

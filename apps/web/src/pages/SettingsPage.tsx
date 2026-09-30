@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { fetchSettings, patchSettings, triggerCron, type SourceSettingKey } from "@/lib/api";
-import { Button } from "@/components/ui/button";
+import { fetchSettings, patchSettings, type SourceSettingKey } from "@/lib/api";
+import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -15,8 +15,6 @@ const SOURCE_LABELS: Record<SourceSettingKey, string> = {
 export function SettingsPage() {
   const [settings, setSettings] = useState<Record<SourceSettingKey, boolean> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [triggering, setTriggering] = useState(false);
-  const [triggerMessage, setTriggerMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSettings()
@@ -33,21 +31,6 @@ export function SettingsPage() {
       // başarısızsa eski değere geri dön
       setSettings((prev) => (prev ? { ...prev, [key]: !checked } : prev));
       setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function handleTrigger() {
-    setTriggering(true);
-    setTriggerMessage(null);
-    try {
-      await triggerCron();
-      setTriggerMessage("Tetiklendi — birkaç dakika içinde Cron Geçmişi'nde görünecek.");
-    } catch (err) {
-      setTriggerMessage(
-        `Tetiklenemedi: ${err instanceof Error ? err.message : String(err)}. GH_WORKFLOW_DISPATCH_TOKEN Worker secret'ı eklenmemiş olabilir.`,
-      );
-    } finally {
-      setTriggering(false);
     }
   }
 
@@ -85,14 +68,17 @@ export function SettingsPage() {
         <CardHeader>
           <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Manuel tetikleme</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
+        <CardContent>
+          <p className="mb-3 text-sm text-muted-foreground">
             Günlük cron'u zamanlanmış saati beklemeden şimdi çalıştırır (aktif kaynak ayarlarıyla).
           </p>
-          <Button onClick={handleTrigger} disabled={triggering} className="w-fit">
-            {triggering ? "Tetikleniyor…" : "Cron'u şimdi tetikle"}
-          </Button>
-          {triggerMessage && <p className="text-sm text-muted-foreground">{triggerMessage}</p>}
+          <WorkflowTriggerButton
+            label="Cron'u şimdi tetikle"
+            loadingLabel="Tetikleniyor…"
+            successMessage="Tetiklendi — birkaç dakika içinde Cron Geçmişi'nde görünecek."
+            workflow="daily-ideas.yml"
+            variant="default"
+          />
         </CardContent>
       </Card>
     </div>

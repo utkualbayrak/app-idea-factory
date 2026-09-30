@@ -85,3 +85,44 @@ export async function finishCronRun(
     body: JSON.stringify(patch),
   });
 }
+
+// Grup 4: notlarla yeniden değerlendirme, rakip bulma, trend_snapshots.
+export async function fetchIdeaById(id: string): Promise<unknown> {
+  const body = await fetchJson<{ idea: unknown }>(`${BASE_URL}/ideas/${id}`, { headers: authHeaders() });
+  return body.idea;
+}
+
+export async function submitReevaluation(id: string, data: unknown): Promise<void> {
+  await fetchJson(`${BASE_URL}/admin/ideas/${id}/reevaluate`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function submitCompetitors(ideaId: string, competitors: unknown[]): Promise<void> {
+  await fetchJson(`${BASE_URL}/admin/competitors`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ idea_id: ideaId, competitors }),
+  });
+}
+
+export async function fetchLatestSnapshot(source: string): Promise<{ payload: unknown } | null> {
+  const body = await fetchJson<{ snapshot: { payload: unknown } | null }>(
+    `${BASE_URL}/admin/trend-snapshots/latest?source=${encodeURIComponent(source)}`,
+    { headers: authHeaders() },
+  );
+  return body.snapshot;
+}
+
+export async function submitTrendSnapshots(
+  cronRunId: string | undefined,
+  snapshots: { source: string; payload: unknown }[],
+): Promise<void> {
+  await fetchJson(`${BASE_URL}/admin/trend-snapshots`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ cron_run_id: cronRunId, snapshots }),
+  });
+}

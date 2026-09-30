@@ -35,3 +35,24 @@ export const ideaInputSchema = z.object({
 export const ideasArraySchema = z.array(ideaInputSchema).length(10);
 
 export type IdeaInput = z.infer<typeof ideaInputSchema>;
+
+// Grup 4: notlarla yeniden değerlendirme (apps/api/src/schema.ts'deki
+// reevaluationSchema ile aynı olmalı).
+export const reevaluationSchema = z.object({
+  scores: ideaScoresSchema,
+  tags: z.array(z.string().min(1)).min(1).optional(),
+});
+
+export type Reevaluation = z.infer<typeof reevaluationSchema>;
+
+// Grup 4: rakip/benzer uygulama bulma (apps/api/src/schema.ts'deki
+// competitorSchema ile aynı olmalı).
+export const competitorSchema = z.object({
+  app_name: z.string().min(1),
+  url: z.string().min(1).nullable().optional(),
+  note: z.string().min(1).nullable().optional(),
+});
+
+export const competitorsArraySchema = z.array(competitorSchema).max(10);
+
+export type Competitor = z.infer<typeof competitorSchema>;

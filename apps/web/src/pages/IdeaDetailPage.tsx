@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, GitCompare } from "lucide-react";
-import { fetchIdea, fetchIdeas, patchIdea, type Idea } from "@/lib/api";
+import { ArrowLeft, Clipboard, ClipboardCheck, GitCompare, Search, Sparkles } from "lucide-react";
+import { fetchIdea, fetchIdeas, fetchCompetitors, patchIdea, type Idea, type Competitor } from "@/lib/api";
 import { ScoreSlider } from "@/components/ScoreSlider";
 import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SourceIcon } from "@/components/SourceIcon";
+import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
 import { SCORE_HELP } from "@/lib/score-help";
 import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
+import { ideaToMarkdown } from "@/lib/export-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +38,8 @@ export function IdeaDetailPage() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [otherIdeas, setOtherIdeas] = useState<Idea[] | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [competitors, setCompetitors] = useState<Competitor[] | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -45,6 +49,9 @@ export function IdeaDetailPage() {
         setNote(res.idea.user_note ?? "");
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+    fetchCompetitors(id)
+      .then((res) => setCompetitors(res.competitors))
+      .catch(() => setCompetitors([]));
   }, [id]);
 
   async function handleRate(value: number) {
@@ -80,6 +87,13 @@ export function IdeaDetailPage() {
     if (open && !otherIdeas) {
       fetchIdeas().then((res) => setOtherIdeas(res.ideas.filter((i) => i.id !== id)));
     }
+  }
+
+  async function handleExport() {
+    if (!idea) return;
+    await navigator.clipboard.writeText(ideaToMarkdown(idea));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }
 
   if (error) return <p className="py-10 text-center text-destructive">Fikir yüklenemedi: {error}</p>;
@@ -179,6 +193,46 @@ export function IdeaDetailPage() {
         </div>
       )}
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Rakipler</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {competitors == null ? (
+            <p className="text-sm text-muted-foreground">Yükleniyor…</p>
+          ) : competitors.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Henüz rakip/benzer uygulama bulunmadı.
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {competitors.map((c) => (
+                <li key={c.id} className="min-w-0 rounded-md border p-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    {c.url ? (
+                      <a href={c.url} target="_blank" rel="noreferrer" className="truncate font-medium text-primary underline underline-offset-4">
+                        {c.app_name}
+                      </a>
+                    ) : (
+                      <span className="truncate font-medium">{c.app_name}</span>
+                    )}
+                  </div>
+                  {c.note && <p className="mt-0.5 text-muted-foreground break-words">{c.note}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <WorkflowTriggerButton
+            label="Rakipleri bul"
+            loadingLabel="Tetikleniyor…"
+            successMessage="Tetiklendi — birkaç dakika içinde sayfayı yenileyip kontrol edebilirsin."
+            workflow="find-competitors.yml"
+            inputs={id ? { idea_id: id } : undefined}
+            icon={<Search className="size-4" />}
+          />
+        </CardContent>
+      </Card>
+
       <InfoCard title="Senin puanın">
         <ScoreSlider value={idea.user_rating} onChange={handleRate} />
       </InfoCard>
@@ -191,8 +245,13 @@ export function IdeaDetailPage() {
               Son güncelleme: {new Date(idea.user_note_updated_at).toLocaleString("tr-TR")}
             </p>
           )}
+          {idea.last_reevaluated_at && (
+            <p className="text-xs text-muted-foreground">
+              Son yeniden değerlendirme: {new Date(idea.last_reevaluated_at).toLocaleString("tr-TR")}
+            </p>
+          )}
         </CardHeader>
-        <CardContent className="flex flex-col gap-2">
+        <CardContent className="flex flex-col gap-3">
           <Label htmlFor="note" className="sr-only">
             Not
           </Label>
@@ -200,10 +259,26 @@ export function IdeaDetailPage() {
           <Button onClick={handleSaveNote} disabled={saving} className="w-fit">
             {saving ? "Kaydediliyor…" : "Notu kaydet"}
           </Button>
+          <WorkflowTriggerButton
+            label="Notlarımla yeniden değerlendir"
+            loadingLabel="Tetikleniyor…"
+            successMessage="Tetiklendi — birkaç dakika içinde sayfayı yenileyip kontrol edebilirsin."
+            workflow="reevaluate-idea.yml"
+            inputs={id ? { idea_id: id } : undefined}
+            disabled={!idea.user_note}
+            icon={<Sparkles className="size-4" />}
+          />
+          {!idea.user_note && (
+            <p className="text-xs text-muted-foreground">Yeniden değerlendirme için önce bir not ekleyip kaydet.</p>
+          )}
         </CardContent>
       </Card>
 
       <div className="flex flex-wrap gap-3">
+        <Button variant="outline" onClick={handleExport}>
+          {copied ? <ClipboardCheck className="size-4" /> : <Clipboard className="size-4" />}
+          {copied ? "Kopyalandı" : "Dışa aktar"}
+        </Button>
         <DropdownMenu onOpenChange={handleCompareMenuOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">

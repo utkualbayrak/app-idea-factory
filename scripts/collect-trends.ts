@@ -4,6 +4,7 @@ import { collectRedditGroups, type SubredditsConfig } from "./lib/reddit";
 import { collectAppStoreSection } from "./lib/appstore";
 import { collectProductHuntSection } from "./lib/producthunt";
 import { collectHackerNewsSection } from "./lib/hackernews";
+import { fetchLatestSnapshot } from "./lib/api-client";
 import type { SourceSection, TrendSummary } from "./lib/types";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -20,6 +21,19 @@ function emptySection(source: string, label: string): SourceSection {
   return { source, label, fetchedAt: new Date().toISOString(), items: [] };
 }
 
+// notes.txt madde 13: App Store gibi zaman içinde az değişen kaynaklar için
+// son 24 saat içinde toplanmış bir trend_snapshots kaydı varsa onu yeniden
+// kullan, tekrar çekme. API'ye erişilemiyorsa (yerel çalıştırma, eksik env
+// vb.) sessizce normal akışa düş — bu saf bir optimizasyon, zorunlu değil.
+async function tryReuseRecentSnapshot(source: string): Promise<SourceSection | null> {
+  try {
+    const snapshot = await fetchLatestSnapshot(source);
+    return (snapshot?.payload as SourceSection | undefined) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   const outPath = process.argv[2] ?? DEFAULT_OUT_PATH;
 
@@ -33,16 +47,24 @@ async function main() {
   const redditSections = skipReddit ? [] : await collectRedditGroups(config);
 
   const skipAppStore = process.env.SKIP_APPSTORE === "true";
-  console.log(skipAppStore ? "App Store atlaniyor (SKIP_APPSTORE=true)..." : "App Store toplaniyor...");
-  const appStoreSection = skipAppStore
-    ? emptySection("appstore", "App Store top charts (US, TR)")
-    : await collectAppStoreSection().catch((err) => ({
-        source: "appstore",
-        label: "App Store top charts (US, TR)",
-        fetchedAt: new Date().toISOString(),
-        items: [],
-        error: err instanceof Error ? err.message : String(err),
-      }));
+  const reusedAppStore = skipAppStore ? null : await tryReuseRecentSnapshot("appstore");
+  let appStoreSection: SourceSection;
+  if (skipAppStore) {
+    console.log("App Store atlaniyor (SKIP_APPSTORE=true)...");
+    appStoreSection = emptySection("appstore", "App Store top charts (US, TR)");
+  } else if (reusedAppStore) {
+    console.log("App Store son 24 saat icinde toplanmis, trend_snapshots'tan yeniden kullaniliyor...");
+    appStoreSection = reusedAppStore;
+  } else {
+    console.log("App Store toplaniyor...");
+    appStoreSection = await collectAppStoreSection().catch((err) => ({
+      source: "appstore",
+      label: "App Store top charts (US, TR)",
+      fetchedAt: new Date().toISOString(),
+      items: [],
+      error: err instanceof Error ? err.message : String(err),
+    }));
+  }
 
   const skipProductHunt = process.env.SKIP_PRODUCTHUNT === "true";
   console.log(skipProductHunt ? "Product Hunt atlaniyor (SKIP_PRODUCTHUNT=true)..." : "Product Hunt toplaniyor...");

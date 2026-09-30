@@ -68,3 +68,52 @@ export const cronRunPatchSchema = z
 
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
 export type CronRunPatch = z.infer<typeof cronRunPatchSchema>;
+
+// Grup 3: GitHub workflow_dispatch tetikleme (cron, yeniden değerlendirme,
+// rakip bulma — hepsi aynı mekanizma).
+export const DISPATCHABLE_WORKFLOWS = ["daily-ideas.yml", "reevaluate-idea.yml", "find-competitors.yml"] as const;
+
+export const triggerWorkflowSchema = z.object({
+  workflow: z.enum(DISPATCHABLE_WORKFLOWS),
+  inputs: z.record(z.string(), z.string()).optional(),
+});
+
+export type TriggerWorkflow = z.infer<typeof triggerWorkflowSchema>;
+
+// Grup 4: notlarla yeniden değerlendirme — scores aynı şema, ideaInputSchema
+// gibi tüm fikri değil sadece puan+gerekçe+tag alanlarını günceller.
+export const reevaluationSchema = z.object({
+  scores: ideaScoresSchema,
+  tags: z.array(z.string().min(1)).min(1).optional(),
+});
+
+export type Reevaluation = z.infer<typeof reevaluationSchema>;
+
+// Grup 4: rakip/benzer uygulama bulma.
+export const competitorSchema = z.object({
+  app_name: z.string().min(1),
+  url: z.string().min(1).nullable().optional(),
+  note: z.string().min(1).nullable().optional(),
+});
+
+export const competitorsSubmitSchema = z.object({
+  idea_id: z.string().min(1),
+  competitors: z.array(competitorSchema).max(10),
+});
+
+export type CompetitorsSubmit = z.infer<typeof competitorsSubmitSchema>;
+
+// Grup 4: trend_snapshots'ın gerçekten kullanılması.
+export const trendSnapshotsSubmitSchema = z.object({
+  cron_run_id: z.string().min(1).optional(),
+  snapshots: z
+    .array(
+      z.object({
+        source: z.string().min(1),
+        payload: z.unknown(),
+      }),
+    )
+    .min(1),
+});
+
+export type TrendSnapshotsSubmit = z.infer<typeof trendSnapshotsSubmitSchema>;

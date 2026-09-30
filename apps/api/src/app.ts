@@ -3,12 +3,24 @@ import cors from "cors";
 import { z } from "zod";
 import { env } from "cloudflare:workers";
 import { requireWorkflowSecret } from "./auth";
-import { serializeIdea, serializeCronRun, type IdeaRow, type CronRunRow } from "./db";
+import {
+  serializeIdea,
+  serializeCronRun,
+  serializeTrendSnapshot,
+  type IdeaRow,
+  type CronRunRow,
+  type CompetitorRow,
+  type TrendSnapshotRow,
+} from "./db";
 import {
   ideaBatchRequestSchema,
   ideaPatchSchema,
   settingsPatchSchema,
   cronRunPatchSchema,
+  triggerWorkflowSchema,
+  reevaluationSchema,
+  competitorsSubmitSchema,
+  trendSnapshotsSubmitSchema,
   SOURCE_SETTING_KEYS,
 } from "./schema";
 
@@ -213,10 +225,18 @@ app.patch("/admin/settings", async (req, res) => {
   res.json({ ok: true });
 });
 
-// GitHub'ın workflow_dispatch API'sini tetikler (manuel "cron'u şimdi
-// çalıştır" butonu). GH_WORKFLOW_DISPATCH_TOKEN, 'workflow' scope'lu bir
-// PAT — Worker secret olarak eklenmesi gerekiyor (bkz. CLAUDE.md).
-app.post("/admin/trigger-cron", async (_req, res) => {
+// GitHub'ın workflow_dispatch API'sini tetikler — manuel "cron'u şimdi
+// çalıştır", "yeniden değerlendir" ve "rakipleri bul" butonlarının hepsi
+// aynı mekanizmayı kullanıyor, tek uç. GH_WORKFLOW_DISPATCH_TOKEN,
+// 'workflow' scope'lu bir PAT — Worker secret olarak eklenmesi gerekiyor
+// (bkz. CLAUDE.md).
+app.post("/admin/trigger-workflow", async (req, res) => {
+  const parsed = triggerWorkflowSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
   const { GH_WORKFLOW_DISPATCH_TOKEN } = env as unknown as Env;
   if (!GH_WORKFLOW_DISPATCH_TOKEN) {
     res.status(500).json({ error: "not_configured" });
@@ -224,7 +244,7 @@ app.post("/admin/trigger-cron", async (_req, res) => {
   }
 
   const ghRes = await fetch(
-    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/daily-ideas.yml/dispatches`,
+    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${parsed.data.workflow}/dispatches`,
     {
       method: "POST",
       headers: {
@@ -233,7 +253,7 @@ app.post("/admin/trigger-cron", async (_req, res) => {
         "User-Agent": "app-idea-factory-worker",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ref: "main" }),
+      body: JSON.stringify({ ref: "main", inputs: parsed.data.inputs ?? {} }),
     },
   );
 
@@ -286,6 +306,121 @@ app.patch("/admin/cron-runs/:id", requireWorkflowSecret, async (req, res) => {
     .run();
 
   res.json({ ok: true });
+});
+
+// Grup 4: notlarla yeniden değerlendirme sonucunu yazar, last_reevaluated_at'i damgalar.
+app.patch("/admin/ideas/:id/reevaluate", requireWorkflowSecret, async (req, res) => {
+  const parsed = reevaluationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const existing = await db().prepare("SELECT * FROM ideas WHERE id = ?1").bind(req.params.id).first<IdeaRow>();
+  if (!existing) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const tags = parsed.data.tags ? JSON.stringify(parsed.data.tags) : existing.tags;
+
+  await db()
+    .prepare(`UPDATE ideas SET scores = ?1, tags = ?2, last_reevaluated_at = ?3 WHERE id = ?4`)
+    .bind(JSON.stringify(parsed.data.scores), tags, now, req.params.id)
+    .run();
+
+  res.json({ idea: serializeIdea({ ...existing, scores: JSON.stringify(parsed.data.scores), tags, last_reevaluated_at: now }) });
+});
+
+// Grup 4: rakip/benzer uygulamalar. Her "rakipleri bul" çalışması o fikrin
+// önceki sonuçlarının yerine geçer (tekrar tekrar biriktirmesin diye).
+app.get("/ideas/:id/competitors", async (req, res) => {
+  const { results } = await db()
+    .prepare("SELECT * FROM idea_competitors WHERE idea_id = ?1 ORDER BY created_at DESC")
+    .bind(req.params.id)
+    .all<CompetitorRow>();
+  res.json({ competitors: results });
+});
+
+app.post("/admin/competitors", requireWorkflowSecret, async (req, res) => {
+  const parsed = competitorsSubmitSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const { idea_id, competitors } = parsed.data;
+  const statements = [
+    db().prepare("DELETE FROM idea_competitors WHERE idea_id = ?1").bind(idea_id),
+    ...competitors.map((c) =>
+      db()
+        .prepare(`INSERT INTO idea_competitors (id, idea_id, app_name, url, note) VALUES (?1, ?2, ?3, ?4, ?5)`)
+        .bind(crypto.randomUUID(), idea_id, c.app_name, c.url ?? null, c.note ?? null),
+    ),
+  ];
+  await db().batch(statements);
+
+  res.status(201).json({ ok: true, count: competitors.length });
+});
+
+// Grup 4: trend_snapshots'ın gerçekten kullanılması — 24 saatten eski
+// kayıtlar her yeni yazımda temizlenir (ayrı bir cleanup adımı/endpoint'i
+// gerekmiyor).
+app.post("/admin/trend-snapshots", requireWorkflowSecret, async (req, res) => {
+  const parsed = trendSnapshotsSubmitSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const statements = [
+    db().prepare(`DELETE FROM trend_snapshots WHERE fetched_at < datetime('now', '-24 hours')`),
+    ...parsed.data.snapshots.map((s) =>
+      db()
+        .prepare(`INSERT INTO trend_snapshots (id, source, payload, cron_run_id) VALUES (?1, ?2, ?3, ?4)`)
+        .bind(crypto.randomUUID(), s.source, JSON.stringify(s.payload), parsed.data.cron_run_id ?? null),
+    ),
+  ];
+  await db().batch(statements);
+
+  res.status(201).json({ ok: true, count: parsed.data.snapshots.length });
+});
+
+// collect-trends.ts'in yavaş değişen bir kaynağı (örn. App Store) son 24
+// saat içinde zaten toplanmışsa tekrar çekmeyip bu kaydı yeniden kullanması için.
+app.get("/admin/trend-snapshots/latest", requireWorkflowSecret, async (req, res) => {
+  const source = typeof req.query.source === "string" ? req.query.source : undefined;
+  if (!source) {
+    res.status(400).json({ error: "source_required" });
+    return;
+  }
+
+  const row = await db()
+    .prepare(
+      `SELECT * FROM trend_snapshots WHERE source = ?1 AND fetched_at >= datetime('now', '-24 hours')
+       ORDER BY fetched_at DESC LIMIT 1`,
+    )
+    .bind(source)
+    .first<TrendSnapshotRow>();
+
+  res.json({ snapshot: row ? serializeTrendSnapshot(row) : null });
+});
+
+// Cron Geçmişi ekranından bir çalışmanın hangi öğeleri topladığını görmek için.
+app.get("/admin/trend-snapshots", async (req, res) => {
+  const cronRunId = typeof req.query.cron_run_id === "string" ? req.query.cron_run_id : undefined;
+  if (!cronRunId) {
+    res.status(400).json({ error: "cron_run_id_required" });
+    return;
+  }
+
+  const { results } = await db()
+    .prepare("SELECT * FROM trend_snapshots WHERE cron_run_id = ?1 ORDER BY source")
+    .bind(cronRunId)
+    .all<TrendSnapshotRow>();
+
+  res.json({ snapshots: results.map(serializeTrendSnapshot) });
 });
 
 export default app;

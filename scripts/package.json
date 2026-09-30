@@ -15,6 +15,10 @@
     "finish-cron-run": "tsx finish-cron-run.ts",
     "validate-ideas": "tsx validate-ideas.ts",
     "submit-ideas": "tsx submit-ideas.ts",
+    "fetch-idea": "tsx fetch-idea.ts",
+    "submit-reevaluation": "tsx submit-reevaluation.ts",
+    "submit-competitors": "tsx submit-competitors.ts",
+    "submit-trend-snapshots": "tsx submit-trend-snapshots.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint"
   },
