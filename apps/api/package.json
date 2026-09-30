@@ -11,11 +11,13 @@
     "lint": "oxlint"
   },
   "dependencies": {
+    "cors": "^2.8.6",
     "express": "^5.2.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260930.1",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "oxlint": "^1.86.0",
     "typescript": "~6.0.3",

@@ -4,6 +4,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-09-30",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "WEB_ORIGIN": "https://app-idea-factory.utkualbayrakrak.workers.dev"
+  },
   "d1_databases": [
     {
       "binding": "DB",

@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { z } from "zod";
 import { env } from "cloudflare:workers";
 import { requireWorkflowSecret } from "./auth";
@@ -7,9 +8,21 @@ import { ideaBatchRequestSchema, ideaPatchSchema } from "./schema";
 
 interface Env {
   DB: D1Database;
+  WEB_ORIGIN: string;
 }
 
 const app = express();
+
+// UI (apps/web) ve API farklı subdomain'lerde (Cloudflare Access session
+// cookie'si de her ikisi için ayrı) — tarayıcıdan doğrudan çağrılabilmesi
+// için CORS gerekiyor. docs/PROJE.md mimarisi UI<->API'nin doğrudan
+// konuştuğunu varsayıyor (proxy yok).
+app.use(
+  cors({
+    origin: (_origin, callback) => callback(null, (env as unknown as Env).WEB_ORIGIN),
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
 function db() {

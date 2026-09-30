@@ -1,0 +1,17 @@
+{
+  "name": "App Idea Factory",
+  "short_name": "Idea Factory",
+  "description": "Günlük üretilen mobil uygulama fikirlerini gözden geçir, puanla, geliştirmeye seç.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f7f8",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

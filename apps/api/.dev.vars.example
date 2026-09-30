@@ -1,1 +1,2 @@
 WORKFLOW_API_SHARED_SECRET=local-dev-secret
+WEB_ORIGIN=http://localhost:5173
