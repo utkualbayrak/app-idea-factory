@@ -5,7 +5,7 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 ## Amaç
 
 1. Her sabah gerçek trend verilerine dayanan 10 özgün mobil uygulama fikri üretmek.
-2. Fikirleri telefondan rahatça gözden geçirmek, her birine kendi puanını (1-5 yıldız) ve notunu vermek, sıralamak ve filtrelemek.
+2. Fikirleri telefondan rahatça gözden geçirmek, her birine kendi puanını (0.00-10.00, slider ile) ve notunu vermek, sıralamak ve filtrelemek.
 3. Yalnızca kullanıcının seçtiği fikirler için platform ve kapsam seçip "Geliştir" görevi atamak.
 4. "Geliştir" denince Claude Code'un otomatik olarak başlayıp o fikrin iskeletini yeni bir GitHub reposunda oluşturması.
 5. Süreci Slack (bildirim) ve GitHub Issues + Projects (görev takibi) ile entegre etmek.
@@ -29,7 +29,13 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Fikir üretim saati | Her gün 06:00 Türkiye saati (03:00 UTC, cron `0 3 * * *`) |
 | Geliştirme kapsamı | Üretilen fikirlerin hiçbiri otomatik geliştirilmez. Repo ve iskelet yalnızca kullanıcının "Geliştir" dediği fikirler için oluşturulur. |
 | Geliştir tetikleme | Görev formu gönderilince iskelet üretimi onay beklemeden otomatik başlar. Claude Code yalnızca iskeleti kurar; iskeletten sonra geliştirmeye kendiliğinden devam etmez. |
-| Kullanıcı puanı | Her fikre 1-5 yıldız kullanıcı puanı ve isteğe bağlı kısa not. Claude'un ürettiği puanlardan ayrı tutulur. |
+| Kullanıcı puanı | Her fikre 0.00-10.00 arası (0.25 adımlarla, slider component'i ile) kullanıcı puanı ve isteğe bağlı kısa not. Claude'un ürettiği puanlarla aynı ölçek ama ayrı tutulur. |
+| Claude puanları | 0.00-10.00 arası, 0.25 adımlarla; her alt puanın (`market`, `feasibility_solo_dev`, `originality`, `overall`) yanında Claude'un o puanı neden verdiğini açıklayan kısa bir metin (`*_reason`) de üretiliyor. `feasibility_solo_dev` ayrıca gerekli API/kaynaklara erişimin ücretsiz/kolay mı yoksa ücretli/kısıtlı mı olduğunu da değerlendiriyor. |
+| Fikir durumu | Üç ayrı durum: aktif (`new`), `on_hold` (kullanıcı üzerinde düşünüyor, listede soluk görünür ama görünür kalır), `deleted` (listeden tamamen gizlenir, yalnızca isim tekrarı kontrolü için DB'de kalır). Eski "arşivle" kavramı `on_hold`'a karşılık geliyor — ayrı bir "arşiv" durumu yok. |
+| Birleşik puan | Kullanıcı puanı girilmiş fikirlerde liste sütununda `%40 Claude overall + %60 kullanıcı puanı` ile hesaplanan birleşik bir puan gösterilir; kullanıcı puanı yoksa `—` gösterilir. |
+| Not geçmişi | Notun tam revizyon geçmişi tutulmaz (tek kullanıcılı uygulama) — yalnızca son güncelleme zamanı (`user_note_updated_at`) saklanır. |
+| Etiketleme | Claude her fikir için 2-4 kısa İngilizce etiket (`tags`) üretir; arama/filtreleme bunları da kapsar. |
+| İlham kaynağı | Artık tek bir url değil, dizi (`inspiration_sources`) — Claude birden fazla trend sinyalini birleştirip tek fikirde sentezleyebiliyor. |
 | Puanların etkisi | Kullanıcı puanları ve notları fikir üretimini etkilemez. Amaç her gün geniş bir yelpazede fikir keşfetmek; üretim talimatına puan, not veya kullanıcı tercihi bilgisi gönderilmez. Geçmiş fikirler yalnızca tekrar kontrolü için (fikir adları) kullanılır. |
 | Bildirim | Slack ücretsiz plan, incoming webhook |
 | Görev takibi | GitHub Issues + GitHub Projects (kişisel hesapta tek pano) |
@@ -105,18 +111,18 @@ flowchart TD
 
 - Vite + React + TypeScript, mobil öncelikli, PWA olarak telefona eklenebilir.
 - Ekranlar:
-  - **Günün fikirleri:** Tarihe göre gruplanmış liste. Her kartta Claude puanı ve kullanıcının yıldız puanı. Sıralama (Claude puanı, kullanıcı puanı, tarih) ve filtreleme (kategori, puan, durum, puanlanmamışlar).
-  - **Fikir detayı:** Açıklama, hedef kitle, temel özellikler, Claude puan dökümü, ilham kaynağı, kullanıcı puanı (1-5 yıldız) ve not alanı, "Geliştir" butonu.
+  - **Günün fikirleri:** Tarihe göre gruplanmış liste. Her kartta Claude puanı ve kullanıcının puanı (0.00-10.00). Sıralama (Claude puanı, kullanıcı puanı, birleşik puan, tarih) ve filtreleme (kategori, puan, durum, puanlanmamışlar).
+  - **Fikir detayı:** Açıklama, hedef kitle, temel özellikler, Claude puan dökümü (her alt puanın gerekçesiyle), ilham kaynakları, kullanıcı puanı (slider, 0.00-10.00) ve not alanı, "Geliştir" butonu.
   - **Görev formu:** Seçilen fikir için geliştirme parametreleri.
   - **Görevler:** Görev durumu (queued, running, done, failed), repo ve issue linkleri, "tekrar dene".
-- Fikir aksiyonları: yıldız puanı ver, not yaz, arşivle, "Geliştir". Puan vermek hiçbir otomatik işlem başlatmaz; yalnızca "Geliştir" + görev formu iskelet üretimini başlatır.
+- Fikir aksiyonları: puan ver (slider), not yaz, askıya al (`on_hold`), sil (`deleted`, listeden gizlenir), "Geliştir". Puan vermek hiçbir otomatik işlem başlatmaz; yalnızca "Geliştir" + görev formu iskelet üretimini başlatır.
 - Bir fikir için zaten görev varsa "Geliştir" butonu görev durumunu gösterir, ikinci repo açılmaz.
 
 ### 2. API (`apps/api`)
 
 - Express + TypeScript, Cloudflare Workers üzerinde. D1'e binding ile erişir.
 - Uç noktalar (taslak):
-  - `GET /ideas`, `GET /ideas/:id`, `PATCH /ideas/:id` (kullanıcı puanı, not, arşiv)
+  - `GET /ideas`, `GET /ideas/:id`, `PATCH /ideas/:id` (kullanıcı puanı, not, durum: `on_hold`/`deleted`)
   - `GET /ideas/recent-names` (tekrar kontrolü için)
   - `POST /ideas/batch` (günlük fikirleri kaydetme; yalnızca workflow çağırır)
   - `POST /tasks`, `GET /tasks`, `POST /tasks/:id/retry`
@@ -144,15 +150,22 @@ flowchart TD
   "core_features": ["string (Türkçe)"],
   "monetization": "string (Türkçe)",
   "category": "string",
-  "inspiration_source": "string (url)",
+  "inspiration_sources": ["string (url)"],
+  "tags": ["string (İngilizce, 2-4 etiket)"],
   "scores": {
-    "market": 1,
-    "feasibility_solo_dev": 1,
-    "originality": 1,
-    "overall": 1
+    "market": 0.00,
+    "market_reason": "string (Türkçe)",
+    "feasibility_solo_dev": 0.00,
+    "feasibility_solo_dev_reason": "string (Türkçe)",
+    "originality": 0.00,
+    "originality_reason": "string (Türkçe)",
+    "overall": 0.00,
+    "overall_reason": "string (Türkçe)"
   }
 }
 ```
+
+Puanlar 0.00-10.00 arası, yalnızca 0.25'in katları (bkz. "Kesinleşen kararlar").
 
 ### 5. Görev formu alanları
 
@@ -182,7 +195,7 @@ flowchart TD
 
 ## Veri modeli (D1, taslak)
 
-- **ideas:** id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_source, scores (json), user_rating (1-5, boş olabilir), user_note, status (new / archived / in_development / developed)
+- **ideas:** id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, her alt puan + gerekçesi), user_rating (0.00-10.00, 0.25 adımlarla, boş olabilir), user_note, user_note_updated_at (boş olabilir), last_reevaluated_at (boş olabilir), status (new / on_hold / deleted / in_development / developed)
 - **tasks:** id, idea_id, created_at, updated_at, params (json), status (queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
 - **trend_snapshots:** id, fetched_at, source, payload (json)
 

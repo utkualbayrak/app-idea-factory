@@ -1,12 +1,21 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "https://ideas-api.utkualbayrak.dev";
+// Production'da /api altına gelen istekler, web Worker'ın kendi fetch
+// handler'ı (worker/index.ts) tarafından sunucu tarafında API Worker'a
+// proxy'lenir — tarayıcı için her zaman same-origin, CORS/Access-oturumu
+// karmaşası yok. Yerel geliştirmede .env.development bunu ezip doğrudan
+// yerel API'ye (http://localhost:8787) bağlanır.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-export type IdeaStatus = "new" | "archived" | "in_development" | "developed";
+export type IdeaStatus = "new" | "on_hold" | "deleted" | "in_development" | "developed";
 
 export interface IdeaScores {
   market: number;
+  market_reason: string;
   feasibility_solo_dev: number;
+  feasibility_solo_dev_reason: string;
   originality: number;
+  originality_reason: string;
   overall: number;
+  overall_reason: string;
 }
 
 export interface Idea {
@@ -20,10 +29,13 @@ export interface Idea {
   core_features: string[];
   monetization: string;
   category: string;
-  inspiration_source: string;
+  inspiration_sources: string[];
+  tags: string[];
   scores: IdeaScores;
   user_rating: number | null;
   user_note: string | null;
+  user_note_updated_at: string | null;
+  last_reevaluated_at: string | null;
   status: IdeaStatus;
 }
 

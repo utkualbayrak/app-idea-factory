@@ -2,12 +2,25 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { fetchIdea, patchIdea, type Idea } from "@/lib/api";
-import { StarRating } from "@/components/StarRating";
+import { ScoreSlider } from "@/components/ScoreSlider";
+import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { SCORE_HELP } from "@/lib/score-help";
+import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+const STATUS_LABELS: Record<Idea["status"], string> = {
+  new: "Yeni",
+  on_hold: "Askıda",
+  deleted: "Silinmiş",
+  in_development: "Geliştiriliyor",
+  developed: "Geliştirildi",
+};
 
 export function IdeaDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -43,10 +56,15 @@ export function IdeaDetailPage() {
     }
   }
 
-  async function handleToggleArchive() {
-    if (!id || !idea) return;
-    const nextStatus = idea.status === "archived" ? "new" : "archived";
+  async function handleSetHold(nextStatus: "new" | "on_hold") {
+    if (!id) return;
     const res = await patchIdea(id, { status: nextStatus });
+    setIdea(res.idea);
+  }
+
+  async function handleDelete() {
+    if (!id) return;
+    const res = await patchIdea(id, { status: "deleted" });
     setIdea(res.idea);
   }
 
@@ -55,15 +73,19 @@ export function IdeaDetailPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <Link to="/" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="size-4" />
-        Fikirler
-      </Link>
-
-      <div>
-        <div className="flex flex-wrap items-center gap-2">
+      {/* Geri butonu + fikir adı + kısa açıklama, üst header'ın (h-14)
+          hemen altında sabit kalır — notlar/skor kartı vb. altında scroll'a
+          devam eder ("scroll atildikca fikirler back butonu ve fikrin adi
+          ile kisa aciklamasi sabit kalsin" isteği). */}
+      <div className="sticky top-14 z-[5] -mx-4 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <Link to="/" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="size-4" />
+          Fikirler
+        </Link>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold">{idea.name}</h1>
-          <Badge variant="secondary">{idea.category}</Badge>
+          <Badge className={categoryColorClasses(idea.category)}>{idea.category}</Badge>
+          <Badge className={statusColorClasses(idea.status)}>{STATUS_LABELS[idea.status]}</Badge>
         </div>
         <p className="mt-1 text-muted-foreground">{idea.one_liner}</p>
       </div>
@@ -73,10 +95,31 @@ export function IdeaDetailPage() {
           <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Claude puan dökümü</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <ScoreBar label="Pazar" value={idea.scores.market} />
-          <ScoreBar label="Uygulanabilirlik (solo)" value={idea.scores.feasibility_solo_dev} />
-          <ScoreBar label="Özgünlük" value={idea.scores.originality} />
-          <ScoreBar label="Genel" value={idea.scores.overall} highlight />
+          <ScoreBar
+            label="Pazar"
+            help={SCORE_HELP.market}
+            value={idea.scores.market}
+            reason={idea.scores.market_reason}
+          />
+          <ScoreBar
+            label="Uygulanabilirlik (solo)"
+            help={SCORE_HELP.feasibility_solo_dev}
+            value={idea.scores.feasibility_solo_dev}
+            reason={idea.scores.feasibility_solo_dev_reason}
+          />
+          <ScoreBar
+            label="Özgünlük"
+            help={SCORE_HELP.originality}
+            value={idea.scores.originality}
+            reason={idea.scores.originality_reason}
+          />
+          <ScoreBar
+            label="Genel"
+            help={SCORE_HELP.overall}
+            value={idea.scores.overall}
+            reason={idea.scores.overall_reason}
+            highlight
+          />
         </CardContent>
       </Card>
 
@@ -95,26 +138,51 @@ export function IdeaDetailPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <InfoCard title="Gelir modeli">{idea.monetization}</InfoCard>
-        <InfoCard title="İlham kaynağı">
-          <a
-            href={idea.inspiration_source}
-            target="_blank"
-            rel="noreferrer"
-            className="block truncate text-primary underline underline-offset-4"
-            title={idea.inspiration_source}
-          >
-            {idea.inspiration_source}
-          </a>
+        <InfoCard title="İlham kaynakları">
+          <ul className="flex flex-col gap-1">
+            {idea.inspiration_sources.map((source) => (
+              <li key={source}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href={source}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block truncate text-primary underline underline-offset-4"
+                    >
+                      {source}
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs break-all">{source}</TooltipContent>
+                </Tooltip>
+              </li>
+            ))}
+          </ul>
         </InfoCard>
       </div>
 
+      {idea.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {idea.tags.map((tag) => (
+            <Badge key={tag} variant="outline">
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      )}
+
       <InfoCard title="Senin puanın">
-        <StarRating value={idea.user_rating} onChange={handleRate} size="lg" />
+        <ScoreSlider value={idea.user_rating} onChange={handleRate} />
       </InfoCard>
 
       <Card>
         <CardHeader>
           <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Not</CardTitle>
+          {idea.user_note_updated_at && (
+            <p className="text-xs text-muted-foreground">
+              Son güncelleme: {new Date(idea.user_note_updated_at).toLocaleString("tr-TR")}
+            </p>
+          )}
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           <Label htmlFor="note" className="sr-only">
@@ -128,9 +196,37 @@ export function IdeaDetailPage() {
       </Card>
 
       <div className="flex flex-wrap gap-3">
-        <Button variant="outline" onClick={handleToggleArchive}>
-          {idea.status === "archived" ? "Arşivden çıkar" : "Arşivle"}
-        </Button>
+        {idea.status === "on_hold" ? (
+          <ConfirmButton
+            label="Askıdan çıkar"
+            title="Fikri askıdan çıkar?"
+            description="Fikir tekrar aktif duruma dönecek."
+            confirmLabel="Çıkar"
+            variant="outline"
+            onConfirm={() => handleSetHold("new")}
+          />
+        ) : (
+          <ConfirmButton
+            label="Askıya al"
+            title="Fikri askıya al?"
+            description="Fikir listede soluk görünecek ama kaybolmayacak; istediğin zaman tekrar aktif edebilirsin."
+            confirmLabel="Askıya al"
+            variant="outline"
+            className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
+            disabled={idea.status === "deleted"}
+            onConfirm={() => handleSetHold("on_hold")}
+          />
+        )}
+        <ConfirmButton
+          label="Sil"
+          title="Fikri sil?"
+          description="Fikir listeden tamamen kaldırılır (yalnızca isim tekrarı kontrolü için veritabanında kalır). Bu ekrandan geri alınamaz."
+          confirmLabel="Sil"
+          variant="destructive"
+          confirmVariant="destructive"
+          disabled={idea.status === "deleted"}
+          onConfirm={handleDelete}
+        />
         <Button disabled title="Faz 3'te gelecek">
           Geliştir (yakında)
         </Button>
@@ -150,14 +246,28 @@ function InfoCard({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
-function ScoreBar({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+function ScoreBar({
+  label,
+  help,
+  value,
+  reason,
+  highlight,
+}: {
+  label: string;
+  help: string;
+  value: number;
+  reason: string;
+  highlight?: boolean;
+}) {
   return (
-    <div className="grid grid-cols-[minmax(100px,140px)_1fr_40px] items-center gap-3 text-sm">
-      <span className={highlight ? "font-semibold text-foreground" : "text-muted-foreground"}>{label}</span>
+    <div className="grid grid-cols-[minmax(140px,180px)_1fr_56px] items-center gap-3 text-sm">
+      <span className={highlight ? "font-semibold text-foreground" : "text-muted-foreground"}>
+        <ScoreReasonPopover label={label} help={help} value={value} reason={reason} />
+      </span>
       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div className="h-full bg-primary" style={{ width: `${value * 10}%` }} />
       </div>
-      <span className="text-right text-muted-foreground">{value}/10</span>
+      <span className="text-right text-muted-foreground">{value.toFixed(2)}/10</span>
     </div>
   );
 }

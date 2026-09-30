@@ -40,14 +40,20 @@ app.get("/health", async (_req, res) => {
 });
 
 app.get("/ideas", async (req, res) => {
+  // 'deleted' durumu listeden tamamen gizlenir (bkz. docs/PROJE.md "Kesinleşen
+  // kararlar"); id üzerinden doğrudan erişim (GET /ideas/:id) hâlâ mümkün.
   const batchDate = typeof req.query.batch_date === "string" ? req.query.batch_date : undefined;
 
   const { results } = batchDate
     ? await db()
-        .prepare("SELECT * FROM ideas WHERE batch_date = ?1 ORDER BY created_at DESC")
+        .prepare(
+          "SELECT * FROM ideas WHERE batch_date = ?1 AND status != 'deleted' ORDER BY created_at DESC",
+        )
         .bind(batchDate)
         .all<IdeaRow>()
-    : await db().prepare("SELECT * FROM ideas ORDER BY created_at DESC").all<IdeaRow>();
+    : await db()
+        .prepare("SELECT * FROM ideas WHERE status != 'deleted' ORDER BY created_at DESC")
+        .all<IdeaRow>();
 
   res.json({ ideas: results.map(serializeIdea) });
 });
@@ -95,8 +101,8 @@ app.post("/ideas/batch", requireWorkflowSecret, async (req, res) => {
       .prepare(
         `INSERT INTO ideas
           (id, created_at, batch_date, name, one_liner, problem, target_audience,
-           core_features, monetization, category, inspiration_source, scores, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 'new')`,
+           core_features, monetization, category, inspiration_sources, tags, scores, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'new')`,
       )
       .bind(
         crypto.randomUUID(),
@@ -109,7 +115,8 @@ app.post("/ideas/batch", requireWorkflowSecret, async (req, res) => {
         JSON.stringify(idea.core_features),
         idea.monetization,
         idea.category,
-        idea.inspiration_source,
+        JSON.stringify(idea.inspiration_sources),
+        JSON.stringify(idea.tags),
         JSON.stringify(idea.scores),
       ),
   );
@@ -141,16 +148,26 @@ app.patch("/ideas/:id", async (req, res) => {
     return;
   }
 
+  const now = new Date().toISOString();
   const next = { ...existing, ...parsed.data };
+  // user_note her değiştiğinde (boşa çekilse bile) güncelleme zamanı damgalanır.
+  const userNoteChanged = Object.hasOwn(parsed.data, "user_note");
+  const userNoteUpdatedAt = userNoteChanged ? now : existing.user_note_updated_at;
 
   await db()
     .prepare(
-      `UPDATE ideas SET user_rating = ?1, user_note = ?2, status = ?3 WHERE id = ?4`,
+      `UPDATE ideas SET user_rating = ?1, user_note = ?2, user_note_updated_at = ?3, status = ?4 WHERE id = ?5`,
     )
-    .bind(next.user_rating ?? null, next.user_note ?? null, next.status, req.params.id)
+    .bind(
+      next.user_rating ?? null,
+      next.user_note ?? null,
+      userNoteUpdatedAt,
+      next.status,
+      req.params.id,
+    )
     .run();
 
-  res.json({ idea: serializeIdea(next as IdeaRow) });
+  res.json({ idea: serializeIdea({ ...next, user_note_updated_at: userNoteUpdatedAt } as IdeaRow) });
 });
 
 export default app;

@@ -5,11 +5,18 @@ import { z } from "zod";
 // erken ve net bir hatayla doğrulaması için (docs/PROJE.md Akış 1, adım 5).
 // Paketler arası paylaşım yok (ayrı pnpm workspace'leri); bu iki dosyayı
 // birlikte güncelle.
+// Puanlar 0.00-10.00 arasında, 0.25 adımlarla (41 durak) veriliyor.
+const scoreValue = z.number().min(0).max(10).multipleOf(0.25);
+
 export const ideaScoresSchema = z.object({
-  market: z.number().int().min(1).max(10),
-  feasibility_solo_dev: z.number().int().min(1).max(10),
-  originality: z.number().int().min(1).max(10),
-  overall: z.number().int().min(1).max(10),
+  market: scoreValue,
+  market_reason: z.string().min(1),
+  feasibility_solo_dev: scoreValue,
+  feasibility_solo_dev_reason: z.string().min(1),
+  originality: scoreValue,
+  originality_reason: z.string().min(1),
+  overall: scoreValue,
+  overall_reason: z.string().min(1),
 });
 
 export const ideaInputSchema = z.object({
@@ -20,7 +27,8 @@ export const ideaInputSchema = z.object({
   core_features: z.array(z.string().min(1)).min(1),
   monetization: z.string().min(1),
   category: z.string().min(1),
-  inspiration_source: z.string().min(1),
+  inspiration_sources: z.array(z.string().min(1)).min(1),
+  tags: z.array(z.string().min(1)).min(1),
   scores: ideaScoresSchema,
 });
 

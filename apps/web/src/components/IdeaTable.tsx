@@ -12,17 +12,19 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown } from "lucide-react";
 import type { Idea } from "@/lib/api";
+import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
+import { combinedScore } from "@/lib/scoring";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { StarRating } from "@/components/StarRating";
 
 const PAGE_SIZE = 8;
 
 const STATUS_LABELS: Record<Idea["status"], string> = {
   new: "Yeni",
-  archived: "Arşivlenmiş",
+  on_hold: "Askıda",
+  deleted: "Silinmiş",
   in_development: "Geliştiriliyor",
   developed: "Geliştirildi",
 };
@@ -32,25 +34,60 @@ function ClaudeScoreCell({ idea }: { idea: Idea }) {
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="cursor-default font-medium text-primary underline decoration-dotted underline-offset-4">
-          {idea.scores.overall}/10
+          {idea.scores.overall.toFixed(2)}/10
         </span>
       </TooltipTrigger>
       <TooltipContent>
         <div className="flex flex-col gap-0.5 text-xs">
-          <span>Pazar: {idea.scores.market}/10</span>
-          <span>Uygulanabilirlik: {idea.scores.feasibility_solo_dev}/10</span>
-          <span>Özgünlük: {idea.scores.originality}/10</span>
+          <span>Pazar: {idea.scores.market.toFixed(2)}/10</span>
+          <span>Uygulanabilirlik: {idea.scores.feasibility_solo_dev.toFixed(2)}/10</span>
+          <span>Özgünlük: {idea.scores.originality.toFixed(2)}/10</span>
         </div>
       </TooltipContent>
     </Tooltip>
   );
 }
 
-function StatusBadge({ status }: { status: Idea["status"] }) {
+function CombinedScoreCell({ idea }: { idea: Idea }) {
+  const combined = combinedScore(idea.scores.overall, idea.user_rating);
+  if (combined == null) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-default text-muted-foreground">—</span>
+        </TooltipTrigger>
+        <TooltipContent>Kullanıcı puanı bekleniyor</TooltipContent>
+      </Tooltip>
+    );
+  }
   return (
-    <Badge variant="outline" className={status === "archived" ? "text-muted-foreground" : undefined}>
-      {STATUS_LABELS[status]}
-    </Badge>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-default font-medium underline decoration-dotted underline-offset-4">
+          {combined.toFixed(2)}/10
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>%40 Claude + %60 kullanıcı puanı</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function StatusBadge({ status }: { status: Idea["status"] }) {
+  return <Badge className={statusColorClasses(status)}>{STATUS_LABELS[status]}</Badge>;
+}
+
+function CategoryBadge({ category }: { category: string }) {
+  return <Badge className={categoryColorClasses(category)}>{category}</Badge>;
+}
+
+function OneLinerCell({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div className="line-clamp-1 cursor-default text-sm text-muted-foreground">{text}</div>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">{text}</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -61,14 +98,14 @@ const columns: ColumnDef<Idea>[] = [
     cell: ({ row }) => (
       <div>
         <div className="font-medium">{row.original.name}</div>
-        <div className="line-clamp-1 text-sm text-muted-foreground">{row.original.one_liner}</div>
+        <OneLinerCell text={row.original.one_liner} />
       </div>
     ),
   },
   {
     accessorKey: "category",
     header: "Kategori",
-    cell: ({ row }) => <Badge variant="secondary">{row.original.category}</Badge>,
+    cell: ({ row }) => <CategoryBadge category={row.original.category} />,
   },
   {
     id: "claude_score",
@@ -80,7 +117,20 @@ const columns: ColumnDef<Idea>[] = [
     id: "user_rating",
     accessorFn: (idea) => idea.user_rating ?? -1,
     header: ({ column }) => <SortButton column={column} label="Kullanıcı puanı" />,
-    cell: ({ row }) => <StarRating value={row.original.user_rating} />,
+    cell: ({ row }) => {
+      const rating = row.original.user_rating;
+      return (
+        <span className="tabular-nums text-muted-foreground">
+          {rating == null ? "—" : `${rating.toFixed(2)}/10`}
+        </span>
+      );
+    },
+  },
+  {
+    id: "combined_score",
+    accessorFn: (idea) => combinedScore(idea.scores.overall, idea.user_rating) ?? -1,
+    header: ({ column }) => <SortButton column={column} label="Birleşik puan" />,
+    cell: ({ row }) => <CombinedScoreCell idea={row.original} />,
   },
   {
     accessorKey: "status",
@@ -141,7 +191,11 @@ export function IdeaTable({ ideas }: { ideas: Idea[] }) {
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={row.id} className="cursor-pointer" onClick={() => navigate(`/ideas/${row.original.id}`)}>
+              <TableRow
+                key={row.id}
+                className="cursor-pointer"
+                onClick={() => navigate(`/ideas/${row.original.id}`)}
+              >
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                 ))}
@@ -160,13 +214,11 @@ export function IdeaTable({ ideas }: { ideas: Idea[] }) {
               key={row.id}
               type="button"
               onClick={() => navigate(`/ideas/${idea.id}`)}
-              className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left"
+              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50"
             >
               <div className="flex min-w-0 items-center gap-2">
                 <span className="truncate font-medium">{idea.name}</span>
-                <Badge variant="secondary" className="shrink-0">
-                  {idea.category}
-                </Badge>
+                <CategoryBadge category={idea.category} />
               </div>
               <div className="shrink-0">
                 <ClaudeScoreCell idea={idea} />
