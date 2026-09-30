@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchIdeas, type Idea, type IdeaStatus } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,13 +9,14 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-// 'deleted' durumu API'den (GET /ideas) hiç dönmez, bu yüzden filtre
-// seçeneklerinde yer almıyor.
-const STATUS_LABELS: Record<Exclude<IdeaStatus, "deleted">, string> = {
+const MAX_COMPARE = 4;
+
+// 'deleted' API'den hiç dönmez; 'in_development'/'developed' ise artık bu
+// listede hiç görünmüyor (Grup 3 — /developed ekranına taşındı), bu yüzden
+// filtre seçeneklerinde de yok.
+const STATUS_LABELS: Record<"new" | "on_hold", string> = {
   new: "Yeni",
   on_hold: "Askıda",
-  in_development: "Geliştiriliyor",
-  developed: "Geliştirildi",
 };
 
 const SCORE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
@@ -24,7 +26,7 @@ const STORAGE_KEY = "app-idea-factory:idea-list-filters";
 interface Filters {
   search: string;
   category: string;
-  status: IdeaStatus | "all";
+  status: "new" | "on_hold" | "all";
   minRating: string;
   onlyUnrated: boolean;
   minMarket: string;
@@ -58,14 +60,25 @@ function loadFilters(): Filters {
 }
 
 export function IdeaListPage() {
+  const navigate = useNavigate();
   const [ideas, setIdeas] = useState<Idea[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(loadFilters);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchIdeas()
       .then((res) => setIdeas(res.ideas))
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, []);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < MAX_COMPARE) next.add(id);
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -82,15 +95,20 @@ export function IdeaListPage() {
 
   const isFiltered = useMemo(() => JSON.stringify(filters) !== JSON.stringify(DEFAULT_FILTERS), [filters]);
 
-  const categories = useMemo(() => {
-    if (!ideas) return [];
-    return [...new Set(ideas.map((idea) => idea.category))].sort();
-  }, [ideas]);
+  // Geliştirme aşamasına geçen fikirler ana listeden tamamen çıkar,
+  // /developed ekranında görünür (Grup 3).
+  const activeIdeas = useMemo(
+    () => (ideas ?? []).filter((idea) => idea.status !== "in_development" && idea.status !== "developed"),
+    [ideas],
+  );
+
+  const categories = useMemo(
+    () => [...new Set(activeIdeas.map((idea) => idea.category))].sort(),
+    [activeIdeas],
+  );
 
   const filtered = useMemo(() => {
-    if (!ideas) return [];
-
-    let result = ideas;
+    let result = activeIdeas;
     const query = filters.search.trim().toLowerCase();
     if (query) {
       result = result.filter(
@@ -114,7 +132,7 @@ export function IdeaListPage() {
     if (filters.dateTo) result = result.filter((idea) => idea.batch_date <= filters.dateTo);
 
     return result;
-  }, [ideas, filters]);
+  }, [activeIdeas, filters]);
 
   const groups = useMemo(() => {
     const map = new Map<string, Idea[]>();
@@ -162,7 +180,7 @@ export function IdeaListPage() {
 
           <div className="flex flex-col gap-1.5">
             <Label>Durum</Label>
-            <Select value={filters.status} onValueChange={(v) => set("status", v as IdeaStatus | "all")}>
+            <Select value={filters.status} onValueChange={(v) => set("status", v as "new" | "on_hold" | "all")}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
@@ -270,9 +288,32 @@ export function IdeaListPage() {
       {groups.map(([batchDate, batchIdeas]) => (
         <section key={batchDate} className="flex flex-col gap-2">
           <h2 className="text-sm font-medium tracking-wide text-muted-foreground uppercase">{batchDate}</h2>
-          <IdeaTable ideas={batchIdeas} />
+          <IdeaTable
+            ideas={batchIdeas}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            selectionFull={selectedIds.size >= MAX_COMPARE}
+          />
         </section>
       ))}
+
+      {selectedIds.size > 0 && (
+        <div className="sticky bottom-4 z-10 mx-auto flex w-fit items-center gap-3 rounded-full border bg-card px-4 py-2 shadow-lg">
+          <span className="text-sm text-muted-foreground">
+            {selectedIds.size} fikir seçildi{selectedIds.size >= MAX_COMPARE ? ` (maks. ${MAX_COMPARE})` : ""}
+          </span>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+            Temizle
+          </Button>
+          <Button
+            size="sm"
+            disabled={selectedIds.size < 2}
+            onClick={() => navigate(`/compare?ids=${[...selectedIds].join(",")}`)}
+          >
+            Karşılaştır
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

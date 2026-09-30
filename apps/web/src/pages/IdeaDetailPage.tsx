@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
-import { fetchIdea, patchIdea, type Idea } from "@/lib/api";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, GitCompare } from "lucide-react";
+import { fetchIdea, fetchIdeas, patchIdea, type Idea } from "@/lib/api";
 import { ScoreSlider } from "@/components/ScoreSlider";
 import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -13,6 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const STATUS_LABELS: Record<Idea["status"], string> = {
   new: "Yeni",
@@ -24,10 +30,12 @@ const STATUS_LABELS: Record<Idea["status"], string> = {
 
 export function IdeaDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [idea, setIdea] = useState<Idea | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [otherIdeas, setOtherIdeas] = useState<Idea[] | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -68,6 +76,12 @@ export function IdeaDetailPage() {
     setIdea(res.idea);
   }
 
+  function handleCompareMenuOpenChange(open: boolean) {
+    if (open && !otherIdeas) {
+      fetchIdeas().then((res) => setOtherIdeas(res.ideas.filter((i) => i.id !== id)));
+    }
+  }
+
   if (error) return <p className="py-10 text-center text-destructive">Fikir yüklenemedi: {error}</p>;
   if (!idea) return <p className="py-10 text-center text-muted-foreground">Yükleniyor…</p>;
 
@@ -78,7 +92,7 @@ export function IdeaDetailPage() {
           devam eder ("scroll atildikca fikirler back butonu ve fikrin adi
           ile kisa aciklamasi sabit kalsin" isteği). */}
       <div className="sticky top-14 z-[5] -mx-4 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <Link to="/" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link to="/ideas" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" />
           Fikirler
         </Link>
@@ -122,6 +136,14 @@ export function IdeaDetailPage() {
           />
         </CardContent>
       </Card>
+
+      {(idea.status === "in_development" || idea.status === "developed") && (
+        <InfoCard title="Geliştirme bilgileri">
+          <p className="text-muted-foreground">
+            Repo/issue linkleri henüz yok — görev formu ve iskelet üretimi Faz 3'te geliyor.
+          </p>
+        </InfoCard>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <InfoCard title="Problem">{idea.problem}</InfoCard>
@@ -182,6 +204,28 @@ export function IdeaDetailPage() {
       </Card>
 
       <div className="flex flex-wrap gap-3">
+        <DropdownMenu onOpenChange={handleCompareMenuOpenChange}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline">
+              <GitCompare className="size-4" />
+              Karşılaştır
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+            {!otherIdeas ? (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">Yükleniyor…</div>
+            ) : otherIdeas.length === 0 ? (
+              <div className="px-2 py-1.5 text-sm text-muted-foreground">Karşılaştırılacak başka fikir yok.</div>
+            ) : (
+              otherIdeas.map((other) => (
+                <DropdownMenuItem key={other.id} onClick={() => navigate(`/compare?ids=${id},${other.id}`)}>
+                  <span className="truncate">{other.name}</span>
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">{other.category}</span>
+                </DropdownMenuItem>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         {idea.status === "on_hold" ? (
           <ConfirmButton
             label="Askıdan çıkar"

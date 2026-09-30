@@ -1,7 +1,9 @@
-import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { Lightbulb, LogOut } from "lucide-react";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Hammer, Lightbulb, LogOut } from "lucide-react";
 import { IdeaListPage } from "@/pages/IdeaListPage";
 import { IdeaDetailPage } from "@/pages/IdeaDetailPage";
+import { DevelopedPage } from "@/pages/DevelopedPage";
+import { ComparePage } from "@/pages/ComparePage";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
@@ -18,8 +20,12 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
-// Grup 3'te buraya /developed, /compare, /settings, /cron-runs eklenecek.
-const NAV_ITEMS = [{ to: "/", label: "Fikirler", icon: Lightbulb }];
+// Grup 3'te buraya /settings, /cron-runs eklenecek. /compare bir nav öğesi
+// değil — seçim/dropdown üzerinden erişiliyor.
+const NAV_ITEMS = [
+  { to: "/ideas", label: "Fikirler", icon: Lightbulb },
+  { to: "/developed", label: "Geliştirilenler", icon: Hammer },
+];
 
 function App() {
   const location = useLocation();
@@ -73,8 +79,12 @@ function App() {
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-16">
           <Routes>
-            <Route path="/" element={<IdeaListPage />} />
+            {/* Grup 3 sonunda "/" dashboard olacak; şimdilik /ideas'a yönlendiriyor. */}
+            <Route path="/" element={<Navigate to="/ideas" replace />} />
+            <Route path="/ideas" element={<IdeaListPage />} />
             <Route path="/ideas/:id" element={<IdeaDetailPage />} />
+            <Route path="/developed" element={<DevelopedPage />} />
+            <Route path="/compare" element={<ComparePage />} />
           </Routes>
         </main>
       </SidebarInset>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   type Column,
@@ -16,6 +16,7 @@ import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
 import { combinedScore } from "@/lib/scoring";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -94,62 +95,26 @@ function OneLinerCell({ text }: { text: string }) {
 // table-fixed ile eşleşen sabit sütun genişlikleri — masaüstü tabloda hiçbir
 // zaman sağa scroll çıkmasın diye (bkz. "Fikir" sütunundaki one_liner'ın
 // table-layout: auto altında sütunu genişletip tabloyu taşırdığı bug).
-const COLUMN_WIDTHS: Record<string, string> = {
-  name: "w-[28%]",
-  category: "w-[12%]",
-  claude_score: "w-[15%]",
-  user_rating: "w-[17%]",
-  combined_score: "w-[15%]",
-  status: "w-[13%]",
-};
-
-const columns: ColumnDef<Idea>[] = [
-  {
-    accessorKey: "name",
-    header: "Fikir",
-    cell: ({ row }) => (
-      <div className="min-w-0">
-        <div className="truncate font-medium">{row.original.name}</div>
-        <OneLinerCell text={row.original.one_liner} />
-      </div>
-    ),
-  },
-  {
-    accessorKey: "category",
-    header: "Kategori",
-    cell: ({ row }) => <CategoryBadge category={row.original.category} />,
-  },
-  {
-    id: "claude_score",
-    accessorFn: (idea) => idea.scores.overall,
-    header: ({ column }) => <SortButton column={column} label="Claude puanı" />,
-    cell: ({ row }) => <ClaudeScoreCell idea={row.original} />,
-  },
-  {
-    id: "user_rating",
-    accessorFn: (idea) => idea.user_rating ?? -1,
-    header: ({ column }) => <SortButton column={column} label="Kullanıcı puanı" />,
-    cell: ({ row }) => {
-      const rating = row.original.user_rating;
-      return (
-        <span className="tabular-nums text-muted-foreground">
-          {rating == null ? "—" : `${rating.toFixed(2)}/10`}
-        </span>
-      );
-    },
-  },
-  {
-    id: "combined_score",
-    accessorFn: (idea) => combinedScore(idea.scores.overall, idea.user_rating) ?? -1,
-    header: ({ column }) => <SortButton column={column} label="Birleşik puan" />,
-    cell: ({ row }) => <CombinedScoreCell idea={row.original} />,
-  },
-  {
-    accessorKey: "status",
-    header: "Durum",
-    cell: ({ row }) => <StatusBadge status={row.original.status} />,
-  },
-];
+function getColumnWidths(withSelection: boolean): Record<string, string> {
+  return withSelection
+    ? {
+        select: "w-[6%]",
+        name: "w-[24%]",
+        category: "w-[11%]",
+        claude_score: "w-[14%]",
+        user_rating: "w-[16%]",
+        combined_score: "w-[14%]",
+        status: "w-[15%]",
+      }
+    : {
+        name: "w-[28%]",
+        category: "w-[12%]",
+        claude_score: "w-[15%]",
+        user_rating: "w-[17%]",
+        combined_score: "w-[15%]",
+        status: "w-[13%]",
+      };
+}
 
 function SortButton({ column, label }: { column: Column<Idea, unknown>; label: string }) {
   const sorted = column.getIsSorted();
@@ -167,9 +132,104 @@ function SortButton({ column, label }: { column: Column<Idea, unknown>; label: s
   );
 }
 
-export function IdeaTable({ ideas }: { ideas: Idea[] }) {
+interface SelectionProps {
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+  selectionFull: boolean;
+}
+
+function buildColumns(selection?: SelectionProps): ColumnDef<Idea>[] {
+  const baseColumns: ColumnDef<Idea>[] = [
+    {
+      accessorKey: "name",
+      header: "Fikir",
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <div className="truncate font-medium">{row.original.name}</div>
+          <OneLinerCell text={row.original.one_liner} />
+        </div>
+      ),
+    },
+    {
+      accessorKey: "category",
+      header: "Kategori",
+      cell: ({ row }) => <CategoryBadge category={row.original.category} />,
+    },
+    {
+      id: "claude_score",
+      accessorFn: (idea) => idea.scores.overall,
+      header: ({ column }) => <SortButton column={column} label="Claude puanı" />,
+      cell: ({ row }) => <ClaudeScoreCell idea={row.original} />,
+    },
+    {
+      id: "user_rating",
+      accessorFn: (idea) => idea.user_rating ?? -1,
+      header: ({ column }) => <SortButton column={column} label="Kullanıcı puanı" />,
+      cell: ({ row }) => {
+        const rating = row.original.user_rating;
+        return (
+          <span className="tabular-nums text-muted-foreground">
+            {rating == null ? "—" : `${rating.toFixed(2)}/10`}
+          </span>
+        );
+      },
+    },
+    {
+      id: "combined_score",
+      accessorFn: (idea) => combinedScore(idea.scores.overall, idea.user_rating) ?? -1,
+      header: ({ column }) => <SortButton column={column} label="Birleşik puan" />,
+      cell: ({ row }) => <CombinedScoreCell idea={row.original} />,
+    },
+    {
+      accessorKey: "status",
+      header: "Durum",
+      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+    },
+  ];
+
+  if (!selection) return baseColumns;
+
+  const { selectedIds, onToggleSelect, selectionFull } = selection;
+  const selectColumn: ColumnDef<Idea> = {
+    id: "select",
+    header: "",
+    cell: ({ row }) => {
+      const checked = selectedIds.has(row.original.id);
+      return (
+        <Checkbox
+          checked={checked}
+          disabled={!checked && selectionFull}
+          aria-label={`${row.original.name} karşılaştırmaya ekle`}
+          onClick={(e) => e.stopPropagation()}
+          onCheckedChange={() => onToggleSelect(row.original.id)}
+        />
+      );
+    },
+  };
+
+  return [selectColumn, ...baseColumns];
+}
+
+interface IdeaTableProps {
+  ideas: Idea[];
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  selectionFull?: boolean;
+}
+
+export function IdeaTable({ ideas, selectedIds, onToggleSelect, selectionFull = false }: IdeaTableProps) {
   const navigate = useNavigate();
   const [sorting, setSorting] = useState<SortingState>([]);
+
+  const hasSelection = Boolean(selectedIds && onToggleSelect);
+  const columns = useMemo(
+    () =>
+      buildColumns(
+        selectedIds && onToggleSelect ? { selectedIds, onToggleSelect, selectionFull } : undefined,
+      ),
+    [selectedIds, onToggleSelect, selectionFull],
+  );
+  const columnWidths = useMemo(() => getColumnWidths(hasSelection), [hasSelection]);
 
   const table = useReactTable({
     data: ideas,
@@ -194,7 +254,7 @@ export function IdeaTable({ ideas }: { ideas: Idea[] }) {
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className={COLUMN_WIDTHS[header.column.id]}>
+                  <TableHead key={header.id} className={columnWidths[header.column.id]}>
                     {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
                 ))}
@@ -223,21 +283,32 @@ export function IdeaTable({ ideas }: { ideas: Idea[] }) {
       <div className="flex flex-col gap-2 md:hidden">
         {rows.map((row) => {
           const idea = row.original;
+          const checked = selectedIds?.has(idea.id) ?? false;
           return (
-            <button
+            <div
               key={row.id}
-              type="button"
               onClick={() => navigate(`/ideas/${idea.id}`)}
-              className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border bg-card p-3 text-left transition-colors hover:bg-muted/50"
+              className="flex cursor-pointer items-center gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50"
             >
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate font-medium">{idea.name}</span>
-                <CategoryBadge category={idea.category} />
+              {hasSelection && (
+                <Checkbox
+                  checked={checked}
+                  disabled={!checked && selectionFull}
+                  aria-label={`${idea.name} karşılaştırmaya ekle`}
+                  onClick={(e) => e.stopPropagation()}
+                  onCheckedChange={() => onToggleSelect?.(idea.id)}
+                />
+              )}
+              <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium">{idea.name}</span>
+                  <CategoryBadge category={idea.category} />
+                </div>
+                <div className="shrink-0">
+                  <ClaudeScoreCell idea={idea} />
+                </div>
               </div>
-              <div className="shrink-0">
-                <ClaudeScoreCell idea={idea} />
-              </div>
-            </button>
+            </div>
           );
         })}
       </div>
