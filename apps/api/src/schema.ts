@@ -44,3 +44,27 @@ export const ideaPatchSchema = z
 export type IdeaInput = z.infer<typeof ideaInputSchema>;
 export type IdeaBatchRequest = z.infer<typeof ideaBatchRequestSchema>;
 export type IdeaPatch = z.infer<typeof ideaPatchSchema>;
+
+// Grup 3: ayarlar (kaynak aç/kapat) ve cron geçmişi.
+export const SOURCE_SETTING_KEYS = [
+  "source_reddit_enabled",
+  "source_appstore_enabled",
+  "source_producthunt_enabled",
+  "source_hackernews_enabled",
+] as const;
+
+export const settingsPatchSchema = z.object({
+  key: z.enum(SOURCE_SETTING_KEYS),
+  value: z.boolean(),
+});
+
+export const cronRunPatchSchema = z
+  .object({
+    status: z.enum(["success", "failed"]),
+    source_breakdown: z.record(z.string(), z.number().int().min(0)).optional(),
+    error: z.string().nullable().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, "En az bir alan gönderilmeli");
+
+export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
+export type CronRunPatch = z.infer<typeof cronRunPatchSchema>;

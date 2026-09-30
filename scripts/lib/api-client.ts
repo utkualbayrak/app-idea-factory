@@ -56,3 +56,32 @@ export async function submitIdeasBatch(batchDate: string, ideas: unknown[]): Pro
     body: JSON.stringify({ batch_date: batchDate, ideas }),
   });
 }
+
+// Grup 3: ayarlar ekranından kapatılmış kaynakları öğrenmek için (GET
+// /admin/settings workflow-secret istemiyor ama Access header'ları yine
+// de gerekiyor, authHeaders() ikisini de gönderiyor, zararı yok).
+export async function fetchSettings(): Promise<Record<string, boolean>> {
+  const body = await fetchJson<{ settings: Record<string, boolean> }>(`${BASE_URL}/admin/settings`, {
+    headers: authHeaders(),
+  });
+  return body.settings;
+}
+
+export async function startCronRun(): Promise<string> {
+  const body = await fetchJson<{ id: string }>(`${BASE_URL}/admin/cron-runs`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  return body.id;
+}
+
+export async function finishCronRun(
+  id: string,
+  patch: { status: "success" | "failed"; source_breakdown?: Record<string, number>; error?: string },
+): Promise<void> {
+  await fetchJson(`${BASE_URL}/admin/cron-runs/${id}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+}

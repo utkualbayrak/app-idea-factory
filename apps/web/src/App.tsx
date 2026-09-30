@@ -1,9 +1,12 @@
-import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { Hammer, Lightbulb, LogOut } from "lucide-react";
+import { Link, Route, Routes, useLocation } from "react-router-dom";
+import { Hammer, History, Lightbulb, LayoutDashboard, LogOut, Settings } from "lucide-react";
+import { DashboardPage } from "@/pages/DashboardPage";
 import { IdeaListPage } from "@/pages/IdeaListPage";
 import { IdeaDetailPage } from "@/pages/IdeaDetailPage";
 import { DevelopedPage } from "@/pages/DevelopedPage";
 import { ComparePage } from "@/pages/ComparePage";
+import { SettingsPage } from "@/pages/SettingsPage";
+import { CronRunsPage } from "@/pages/CronRunsPage";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
@@ -20,11 +23,13 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 
-// Grup 3'te buraya /settings, /cron-runs eklenecek. /compare bir nav öğesi
-// değil — seçim/dropdown üzerinden erişiliyor.
+// /compare bir nav öğesi değil — seçim/dropdown üzerinden erişiliyor.
 const NAV_ITEMS = [
+  { to: "/", label: "Gösterge paneli", icon: LayoutDashboard },
   { to: "/ideas", label: "Fikirler", icon: Lightbulb },
   { to: "/developed", label: "Geliştirilenler", icon: Hammer },
+  { to: "/cron-runs", label: "Cron geçmişi", icon: History },
+  { to: "/settings", label: "Ayarlar", icon: Settings },
 ];
 
 function App() {
@@ -79,12 +84,13 @@ function App() {
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-16">
           <Routes>
-            {/* Grup 3 sonunda "/" dashboard olacak; şimdilik /ideas'a yönlendiriyor. */}
-            <Route path="/" element={<Navigate to="/ideas" replace />} />
+            <Route path="/" element={<DashboardPage />} />
             <Route path="/ideas" element={<IdeaListPage />} />
             <Route path="/ideas/:id" element={<IdeaDetailPage />} />
             <Route path="/developed" element={<DevelopedPage />} />
             <Route path="/compare" element={<ComparePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/cron-runs" element={<CronRunsPage />} />
           </Routes>
         </main>
       </SidebarInset>

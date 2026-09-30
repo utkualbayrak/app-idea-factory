@@ -29,6 +29,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Start cron run (cron geçmişi ekranı için)
+        working-directory: scripts
+        run: pnpm exec tsx start-cron-run.ts
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Fetch source settings (Ayarlar ekranından kapatılan kaynakları atla)
+        working-directory: scripts
+        run: pnpm exec tsx fetch-settings.ts
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
       - name: Fetch recent idea names (tekrar kontrolü için)
         working-directory: scripts
         run: pnpm exec tsx fetch-recent-names.ts output/recent-names.json
@@ -57,6 +73,29 @@ jobs:
       - name: Submit ideas batch to API
         working-directory: scripts
         run: pnpm exec tsx submit-ideas.ts output/ideas.json
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      # `always()` olmasa bir önceki adım patladığında GitHub Actions bu
+      # adımları hiç çalıştırmaz, cron geçmişinde run "running" durumunda asılı
+      # kalırdı. success()/failure() ile ikisinden yalnızca biri çalışır.
+      # CRON_RUN_ID start-cron-run.ts'ten $GITHUB_ENV ile geldiği için burada
+      # env: bloğuna eklemeye gerek yok, runner ortamında zaten var.
+      - name: Finish cron run (başarılı)
+        if: always() && success()
+        working-directory: scripts
+        run: pnpm exec tsx finish-cron-run.ts success output/trends.json
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Finish cron run (başarısız)
+        if: always() && failure()
+        working-directory: scripts
+        run: pnpm exec tsx finish-cron-run.ts failed output/trends.json "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}

@@ -41,6 +41,7 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Görev takibi | GitHub Issues + GitHub Projects (kişisel hesapta tek pano) |
 | Bütçe limiti | Uygulama içinde bütçe limiti özelliği yapılmayacak |
 | Fikir dili | Açıklamalar Türkçe; fikrin adı İngilizce, uygulama adı gibi kısa ve akılda kalıcı (örn. "MealMate") |
+| Cron tetikleme yetkisi (Grup 3, 2026-09-30) | Ayarlar ekranındaki "cron'u şimdi tetikle" butonu için ayrı bir token yerine mevcut `SKELETON_REPO_PAT`'e `workflow` scope'u eklendi (aynı token, yeni bir PAT yok). Worker'a `GH_WORKFLOW_DISPATCH_TOKEN` secret'ı olarak eklenmesi gerekiyor — bkz. CLAUDE.md "Grup 3 — what's live". |
 
 ## Bu kararların mimariye etkisi
 

@@ -38,3 +38,23 @@ export function serializeIdea(row: IdeaRow): Idea {
     scores: JSON.parse(row.scores),
   };
 }
+
+export interface CronRunRow {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: "running" | "success" | "failed";
+  source_breakdown: string | null;
+  error: string | null;
+}
+
+export interface CronRun extends Omit<CronRunRow, "source_breakdown"> {
+  source_breakdown: Record<string, number> | null;
+}
+
+export function serializeCronRun(row: CronRunRow): CronRun {
+  return {
+    ...row,
+    source_breakdown: row.source_breakdown ? JSON.parse(row.source_breakdown) : null,
+  };
+}

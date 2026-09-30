@@ -70,3 +70,35 @@ export function fetchIdea(id: string): Promise<{ idea: Idea }> {
 export function patchIdea(id: string, patch: IdeaPatch): Promise<{ idea: Idea }> {
   return request(`/ideas/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
+
+// Grup 3: ayarlar ekranı ve cron geçmişi.
+export type SourceSettingKey =
+  | "source_reddit_enabled"
+  | "source_appstore_enabled"
+  | "source_producthunt_enabled"
+  | "source_hackernews_enabled";
+
+export interface CronRun {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: "running" | "success" | "failed";
+  source_breakdown: Record<string, number> | null;
+  error: string | null;
+}
+
+export function fetchSettings(): Promise<{ settings: Record<SourceSettingKey, boolean> }> {
+  return request("/admin/settings");
+}
+
+export function patchSettings(key: SourceSettingKey, value: boolean): Promise<{ ok: true }> {
+  return request("/admin/settings", { method: "PATCH", body: JSON.stringify({ key, value }) });
+}
+
+export function triggerCron(): Promise<{ ok: true }> {
+  return request("/admin/trigger-cron", { method: "POST" });
+}
+
+export function fetchCronRuns(limit = 30): Promise<{ runs: CronRun[] }> {
+  return request(`/admin/cron-runs?limit=${limit}`);
+}
