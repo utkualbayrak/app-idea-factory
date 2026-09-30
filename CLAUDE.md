@@ -4,9 +4,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-**This repository currently contains no code — only the spec document `PROJE.md`.** There is no `package.json`, no build/lint/test tooling, and no git history yet. `PROJE.md` is the authoritative project plan (written in Turkish); everything below is derived from it. As code is added, update this file with real build/lint/test commands.
+**Faz 0 (setup) is done.** `docs/PROJE.md` is the authoritative project plan (written in Turkish); everything below is derived from it. GitHub repo, Cloudflare Worker (API), Cloudflare Pages/Workers static assets (web), and the D1 database all exist and are wired together and verified live (see "Faz 0 — what's live" below). Faz 1 (idea pipeline) has not started: there is no real idea-generation logic, no UI screens beyond the Vite starter page, and `/health` is the only real endpoint.
 
-**Critical process rule from `PROJE.md`'s final section:** do not code around anything listed under "Açık sorular" (open questions) without clarifying with the user first — don't assume, ask. As decisions are made, keep the "Kesinleşen kararlar" (finalized decisions) table and "Açık sorular" list in `PROJE.md` up to date. Work phase by phase starting from Faz 0 (see Roadmap below), and at the end of each phase show the user how to test what was built.
+**Critical process rule from `docs/PROJE.md`'s final section:** do not code around anything listed under "Açık sorular" (open questions) without clarifying with the user first — don't assume, ask. As decisions are made, keep the "Kesinleşen kararlar" (finalized decisions) table and "Açık sorular" list in `docs/PROJE.md` up to date. Work phase by phase (see Roadmap below), and at the end of each phase show the user how to test what was built.
+
+## Commands
+
+```bash
+pnpm install            # install all workspace deps (run from repo root)
+
+pnpm dev:web            # apps/web: vite dev server
+pnpm dev:api            # apps/api: wrangler dev (local Worker + local D1 sim)
+
+pnpm build              # typecheck+build web, typecheck api
+pnpm typecheck          # both apps
+pnpm lint               # both apps (oxlint)
+
+# deploy (real Cloudflare resources — costs nothing on free tier, but is a live change)
+pnpm --filter web deploy    # builds then `wrangler deploy` (static assets)
+pnpm --filter api deploy    # `wrangler deploy` (the Express Worker)
+```
+
+There are no automated tests yet (none exist for Faz 0's scope — just a `/health` endpoint). Add a real test runner when Faz 1 introduces logic worth testing.
+
+## Faz 0 — what's live
+
+- **GitHub repo:** https://github.com/utkualbayrak/app-idea-factory (public, per the finalized decision).
+- **API Worker:** `apps/api`, deployed at https://app-idea-factory-api.utkualbayrakrak.workers.dev — Express app run via `nodejs_compat` + `httpServerHandler` (see `apps/api/src/index.ts`), bound to D1 via `env.DB` (accessed through `import { env } from "cloudflare:workers"`, see `apps/api/src/app.ts`). Only route so far: `GET /health`, which does a `SELECT 1` against D1 to prove the binding works.
+- **D1 database:** `app-idea-factory-db` (id in `apps/api/wrangler.jsonc`). No schema/migrations yet — that's Faz 1.
+- **Web app:** `apps/web`, deployed at https://app-idea-factory.utkualbayrakrak.workers.dev — still the unmodified Vite+React+TS starter page; real screens come in Faz 2. Deployed as a Cloudflare Workers **static-assets** site (`apps/web/wrangler.jsonc`, `@cloudflare/vite-plugin`) — this is Cloudflare's current mechanism for what `docs/PROJE.md` calls "Cloudflare Pages" (Cloudflare merged Pages into Workers in 2026); same free tier, same product intent, just deployed with `wrangler deploy` instead of a separate `pages` command.
+- **Package manager:** pnpm workspaces (`pnpm-workspace.yaml`: `apps/*`). `wrangler`/`@cloudflare/vite-plugin`/`esbuild` build scripts are pre-approved via `pnpm.onlyBuiltDependencies` in the root `package.json` — needed for `wrangler dev`/`deploy` to work after a fresh `pnpm install`.
+
+### Faz 0 — deliberately NOT done yet (needs the user, not Claude)
+
+These require manual dashboard/CLI steps with credentials Claude Code should not generate or handle on the user's behalf:
+
+- **Cloudflare Access** in front of the web app + API (Zero Trust free tier, owner's email only) — not configured. Both are currently reachable by anyone with the URL.
+- **GitHub Actions secrets** — none are set yet: `CLAUDE_CODE_OAUTH_TOKEN` (user runs `claude setup-token` locally and pastes the result into repo secrets), a fine-grained GitHub PAT scoped to private-repo-creation + content + issues + Projects write (for the skeleton-generation workflow in Faz 3), a workflow↔Worker shared secret, a Cloudflare Access service token, and the Slack incoming-webhook URL (Faz 4).
+- None of `.github/workflows/*.yml` exist yet — those land in Faz 1 (`daily-ideas.yml`) and Faz 3 (`build-skeleton.yml`).
 
 ## What this project is
 
@@ -126,7 +161,6 @@ Private repo, name derived from the idea's English name (e.g. `mealmate-app`, su
     └── workflows/
 ```
 
-Note: `PROJE.md` currently lives at the repo root, not under `docs/` — move it as part of Faz 0 if adopting this structure.
 
 ## Security constraints
 
