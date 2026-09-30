@@ -5,6 +5,7 @@ import { fetchIdea, patchIdea, type Idea } from "@/lib/api";
 import { ScoreSlider } from "@/components/ScoreSlider";
 import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { SourceIcon } from "@/components/SourceIcon";
 import { SCORE_HELP } from "@/lib/score-help";
 import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const STATUS_LABELS: Record<Idea["status"], string> = {
   new: "Yeni",
@@ -139,25 +139,11 @@ export function IdeaDetailPage() {
       <div className="grid gap-4 sm:grid-cols-2">
         <InfoCard title="Gelir modeli">{idea.monetization}</InfoCard>
         <InfoCard title="İlham kaynakları">
-          <ul className="flex flex-col gap-1">
+          <div className="flex flex-wrap gap-2">
             {idea.inspiration_sources.map((source) => (
-              <li key={source}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <a
-                      href={source}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block truncate text-primary underline underline-offset-4"
-                    >
-                      {source}
-                    </a>
-                  </TooltipTrigger>
-                  <TooltipContent className="max-w-xs break-all">{source}</TooltipContent>
-                </Tooltip>
-              </li>
+              <SourceIcon key={source} url={source} />
             ))}
-          </ul>
+          </div>
         </InfoCard>
       </div>
 
@@ -236,12 +222,17 @@ export function IdeaDetailPage() {
 }
 
 function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
+  // min-w-0: grid/flex öğeleri varsayılan olarak min-width:auto alır, yani
+  // içerik (örn. uzun bir kelime) sarmasa bile küçülmeyi reddedip mobilde
+  // sayfayı sağa taşırabiliyordu (İlham kaynakları'ndaki uzun url'lerle
+  // aynı hizadaki Gelir modeli kartında yaşanan bug buydu). break-words da
+  // benzer bir metin için ek güvence.
   return (
-    <Card>
+    <Card className="min-w-0">
       <CardHeader>
         <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">{title}</CardTitle>
       </CardHeader>
-      <CardContent>{children}</CardContent>
+      <CardContent className="min-w-0 break-words">{children}</CardContent>
     </Card>
   );
 }
