@@ -199,6 +199,7 @@ flowchart TD
   - Cloudflare Access service token (GitHub)
   - Slack webhook URL'si (Worker)
 - PAT mümkün olan en dar yetkiyle oluşturulur: özel repo oluşturma, içerik yazma, issue yazma, Projects yazma.
+  - **Not (Faz 0, 2026-09-30):** GitHub'ın fine-grained PAT'ları kullanıcı hesabı seviyesindeki Projects (v2) panosunu desteklemiyor (Account permissions listesinde yok). Bu yüzden `SKELETON_REPO_PAT` fine-grained yerine **classic PAT**, `repo` + `project` scope'larıyla oluşturuldu. Daha geniş kapsamlı ama tek token ile repo/issue/Projects hepsi çalışıyor. Fine-grained'e Projects v2 desteği gelirse daraltılabilir.
 
 ## Yol haritası
 
