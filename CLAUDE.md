@@ -170,7 +170,7 @@ Fourth and last group of the post-Faz-2 feedback pass. Background AI features �
 
 ## 2nd feedback round (pre-Faz-3, 2026-10-01) — process and Grup 0
 
-A second `notes.txt` feedback list (10 items) is being worked through in 6 groups (0, A–E). Approved plan: `/Users/utkualbayrak/.claude/plans/proud-honking-cookie.md`. Groups D–E (dashboard widgets, README + repo protection) are not done yet.
+A second `notes.txt` feedback list (10 items) is being worked through in 6 groups (0, A–E). Approved plan: `/Users/utkualbayrak/.claude/plans/proud-honking-cookie.md`. Group E (README + repo protection) is not done yet.
 
 - **Process rule for this round (supersedes the Grup 1 "Verification protocol" above):** at the end of each group Claude runs `pnpm typecheck && pnpm lint && pnpm build`, then **commits and pushes itself**. The push auto-deploys. Any new D1 migration is applied `--remote` **before** the push. The user tests in production. Claude never uses Chrome to test this app's UI. Wait for the user's OK before starting the next group.
 - **`prompts/*.md` belong to the user.** The user rewrote all three prompts this round. Don't edit or revert prompt content; adapt code to the prompts' output contracts instead, and ask before proposing a prompt change.
@@ -270,6 +270,30 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   - Both tabs have a `SummaryStrip` with total/success/failed/in-progress counts.
   - The selected tab is kept in `?tab=jobs`.
 - **The detail page shows a "Son arama" / "Son değerlendirme işi" line under each trigger button** (`LastRunLine`: time, status, error, log link). `WorkflowTriggerButton`'s new `onTriggered` callback refreshes the idea and its runs, so the badge flips to "Rakip aranıyor…" immediately.
+
+### Grup D — what's live (dashboard widgets)
+
+- **`DashboardPage` layout, top to bottom:**
+  - **"Şu an" stat tiles.** These are point-in-time counts that ignore the period selector: total, new, on hold, unrated (new/on_hold without a user rating), 8.00+, in development, developed, and last cron status. Tiles with a target link to the relevant screen.
+  - **"Dönem" selector**: Son 7 gün / Son 30 gün (default) / Tümü. It scopes everything below it in that section. Ranges are computed on `batch_date` strings, with "today" taken in `Europe/Istanbul`.
+  - **Kategori dağılımı**: `components/dashboard/CategoryBars.tsx`.
+  - **Günlük ortalama Claude puanı**: `components/dashboard/ScoreTrendChart.tsx`.
+  - **Son fikir işleri** (`GET /admin/workflow-runs?limit=5`) and the existing **Son cron çalışması** pie card.
+- **Chart rules, from the `dataviz` skill:**
+  - Both charts are single-series, so they use **one** color, the new `--chart-series` token (`bg-chart-series`, `fill-chart-series`, `stroke-chart-series`), and have no legend.
+  - That token was picked with the skill's `validate_palette.js`: light `oklch(0.62 0.13 72)` passes ≥3:1 contrast on the white card; dark `oklch(0.66 0.13 78)` sits inside the dark lightness band (0.48–0.67). The theme's own `--chart-1`/`--chart-5` failed: 2.2:1 contrast in light mode, and outside the lightness band in dark mode.
+  - Don't recolor category bars per category: categories are nominal, and the skill's anti-patterns rule that out.
+- **`CategoryBars`:**
+  - Shows the top 7 categories plus "Diğer" once there are more than 8.
+  - Bars are 12px with a 4px rounded data-end and a value at the tip in muted text.
+  - The whole row is the hover/focus target, with a tooltip showing count, % and name.
+- **`ScoreTrendChart`:**
+  - Plain SVG measured with a callback-ref `ResizeObserver`, so it re-attaches when switching between the empty state and the chart.
+  - One y-axis 0–10 with ticks 0/5/10; the x-axis is labeled only at the first and last day.
+  - 2px line, 10% area wash, and a ringed end-dot with the last value labeled.
+  - A crosshair and tooltip snap to the nearest day on pointer move, and arrow keys move it when focused.
+  - A "Tablo olarak gör" `<details>` table makes every value reachable without hover.
+- **No chart library was added.** The pie card is unchanged, still the `conic-gradient` approach.
 
 ## What this project is
 
