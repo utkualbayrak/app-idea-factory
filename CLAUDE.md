@@ -170,7 +170,7 @@ Fourth and last group of the post-Faz-2 feedback pass. Background AI features �
 
 ## 2nd feedback round (pre-Faz-3, 2026-10-01) — process and Grup 0
 
-A second `notes.txt` feedback list (10 items) is being worked through in 6 groups (0, A–E). Approved plan: `/Users/utkualbayrak/.claude/plans/proud-honking-cookie.md`. Group E (README + repo protection) is not done yet.
+A second `notes.txt` feedback list (10 items) is being worked through in 6 groups (0, A–E). Approved plan: `/Users/utkualbayrak/.claude/plans/proud-honking-cookie.md`. All 6 groups are done; Faz 3 is next.
 
 - **Process rule for this round (supersedes the Grup 1 "Verification protocol" above):** at the end of each group Claude runs `pnpm typecheck && pnpm lint && pnpm build`, then **commits and pushes itself**. The push auto-deploys. Any new D1 migration is applied `--remote` **before** the push. The user tests in production. Claude never uses Chrome to test this app's UI. Wait for the user's OK before starting the next group.
 - **`prompts/*.md` belong to the user.** The user rewrote all three prompts this round. Don't edit or revert prompt content; adapt code to the prompts' output contracts instead, and ask before proposing a prompt change.
@@ -294,6 +294,22 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   - A crosshair and tooltip snap to the nearest day on pointer move, and arrow keys move it when focused.
   - A "Tablo olarak gör" `<details>` table makes every value reachable without hover.
 - **No chart library was added.** The pie card is unchanged, still the `conic-gradient` approach.
+
+### Grup E — what's live (README + repo protection)
+
+- **`README.md` (English) and `README.tr.md` (Turkish) are parallel copies.** Keep them in sync when either changes. They cover:
+  - what the app does, with a screen list and a mermaid architecture diagram (including the web Worker's `/api/*` service-binding proxy)
+  - tech stack and repo layout
+  - a full **"run your own copy"** guide: every owner-specific value to replace, by file; the Access setup order (Access app before custom domain); every Worker/GitHub secret and its purpose; Claude GitHub App; migrations-before-push; first run
+  - local dev commands and a short gotchas list
+  - No license file exists yet. That is the owner's call; don't add one unasked.
+- **`deploy.yml` now declares `permissions: contents: read`.** The other three workflows already declared their own.
+- **Repo protection ("orta" level, chosen by the user).** Applied via `gh api` after showing the user the exact commands:
+  - a `main` branch ruleset blocking deletion and force-push, with **no** PR requirement, so direct pushes and auto-deploy keep working
+  - fork PR workflow runs need approval for **all** outside contributors
+  - the wiki is disabled
+  - Repo-level `has_projects` was deliberately **left on**, because Faz 4 uses GitHub Projects (v2) and it wasn't worth risking.
+  - Default `GITHUB_TOKEN` permissions were already read-only; no workflow uses `pull_request_target`.
 
 ## What this project is
 

@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+# Deploy yalnızca repoyu okur; Cloudflare'e erişim CLOUDFLARE_API_TOKEN ile.
+# GITHUB_TOKEN'a açıkça en dar izin (public repo hijyeni).
+permissions:
+  contents: read
+
 jobs:
   deploy-api:
     runs-on: ubuntu-latest
