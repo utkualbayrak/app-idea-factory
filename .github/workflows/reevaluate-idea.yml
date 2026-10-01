@@ -35,12 +35,14 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Çalışma geçmişi > Fikir işleri: Worker'ın açtığı 'queued' satırını
-      # 'running' yapar (job_id boşsa script kendi kendine atlar).
+      # 'running' yapar; job_id boşsa (elle çalıştırma) yeni satır açar. Kullanılan
+      # id WORKFLOW_RUN_ID olarak $GITHUB_ENV'e yazılır, bitiş adımları onu okur.
       - name: Start workflow run (Çalışma geçmişi için)
         working-directory: scripts
-        run: pnpm exec tsx start-workflow-run.ts "$JOB_ID" "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: pnpm exec tsx start-workflow-run.ts "$JOB_ID" "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" reevaluate-idea.yml "$IDEA_ID"
         env:
           JOB_ID: ${{ inputs.job_id }}
+          IDEA_ID: ${{ inputs.idea_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
@@ -73,9 +75,8 @@ jobs:
       - name: Finish workflow run (başarılı)
         if: always() && success()
         working-directory: scripts
-        run: pnpm exec tsx finish-workflow-run.ts "$JOB_ID" success
+        run: pnpm exec tsx finish-workflow-run.ts "$WORKFLOW_RUN_ID" success
         env:
-          JOB_ID: ${{ inputs.job_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
@@ -83,9 +84,8 @@ jobs:
       - name: Finish workflow run (başarısız)
         if: always() && (failure() || cancelled())
         working-directory: scripts
-        run: pnpm exec tsx finish-workflow-run.ts "$JOB_ID" failed output/failure-reason.txt
+        run: pnpm exec tsx finish-workflow-run.ts "$WORKFLOW_RUN_ID" failed output/failure-reason.txt
         env:
-          JOB_ID: ${{ inputs.job_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

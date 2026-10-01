@@ -138,6 +138,18 @@ export async function submitTrendSnapshots(
 
 // 2. tur Grup C: fikir bazlı işlerin (reevaluate/find-competitors) Çalışma
 // geçmişi kaydı. job_id, Worker'ın tetiklerken oluşturduğu workflow_runs satırı.
+export async function createWorkflowRun(body: {
+  workflow: string;
+  idea_id: string;
+  run_url?: string;
+}): Promise<{ id: string }> {
+  return fetchJson(`${BASE_URL}/admin/workflow-runs`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export async function patchWorkflowRun(
   jobId: string,
   patch: { status: "running" | "success" | "failed"; run_url?: string; error?: string | null },

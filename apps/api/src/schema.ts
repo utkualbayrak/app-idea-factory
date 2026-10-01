@@ -159,3 +159,11 @@ export const workflowRunPatchSchema = z.object({
 });
 
 export type WorkflowRunPatch = z.infer<typeof workflowRunPatchSchema>;
+
+// job_id'siz başlayan işler (GitHub arayüzünden elle çalıştırma, gh workflow run)
+// kendi satırlarını açar ki ekranda son iş olarak görünsünler.
+export const workflowRunCreateSchema = z.object({
+  workflow: z.enum(IDEA_WORKFLOWS),
+  idea_id: z.string().min(1),
+  run_url: z.string().optional(),
+});

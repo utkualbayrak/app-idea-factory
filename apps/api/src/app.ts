@@ -24,6 +24,7 @@ import {
   competitorsSubmitSchema,
   trendSnapshotsSubmitSchema,
   workflowRunPatchSchema,
+  workflowRunCreateSchema,
   SOURCE_SETTING_KEYS,
   IDEA_WORKFLOWS,
   WORKFLOW_ACTIVITY,
@@ -366,6 +367,33 @@ app.get("/admin/workflow-runs", async (req, res) => {
     : await db().prepare(`${base} ORDER BY w.created_at DESC LIMIT ?1`).bind(safeLimit).all<WorkflowRunRow>();
 
   res.json({ runs: results });
+});
+
+app.post("/admin/workflow-runs", requireWorkflowSecret, async (req, res) => {
+  const parsed = workflowRunCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const { workflow, idea_id: ideaId, run_url: runUrl } = parsed.data;
+  const idea = await db().prepare("SELECT id FROM ideas WHERE id = ?1").bind(ideaId).first<{ id: string }>();
+  if (!idea) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await db().batch([
+    db()
+      .prepare(
+        "INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at, started_at, run_url) VALUES (?1, ?2, ?3, 'running', ?4, ?4, ?5)",
+      )
+      .bind(id, workflow, ideaId, now, runUrl ?? null),
+    stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
+  ]);
+  res.status(201).json({ id });
 });
 
 app.patch("/admin/workflow-runs/:id", requireWorkflowSecret, async (req, res) => {

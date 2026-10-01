@@ -11,7 +11,7 @@ async function main() {
     throw new Error("İkinci argüman 'success' veya 'failed' olmalı");
   }
   if (!jobId) {
-    console.log("job_id yok — Çalışma geçmişi kaydı atlanıyor.");
+    console.log("Çalışma geçmişi kaydı yok (başlangıç adımı çalışmadı) — atlanıyor.");
     return;
   }
 
