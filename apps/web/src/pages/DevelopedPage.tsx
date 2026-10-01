@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
-import { formatBatchDate } from "@/lib/format-date";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -22,22 +21,16 @@ export function DevelopedPage() {
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, []);
 
-  const filtered = useMemo(() => {
-    const developing = (ideas ?? []).filter(
-      (idea) => idea.status === "in_development" || idea.status === "developed",
-    );
-    return status === "all" ? developing : developing.filter((idea) => idea.status === status);
-  }, [ideas, status]);
+  const developing = useMemo(
+    () => (ideas ?? []).filter((idea) => idea.status === "in_development" || idea.status === "developed"),
+    [ideas],
+  );
 
-  const groups = useMemo(() => {
-    const map = new Map<string, Idea[]>();
-    for (const idea of filtered) {
-      const list = map.get(idea.batch_date) ?? [];
-      list.push(idea);
-      map.set(idea.batch_date, list);
-    }
-    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [filtered]);
+  const filtered = useMemo(
+    () => (status === "all" ? developing : developing.filter((idea) => idea.status === status)),
+    [developing, status],
+  );
+
 
   const header = (
     <PageHeader
@@ -87,16 +80,13 @@ export function DevelopedPage() {
         </Select>
       </div>
 
-      {groups.length === 0 && (
-        <PageMessage>Henüz geliştirilmeye başlanan bir fikir yok.</PageMessage>
-      )}
-
-      {groups.map(([batchDate, batchIdeas]) => (
-        <section key={batchDate} className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium tracking-wide text-muted-foreground uppercase">{formatBatchDate(batchDate)}</h2>
-          <IdeaTable ideas={batchIdeas} />
-        </section>
-      ))}
+      <IdeaTable
+        ideas={filtered}
+        totalCount={developing.length}
+        emptyMessage={
+          developing.length === 0 ? "Henüz geliştirilmeye başlanan bir fikir yok." : "Bu duruma uyan fikir yok."
+        }
+      />
     </div>
   );
 }

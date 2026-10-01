@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   type Column,
   type ColumnDef,
+  type PaginationState,
   type SortingState,
   flexRender,
   getCoreRowModel,
@@ -10,17 +11,21 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import type { Idea } from "@/lib/api";
 import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
 import { combinedScore } from "@/lib/scoring";
+import { formatBatchDate } from "@/lib/format-date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 20;
+
+// Varsayılan: en yeni fikir en üstte (tek tablo, tarih grupları yok).
+const DEFAULT_SORTING: SortingState = [{ id: "date", desc: true }];
 
 const STATUS_LABELS: Record<Idea["status"], string> = {
   new: "Yeni",
@@ -98,21 +103,23 @@ function OneLinerCell({ text }: { text: string }) {
 function getColumnWidths(withSelection: boolean): Record<string, string> {
   return withSelection
     ? {
-        select: "w-[6%]",
-        name: "w-[24%]",
+        select: "w-[5%]",
+        name: "w-[23%]",
+        date: "w-[11%]",
         category: "w-[11%]",
-        claude_score: "w-[14%]",
-        user_rating: "w-[16%]",
-        combined_score: "w-[14%]",
-        status: "w-[15%]",
+        claude_score: "w-[12%]",
+        user_rating: "w-[13%]",
+        combined_score: "w-[12%]",
+        status: "w-[13%]",
       }
     : {
-        name: "w-[28%]",
-        category: "w-[12%]",
-        claude_score: "w-[15%]",
-        user_rating: "w-[17%]",
-        combined_score: "w-[15%]",
-        status: "w-[13%]",
+        name: "w-[26%]",
+        date: "w-[11%]",
+        category: "w-[11%]",
+        claude_score: "w-[13%]",
+        user_rating: "w-[14%]",
+        combined_score: "w-[13%]",
+        status: "w-[12%]",
       };
 }
 
@@ -148,6 +155,16 @@ function buildColumns(selection?: SelectionProps): ColumnDef<Idea>[] {
           <div className="truncate font-medium">{row.original.name}</div>
           <OneLinerCell text={row.original.one_liner} />
         </div>
+      ),
+    },
+    {
+      // Sıralama created_at ile (aynı gün içindeki batch'ler de doğru sıralansın),
+      // gösterim batch_date ile.
+      id: "date",
+      accessorFn: (idea) => idea.created_at,
+      header: ({ column }) => <SortButton column={column} label="Tarih" />,
+      cell: ({ row }) => (
+        <span className="tabular-nums text-sm text-muted-foreground">{formatBatchDate(row.original.batch_date)}</span>
       ),
     },
     {
@@ -211,15 +228,33 @@ function buildColumns(selection?: SelectionProps): ColumnDef<Idea>[] {
 }
 
 interface IdeaTableProps {
+  /** Filtrelenmiş fikirler (tablo bunları sıralar ve sayfalar). */
   ideas: Idea[];
+  /** Filtre öncesi toplam kayıt sayısı; verilirse "filtre sonrası" sayısıyla birlikte gösterilir. */
+  totalCount?: number;
+  emptyMessage?: string;
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   selectionFull?: boolean;
 }
 
-export function IdeaTable({ ideas, selectedIds, onToggleSelect, selectionFull = false }: IdeaTableProps) {
+export function IdeaTable({
+  ideas,
+  totalCount,
+  emptyMessage = "Bu filtrelere uyan fikir yok.",
+  selectedIds,
+  onToggleSelect,
+  selectionFull = false,
+}: IdeaTableProps) {
   const navigate = useNavigate();
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: PAGE_SIZE });
+
+  // Filtre değişince (yeni ideas dizisi) ilk sayfaya dön — yoksa örn. 3.
+  // sayfadayken filtre sonucu 1 sayfaya düşünce boş bir sayfa görünür.
+  useEffect(() => {
+    setPagination((p) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }));
+  }, [ideas]);
 
   const hasSelection = Boolean(selectedIds && onToggleSelect);
   const columns = useMemo(
@@ -234,16 +269,21 @@ export function IdeaTable({ ideas, selectedIds, onToggleSelect, selectionFull = 
   const table = useReactTable({
     data: ideas,
     columns,
-    state: { sorting },
+    state: { sorting, pagination },
     onSortingChange: setSorting,
+    onPaginationChange: setPagination,
+    autoResetPageIndex: false,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    initialState: { pagination: { pageSize: PAGE_SIZE } },
   });
 
   const rows = table.getRowModel().rows;
-  const showPagination = table.getPageCount() > 1;
+  const filteredCount = table.getPrePaginationRowModel().rows.length;
+  const pageCount = Math.max(1, table.getPageCount());
+  const firstRow = filteredCount === 0 ? 0 : pagination.pageIndex * pagination.pageSize + 1;
+  const lastRow = Math.min(filteredCount, (pagination.pageIndex + 1) * pagination.pageSize);
+  const isFiltered = totalCount != null && totalCount !== filteredCount;
 
   return (
     <div className="flex flex-col gap-2">
@@ -262,6 +302,13 @@ export function IdeaTable({ ideas, selectedIds, onToggleSelect, selectionFull = 
             ))}
           </TableHeader>
           <TableBody>
+            {rows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="py-10 text-center text-muted-foreground">
+                  {emptyMessage}
+                </TableCell>
+              </TableRow>
+            )}
             {rows.map((row) => (
               <TableRow
                 key={row.id}
@@ -281,6 +328,7 @@ export function IdeaTable({ ideas, selectedIds, onToggleSelect, selectionFull = 
 
       {/* Mobil: sadece ad + kategori + Claude puanı (gerisi detay sayfasında) */}
       <div className="flex flex-col gap-2 md:hidden">
+        {rows.length === 0 && <p className="py-10 text-center text-muted-foreground">{emptyMessage}</p>}
         {rows.map((row) => {
           const idea = row.original;
           const checked = selectedIds?.has(idea.id) ?? false;
@@ -300,9 +348,12 @@ export function IdeaTable({ ideas, selectedIds, onToggleSelect, selectionFull = 
                 />
               )}
               <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate font-medium">{idea.name}</span>
-                  <CategoryBadge category={idea.category} />
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium">{idea.name}</span>
+                    <CategoryBadge category={idea.category} />
+                  </div>
+                  <span className="text-xs tabular-nums text-muted-foreground">{formatBatchDate(idea.batch_date)}</span>
                 </div>
                 <div className="shrink-0">
                   <ClaudeScoreCell idea={idea} />
@@ -313,19 +364,67 @@ export function IdeaTable({ ideas, selectedIds, onToggleSelect, selectionFull = 
         })}
       </div>
 
-      {showPagination && (
-        <div className="flex items-center justify-end gap-3 pt-1">
-          <span className="text-sm text-muted-foreground">
-            Sayfa {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
-          </span>
-          <Button variant="outline" size="icon" disabled={!table.getCanPreviousPage()} onClick={() => table.previousPage()}>
-            <ArrowLeft className="size-4" />
+      {/* Kayıt sayıları + sayfalama: her zaman görünür (tek sayfa olsa bile). */}
+      <div className="flex flex-col gap-2 pt-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          {isFiltered ? (
+            <>
+              Toplam <span className="font-medium text-foreground">{totalCount}</span> kayıt · filtre sonrası{" "}
+              <span className="font-medium text-foreground">{filteredCount}</span>
+            </>
+          ) : (
+            <>
+              Toplam <span className="font-medium text-foreground">{filteredCount}</span> kayıt
+            </>
+          )}
+          {filteredCount > 0 && (
+            <span className="ml-1">
+              · {firstRow}–{lastRow} arası gösteriliyor
+            </span>
+          )}
+        </span>
+        <div className="flex items-center gap-1.5 self-end sm:self-auto">
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="İlk sayfa"
+            disabled={!table.getCanPreviousPage()}
+            onClick={() => table.firstPage()}
+          >
+            <ChevronsLeft className="size-4" />
           </Button>
-          <Button variant="outline" size="icon" disabled={!table.getCanNextPage()} onClick={() => table.nextPage()}>
-            <ArrowRight className="size-4" />
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Önceki sayfa"
+            disabled={!table.getCanPreviousPage()}
+            onClick={() => table.previousPage()}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <span className="px-2 tabular-nums">
+            Sayfa {pagination.pageIndex + 1} / {pageCount}
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Sonraki sayfa"
+            disabled={!table.getCanNextPage()}
+            onClick={() => table.nextPage()}
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            aria-label="Son sayfa"
+            disabled={!table.getCanNextPage()}
+            onClick={() => table.lastPage()}
+          >
+            <ChevronsRight className="size-4" />
           </Button>
         </div>
-      )}
+      </div>
     </div>
   );
 }

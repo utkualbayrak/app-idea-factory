@@ -4,7 +4,6 @@ import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
-import { formatBatchDate } from "@/lib/format-date";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -136,15 +135,6 @@ export function IdeaListPage() {
     return result;
   }, [activeIdeas, filters]);
 
-  const groups = useMemo(() => {
-    const map = new Map<string, Idea[]>();
-    for (const idea of filtered) {
-      const list = map.get(idea.batch_date) ?? [];
-      list.push(idea);
-      map.set(idea.batch_date, list);
-    }
-    return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
-  }, [filtered]);
 
   const header = (
     <PageHeader
@@ -306,19 +296,13 @@ export function IdeaListPage() {
         </div>
       </div>
 
-      {groups.length === 0 && <PageMessage>Bu filtrelere uyan fikir yok.</PageMessage>}
-
-      {groups.map(([batchDate, batchIdeas]) => (
-        <section key={batchDate} className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium tracking-wide text-muted-foreground uppercase">{formatBatchDate(batchDate)}</h2>
-          <IdeaTable
-            ideas={batchIdeas}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelect}
-            selectionFull={selectedIds.size >= MAX_COMPARE}
-          />
-        </section>
-      ))}
+      <IdeaTable
+        ideas={filtered}
+        totalCount={activeIdeas.length}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        selectionFull={selectedIds.size >= MAX_COMPARE}
+      />
 
       {selectedIds.size > 0 && (
         <div className="sticky bottom-4 z-10 mx-auto flex w-fit items-center gap-3 rounded-full border bg-card px-4 py-2 shadow-lg">
