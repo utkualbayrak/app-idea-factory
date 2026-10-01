@@ -12,6 +12,8 @@ interface WorkflowTriggerButtonProps {
   disabled?: boolean;
   variant?: React.ComponentProps<typeof Button>["variant"];
   icon?: ReactNode;
+  /** Tetikleme başarılı olunca (örn. sayfadaki fikri/iş listesini tazelemek için). */
+  onTriggered?: () => void;
 }
 
 // Ayarlar'daki manuel cron tetikleme, detay sayfasındaki "yeniden
@@ -27,6 +29,7 @@ export function WorkflowTriggerButton({
   disabled,
   variant = "outline",
   icon,
+  onTriggered,
 }: WorkflowTriggerButtonProps) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -37,6 +40,7 @@ export function WorkflowTriggerButton({
     try {
       await triggerWorkflow(workflow, inputs);
       setMessage(successMessage);
+      onTriggered?.();
     } catch (err) {
       setMessage(
         `Tetiklenemedi: ${err instanceof Error ? err.message : String(err)}. GH_WORKFLOW_DISPATCH_TOKEN Worker secret'ı eklenmemiş olabilir.`,

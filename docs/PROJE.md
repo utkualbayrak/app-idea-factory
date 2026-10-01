@@ -198,9 +198,10 @@ Puanlar 0.00-10.00 arası, yalnızca 0.25'in katları (bkz. "Kesinleşen kararla
 
 ## Veri modeli (D1, taslak)
 
-- **ideas:** id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, her alt puan + gerekçesi), user_rating (0.00-10.00, 0.25 adımlarla, boş olabilir), user_note, user_note_updated_at (boş olabilir), last_reevaluated_at (boş olabilir), last_reevaluation_summary (boş olabilir), status (new / on_hold / deleted / in_development / developed)
+- **ideas:** id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, her alt puan + gerekçesi), user_rating (0.00-10.00, 0.25 adımlarla, boş olabilir), user_note, user_note_updated_at (boş olabilir), last_reevaluated_at (boş olabilir), last_reevaluation_summary (boş olabilir), last_activity_at / last_activity_kind / activity_seen_at (boş olabilir; fikir listesindeki aktivite rozeti için), status (new / on_hold / deleted / in_development / developed)
 - **tasks:** id, idea_id, created_at, updated_at, params (json), status (queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
 - **trend_snapshots:** id, fetched_at, source, payload (json)
+- **workflow_runs:** id, workflow, idea_id, status (queued / running / success / failed), created_at, started_at, finished_at, run_url, error — fikir bazlı arka plan işlerinin (yeniden değerlendirme, rakip bulma) geçmişi
 
 ## Önerilen klasör yapısı
 

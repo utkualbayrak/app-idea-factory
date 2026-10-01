@@ -16,6 +16,7 @@ import type { Idea } from "@/lib/api";
 import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
 import { combinedScore } from "@/lib/scoring";
 import { formatBatchDate } from "@/lib/format-date";
+import { ActivityBadge } from "@/components/ActivityBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -104,22 +105,22 @@ function getColumnWidths(withSelection: boolean): Record<string, string> {
   return withSelection
     ? {
         select: "w-[5%]",
-        name: "w-[23%]",
-        date: "w-[11%]",
-        category: "w-[11%]",
-        claude_score: "w-[12%]",
-        user_rating: "w-[13%]",
-        combined_score: "w-[12%]",
-        status: "w-[13%]",
+        name: "w-[21%]",
+        date: "w-[10%]",
+        category: "w-[10%]",
+        claude_score: "w-[11%]",
+        user_rating: "w-[12%]",
+        combined_score: "w-[11%]",
+        status: "w-[20%]",
       }
     : {
-        name: "w-[26%]",
-        date: "w-[11%]",
-        category: "w-[11%]",
-        claude_score: "w-[13%]",
-        user_rating: "w-[14%]",
-        combined_score: "w-[13%]",
-        status: "w-[12%]",
+        name: "w-[24%]",
+        date: "w-[10%]",
+        category: "w-[10%]",
+        claude_score: "w-[12%]",
+        user_rating: "w-[12%]",
+        combined_score: "w-[12%]",
+        status: "w-[20%]",
       };
 }
 
@@ -198,9 +199,17 @@ function buildColumns(selection?: SelectionProps): ColumnDef<Idea>[] {
       cell: ({ row }) => <CombinedScoreCell idea={row.original} />,
     },
     {
-      accessorKey: "status",
-      header: "Durum",
-      cell: ({ row }) => <StatusBadge status={row.original.status} />,
+      // Hücre durum + son aktivite rozetini gösterir; sıralama son aktivite
+      // zamanına göre (en son ne olduysa en üstte).
+      id: "status",
+      accessorFn: (idea) => idea.last_activity_at ?? "",
+      header: ({ column }) => <SortButton column={column} label="Durum · aktivite" />,
+      cell: ({ row }) => (
+        <div className="flex min-w-0 flex-col items-start gap-1">
+          <StatusBadge status={row.original.status} />
+          <ActivityBadge idea={row.original} />
+        </div>
+      ),
     },
   ];
 
@@ -353,7 +362,12 @@ export function IdeaTable({
                     <span className="truncate font-medium">{idea.name}</span>
                     <CategoryBadge category={idea.category} />
                   </div>
-                  <span className="text-xs tabular-nums text-muted-foreground">{formatBatchDate(idea.batch_date)}</span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                      {formatBatchDate(idea.batch_date)}
+                    </span>
+                    <ActivityBadge idea={idea} />
+                  </div>
                 </div>
                 <div className="shrink-0">
                   <ClaudeScoreCell idea={idea} />

@@ -6,6 +6,10 @@ on:
       idea_id:
         description: "Yeniden değerlendirilecek fikrin id'si"
         required: true
+      job_id:
+        description: "Çalışma geçmişi kaydının id'si (Worker tetiklerken verir; elle çalıştırırken boş bırakılabilir)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -30,6 +34,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Çalışma geçmişi > Fikir işleri: Worker'ın açtığı 'queued' satırını
+      # 'running' yapar (job_id boşsa script kendi kendine atlar).
+      - name: Start workflow run (Çalışma geçmişi için)
+        working-directory: scripts
+        run: pnpm exec tsx start-workflow-run.ts "$JOB_ID" "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
       - name: Fetch idea
         working-directory: scripts
         run: pnpm exec tsx fetch-idea.ts "${{ inputs.idea_id }}" output/idea.json
@@ -49,6 +64,28 @@ jobs:
         working-directory: scripts
         run: pnpm exec tsx submit-reevaluation.ts "${{ inputs.idea_id }}" output/reevaluation.json
         env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      # `always()` olmasa önceki bir adım patladığında bu adımlar hiç çalışmaz,
+      # kayıt "running"de asılı kalırdı. success()/failure() ile yalnızca biri çalışır.
+      - name: Finish workflow run (başarılı)
+        if: always() && success()
+        working-directory: scripts
+        run: pnpm exec tsx finish-workflow-run.ts "$JOB_ID" success
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Finish workflow run (başarısız)
+        if: always() && (failure() || cancelled())
+        working-directory: scripts
+        run: pnpm exec tsx finish-workflow-run.ts "$JOB_ID" failed output/failure-reason.txt
+        env:
+          JOB_ID: ${{ inputs.job_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

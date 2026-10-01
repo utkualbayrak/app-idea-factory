@@ -170,7 +170,7 @@ Fourth and last group of the post-Faz-2 feedback pass. Background AI features �
 
 ## 2nd feedback round (pre-Faz-3, 2026-10-01) — process and Grup 0
 
-A second `notes.txt` feedback list (10 items) is being worked through in 6 groups (0, A–E). Approved plan: `/Users/utkualbayrak/.claude/plans/proud-honking-cookie.md`. Groups C–E (per-idea workflow history + activity badge, dashboard widgets, README + repo protection) are not done yet.
+A second `notes.txt` feedback list (10 items) is being worked through in 6 groups (0, A–E). Approved plan: `/Users/utkualbayrak/.claude/plans/proud-honking-cookie.md`. Groups D–E (dashboard widgets, README + repo protection) are not done yet.
 
 - **Process rule for this round (supersedes the Grup 1 "Verification protocol" above):** at the end of each group Claude runs `pnpm typecheck && pnpm lint && pnpm build`, then **commits and pushes itself**. The push auto-deploys. Any new D1 migration is applied `--remote` **before** the push. The user tests in production. Claude never uses Chrome to test this app's UI. Wait for the user's OK before starting the next group.
 - **`prompts/*.md` belong to the user.** The user rewrote all three prompts this round. Don't edit or revert prompt content; adapt code to the prompts' output contracts instead, and ask before proposing a prompt change.
@@ -234,6 +234,42 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   - "· a–b arası gösteriliyor".
   - First, previous, next and last page buttons.
 - **The empty state is rendered inside the table** (a `colSpan` row, or a mobile `<p>`) via the `emptyMessage` prop, so the counts stay visible even when a filter matches nothing.
+
+### Grup C — what's live (per-idea job history, activity badge)
+
+- **Migration `0006_workflow_runs_and_activity.sql`:**
+  - New `workflow_runs` table: `id`, `workflow`, `idea_id`, `status` (queued/running/success/failed), `created_at`, `started_at`, `finished_at`, `run_url`, `error`. All timestamps are explicit ISO.
+  - New nullable `ideas` columns: `last_activity_at`, `last_activity_kind`, `activity_seen_at`.
+  - Existing rows are backfilled from `last_reevaluated_at`/`user_note_updated_at`, with `seen = at` so old events don't show as unread.
+- **Lifecycle of a per-idea job.** `IDEA_WORKFLOWS` = `reevaluate-idea.yml`, `find-competitors.yml`. `WORKFLOW_ACTIVITY` maps each one to its queued/ok/failed activity kinds.
+  1. `POST /admin/trigger-workflow`, when given an idea workflow, requires `inputs.idea_id` and checks that the idea exists.
+  2. It inserts a `queued` row, stamps `*_queued` activity, and passes the row id to GitHub as the `job_id` dispatch input.
+  3. If the GitHub dispatch call fails, the row and the idea activity are marked failed immediately.
+  4. Both workflows have an optional `job_id` input, passed to steps via the `JOB_ID` env var rather than inlined into `run:`, to avoid script injection.
+  5. `scripts/start-workflow-run.ts` sets the row to `running` and stores `run_url`.
+  6. `scripts/finish-workflow-run.ts` runs from two `always()` steps and sets success or failed, stamping the idea's ok/failed activity. Both scripts no-op when `job_id` is empty, e.g. a manual run from the GitHub UI.
+- **Failure reasons.** `submit-competitors.ts` and `submit-reevaluation.ts` write a readable reason to `output/failure-reason.txt`, and the failure finish step stores it as the run's `error`. Cases covered:
+  - missing or invalid output file
+  - schema mismatch
+  - `status !== "ok"` from the competitors prompt
+- **All three workflows' failure finish steps run on `failure() || cancelled()`.** A job that times out or is cancelled reports `cancelled()`, not `failure()`. Before this, a timeout left cron runs stuck at "running" forever.
+- **Activity stamping on the API side:**
+  - `PATCH /ideas/:id` stamps exactly one kind per request, in priority order: `status_changed`, `note_updated`, `rating_updated`.
+  - `mark_seen: true` only sets `activity_seen_at` and stamps no activity. The detail page sends it on open when the idea is unread.
+  - `/admin/ideas/:id/reevaluate` and `/admin/competitors` also stamp their success kind, so manual job_id-less runs still update the badge.
+- **`ActivityBadge`** (`components/ActivityBadge.tsx`; pure helpers in `lib/activity.ts`) shows in `IdeaTable`'s status column, the mobile cards and the detail header:
+  - It is always shown when there is any activity, with the time in a tooltip.
+  - It is **unread** (dot + ring) only for job results (success/failed) newer than `activity_seen_at` and under 7 days old. The user's own note/rating/status changes are never unread.
+  - It is dimmed after 7 days.
+  - An in-progress kind older than 1 hour is shown dimmed as possibly stuck.
+- **`IdeaTable` status column.** The id is still `status`, but it now sorts by `last_activity_at` (header "Durum · aktivite"). The column is 20% wide so it fits both badges stacked.
+- **`/cron-runs` is now "Çalışma geçmişi" with two tabs.** The sidebar label was renamed too.
+  - Tabs are a hand-written shadcn `ui/tabs.tsx` on `radix-ui`; the CLI was skipped because of the monorepo path bug.
+  - "Günlük fikir üretimi" holds the old cron list.
+  - "Fikir işleri" lists `GET /admin/workflow-runs`, which `LEFT JOIN`s the idea name. It has a name search, and each row shows status, job type, an idea link, times/duration and the error + log link.
+  - Both tabs have a `SummaryStrip` with total/success/failed/in-progress counts.
+  - The selected tab is kept in `?tab=jobs`.
+- **The detail page shows a "Son arama" / "Son değerlendirme işi" line under each trigger button** (`LastRunLine`: time, status, error, log link). `WorkflowTriggerButton`'s new `onTriggered` callback refreshes the idea and its runs, so the badge flips to "Rakip aranıyor…" immediately.
 
 ## What this project is
 
@@ -341,11 +377,12 @@ Private repo, name derived from the idea's English name (e.g. `mealmate-app`, su
 
 ## Data model (D1, draft)
 
-- **ideas**: id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, each sub-score + its reason text), user_rating (0.00-10.00 step 0.25, nullable), user_note, user_note_updated_at (nullable), last_reevaluated_at (nullable), last_reevaluation_summary (nullable), status (new / on_hold / deleted / in_development / developed)
+- **ideas**: id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, each sub-score + its reason text), user_rating (0.00-10.00 step 0.25, nullable), user_note, user_note_updated_at (nullable), last_reevaluated_at (nullable), last_reevaluation_summary (nullable), last_activity_at / last_activity_kind / activity_seen_at (nullable, 2nd round Grup C), status (new / on_hold / deleted / in_development / developed)
 - **tasks**: id, idea_id, created_at, updated_at, params (json), status (queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
 - **trend_snapshots**: id, fetched_at, source, payload (json), cron_run_id (nullable, added Grup 4 — links a snapshot back to the run that produced it)
 - **app_settings** (Grup 3): key, value, updated_at — key-value, a missing key means that setting is enabled (see `SOURCE_SETTING_KEYS` in `apps/api/src/schema.ts`)
 - **cron_runs** (Grup 3): id, started_at, finished_at (nullable), status (running / success / failed), source_breakdown (json, nullable), error (nullable)
+- **workflow_runs** (2nd round Grup C): id, workflow, idea_id, status (queued / running / success / failed), created_at, started_at, finished_at, run_url, error
 - **idea_competitors** (Grup 4): id, idea_id, app_name, url (nullable), note (nullable), similarity (nullable, 2nd round Grup 0), created_at
 
 ## Planned folder structure

@@ -38,6 +38,9 @@ export const ideaPatchSchema = z
     user_rating: scoreValue.nullable().optional(),
     user_note: z.string().nullable().optional(),
     status: z.enum(["new", "on_hold", "deleted", "in_development", "developed"]).optional(),
+    // Detay sayfası açılınca gönderilir: son aktiviteyi "görüldü" yapar
+    // (fikir listesindeki okunmamış noktası kalkar). Aktivite damgalamaz.
+    mark_seen: z.literal(true).optional(),
   })
   .refine((data) => Object.keys(data).length > 0, "En az bir alan gönderilmeli");
 
@@ -124,3 +127,35 @@ export const trendSnapshotsSubmitSchema = z.object({
 });
 
 export type TrendSnapshotsSubmit = z.infer<typeof trendSnapshotsSubmitSchema>;
+
+// 2. tur Grup C: fikir bazlı arka plan işleri (workflow_runs) ve fikir
+// listesindeki aktivite rozeti.
+export const IDEA_WORKFLOWS = ["reevaluate-idea.yml", "find-competitors.yml"] as const;
+export type IdeaWorkflow = (typeof IDEA_WORKFLOWS)[number];
+
+export const ACTIVITY_KINDS = [
+  "note_updated",
+  "rating_updated",
+  "status_changed",
+  "reevaluate_queued",
+  "reevaluated",
+  "reevaluate_failed",
+  "competitors_queued",
+  "competitors_found",
+  "competitors_failed",
+] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+
+// Workflow → [kuyruğa alındı, başarılı, başarısız] aktivite türleri.
+export const WORKFLOW_ACTIVITY: Record<IdeaWorkflow, [ActivityKind, ActivityKind, ActivityKind]> = {
+  "reevaluate-idea.yml": ["reevaluate_queued", "reevaluated", "reevaluate_failed"],
+  "find-competitors.yml": ["competitors_queued", "competitors_found", "competitors_failed"],
+};
+
+export const workflowRunPatchSchema = z.object({
+  status: z.enum(["running", "success", "failed"]),
+  run_url: z.string().optional(),
+  error: z.string().nullable().optional(),
+});
+
+export type WorkflowRunPatch = z.infer<typeof workflowRunPatchSchema>;

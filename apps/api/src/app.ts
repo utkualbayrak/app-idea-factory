@@ -12,6 +12,7 @@ import {
   type CronRunRow,
   type CompetitorRow,
   type TrendSnapshotRow,
+  type WorkflowRunRow,
 } from "./db";
 import {
   ideaBatchRequestSchema,
@@ -22,7 +23,12 @@ import {
   reevaluationSchema,
   competitorsSubmitSchema,
   trendSnapshotsSubmitSchema,
+  workflowRunPatchSchema,
   SOURCE_SETTING_KEYS,
+  IDEA_WORKFLOWS,
+  WORKFLOW_ACTIVITY,
+  type ActivityKind,
+  type IdeaWorkflow,
 } from "./schema";
 
 interface Env {
@@ -54,6 +60,17 @@ app.use(express.json());
 
 function db() {
   return (env as unknown as Env).DB;
+}
+
+function isIdeaWorkflow(workflow: string): workflow is IdeaWorkflow {
+  return (IDEA_WORKFLOWS as readonly string[]).includes(workflow);
+}
+
+// Fikir listesindeki aktivite rozeti için (2. tur Grup C).
+function stampActivity(ideaId: string, kind: ActivityKind, at: string) {
+  return db()
+    .prepare("UPDATE ideas SET last_activity_at = ?1, last_activity_kind = ?2 WHERE id = ?3")
+    .bind(at, kind, ideaId);
 }
 
 app.get("/health", async (_req, res) => {
@@ -175,25 +192,51 @@ app.patch("/ideas/:id", async (req, res) => {
   }
 
   const now = new Date().toISOString();
-  const next = { ...existing, ...parsed.data };
+  const { mark_seen: markSeen, ...fields } = parsed.data;
+  const next = { ...existing, ...fields };
   // user_note her değiştiğinde (boşa çekilse bile) güncelleme zamanı damgalanır.
-  const userNoteChanged = Object.hasOwn(parsed.data, "user_note");
+  const userNoteChanged = Object.hasOwn(fields, "user_note");
   const userNoteUpdatedAt = userNoteChanged ? now : existing.user_note_updated_at;
+
+  // Aktivite rozeti: istekteki en "anlamlı" değişiklik damgalanır. mark_seen
+  // tek başına geldiyse (detay sayfası açıldı) aktivite değişmez.
+  let activityKind: ActivityKind | null = null;
+  if (Object.hasOwn(fields, "status") && fields.status !== existing.status) activityKind = "status_changed";
+  else if (userNoteChanged) activityKind = "note_updated";
+  else if (Object.hasOwn(fields, "user_rating") && fields.user_rating !== existing.user_rating)
+    activityKind = "rating_updated";
+
+  const lastActivityAt = activityKind ? now : existing.last_activity_at;
+  const lastActivityKind = activityKind ?? existing.last_activity_kind;
+  const activitySeenAt = markSeen ? now : existing.activity_seen_at;
 
   await db()
     .prepare(
-      `UPDATE ideas SET user_rating = ?1, user_note = ?2, user_note_updated_at = ?3, status = ?4 WHERE id = ?5`,
+      `UPDATE ideas SET user_rating = ?1, user_note = ?2, user_note_updated_at = ?3, status = ?4,
+         last_activity_at = ?5, last_activity_kind = ?6, activity_seen_at = ?7
+       WHERE id = ?8`,
     )
     .bind(
       next.user_rating ?? null,
       next.user_note ?? null,
       userNoteUpdatedAt,
       next.status,
+      lastActivityAt,
+      lastActivityKind,
+      activitySeenAt,
       req.params.id,
     )
     .run();
 
-  res.json({ idea: serializeIdea({ ...next, user_note_updated_at: userNoteUpdatedAt } as IdeaRow) });
+  res.json({
+    idea: serializeIdea({
+      ...next,
+      user_note_updated_at: userNoteUpdatedAt,
+      last_activity_at: lastActivityAt,
+      last_activity_kind: lastActivityKind,
+      activity_seen_at: activitySeenAt,
+    } as IdeaRow),
+  });
 });
 
 // Grup 3: ayarlar ekranı (kaynak aç/kapat + manuel cron tetikleme).
@@ -248,8 +291,37 @@ app.post("/admin/trigger-workflow", async (req, res) => {
     return;
   }
 
+  const { workflow } = parsed.data;
+  const inputs: Record<string, string> = { ...parsed.data.inputs };
+  const now = new Date().toISOString();
+
+  // Fikir bazlı işler (yeniden değerlendirme, rakip bulma) Çalışma geçmişi
+  // ekranında görünsün diye önce workflow_runs'a 'queued' satırı yazılır; id'si
+  // workflow'a job_id input'u olarak geçer, workflow başlarken/biterken bu
+  // satırı günceller (scripts/start-workflow-run.ts, finish-workflow-run.ts).
+  let jobId: string | null = null;
+  if (isIdeaWorkflow(workflow)) {
+    const ideaId = inputs.idea_id;
+    const idea = ideaId
+      ? await db().prepare("SELECT id FROM ideas WHERE id = ?1").bind(ideaId).first<{ id: string }>()
+      : null;
+    if (!ideaId || !idea) {
+      res.status(400).json({ error: "idea_id_required" });
+      return;
+    }
+
+    jobId = crypto.randomUUID();
+    inputs.job_id = jobId;
+    await db().batch([
+      db()
+        .prepare("INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at) VALUES (?1, ?2, ?3, 'queued', ?4)")
+        .bind(jobId, workflow, ideaId, now),
+      stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
+    ]);
+  }
+
   const ghRes = await fetch(
-    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${parsed.data.workflow}/dispatches`,
+    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${workflow}/dispatches`,
     {
       method: "POST",
       headers: {
@@ -258,16 +330,84 @@ app.post("/admin/trigger-workflow", async (req, res) => {
         "User-Agent": "app-idea-factory-worker",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ref: "main", inputs: parsed.data.inputs ?? {} }),
+      body: JSON.stringify({ ref: "main", inputs }),
     },
   );
 
   if (!ghRes.ok) {
+    if (jobId && isIdeaWorkflow(workflow)) {
+      await db().batch([
+        db()
+          .prepare("UPDATE workflow_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3")
+          .bind(now, `GitHub tetikleme başarısız (HTTP ${ghRes.status})`, jobId),
+        stampActivity(inputs.idea_id, WORKFLOW_ACTIVITY[workflow][2], now),
+      ]);
+    }
     res.status(502).json({ error: "github_dispatch_failed", status: ghRes.status });
     return;
   }
 
-  res.status(202).json({ ok: true });
+  res.status(202).json({ ok: true, job_id: jobId });
+});
+
+// 2. tur Grup C: fikir bazlı işlerin geçmişi (Çalışma geçmişi > Fikir işleri,
+// gösterge paneli). Fikir adı JOIN ile gelir.
+app.get("/admin/workflow-runs", async (req, res) => {
+  const limit = Number(req.query.limit ?? 50);
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 200) : 50;
+  const ideaId = typeof req.query.idea_id === "string" ? req.query.idea_id : undefined;
+
+  const base = `SELECT w.*, i.name AS idea_name FROM workflow_runs w LEFT JOIN ideas i ON i.id = w.idea_id`;
+  const { results } = ideaId
+    ? await db()
+        .prepare(`${base} WHERE w.idea_id = ?1 ORDER BY w.created_at DESC LIMIT ?2`)
+        .bind(ideaId, safeLimit)
+        .all<WorkflowRunRow>()
+    : await db().prepare(`${base} ORDER BY w.created_at DESC LIMIT ?1`).bind(safeLimit).all<WorkflowRunRow>();
+
+  res.json({ runs: results });
+});
+
+app.patch("/admin/workflow-runs/:id", requireWorkflowSecret, async (req, res) => {
+  const parsed = workflowRunPatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const run = await db()
+    .prepare("SELECT * FROM workflow_runs WHERE id = ?1")
+    .bind(req.params.id)
+    .first<WorkflowRunRow>();
+  if (!run) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const { status, run_url: runUrl, error } = parsed.data;
+
+  if (status === "running") {
+    await db()
+      .prepare("UPDATE workflow_runs SET status = 'running', started_at = ?1, run_url = COALESCE(?2, run_url) WHERE id = ?3")
+      .bind(now, runUrl ?? null, run.id)
+      .run();
+  } else {
+    const statements = [
+      db()
+        .prepare(
+          "UPDATE workflow_runs SET status = ?1, finished_at = ?2, error = ?3, run_url = COALESCE(?4, run_url) WHERE id = ?5",
+        )
+        .bind(status, now, error ?? null, runUrl ?? null, run.id),
+    ];
+    if (isIdeaWorkflow(run.workflow)) {
+      const [, okKind, failKind] = WORKFLOW_ACTIVITY[run.workflow];
+      statements.push(stampActivity(run.idea_id, status === "success" ? okKind : failKind, now));
+    }
+    await db().batch(statements);
+  }
+
+  res.json({ ok: true });
 });
 
 // Grup 3: cron geçmişi ekranı.
@@ -338,7 +478,9 @@ app.patch("/admin/ideas/:id/reevaluate", requireWorkflowSecret, async (req, res)
 
   await db()
     .prepare(
-      `UPDATE ideas SET scores = ?1, tags = ?2, last_reevaluated_at = ?3, last_reevaluation_summary = ?4 WHERE id = ?5`,
+      `UPDATE ideas SET scores = ?1, tags = ?2, last_reevaluated_at = ?3, last_reevaluation_summary = ?4,
+         last_activity_at = ?3, last_activity_kind = 'reevaluated'
+       WHERE id = ?5`,
     )
     .bind(JSON.stringify(parsed.data.scores), tags, now, summary, req.params.id)
     .run();
@@ -350,6 +492,8 @@ app.patch("/admin/ideas/:id/reevaluate", requireWorkflowSecret, async (req, res)
       tags,
       last_reevaluated_at: now,
       last_reevaluation_summary: summary,
+      last_activity_at: now,
+      last_activity_kind: "reevaluated",
     }),
   });
 });
@@ -372,15 +516,19 @@ app.post("/admin/competitors", requireWorkflowSecret, async (req, res) => {
   }
 
   const { idea_id, competitors } = parsed.data;
+  const now = new Date().toISOString();
   const statements = [
     db().prepare("DELETE FROM idea_competitors WHERE idea_id = ?1").bind(idea_id),
     ...competitors.map((c) =>
       db()
         .prepare(
-          `INSERT INTO idea_competitors (id, idea_id, app_name, url, similarity, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+          `INSERT INTO idea_competitors (id, idea_id, app_name, url, similarity, note, created_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
         )
-        .bind(crypto.randomUUID(), idea_id, c.app_name, c.url, c.similarity, c.note),
+        .bind(crypto.randomUUID(), idea_id, c.app_name, c.url, c.similarity, c.note, now),
     ),
+    // job_id'siz (örn. GitHub arayüzünden elle) çalıştırılsa da rozet güncellensin.
+    stampActivity(idea_id, "competitors_found", now),
   ];
   await db().batch(statements);
 

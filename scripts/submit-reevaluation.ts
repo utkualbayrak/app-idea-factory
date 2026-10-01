@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
 import { reevaluationSchema } from "./lib/idea-schema";
 import { submitReevaluation } from "./lib/api-client";
@@ -10,10 +11,25 @@ async function main() {
   const [id, dataPath] = process.argv.slice(2);
   if (!id || !dataPath) throw new Error("Kullanım: submit-reevaluation.ts <idea id> <reevaluation.json path>");
 
-  const raw: unknown = JSON.parse(await readFile(dataPath, "utf-8"));
+  let raw: unknown;
+  try {
+    raw = JSON.parse(await readFile(dataPath, "utf-8"));
+  } catch (err) {
+    // Prompt, girdi okunamazsa bilerek hiç çıktı yazmıyor.
+    console.error(err);
+    await writeFile(
+      path.join(path.dirname(dataPath), "failure-reason.txt"),
+      "Claude değerlendirme çıktısı üretmedi (reevaluation.json yok veya geçersiz).",
+      "utf-8",
+    ).catch(() => {});
+    process.exit(1);
+  }
   const parsed = reevaluationSchema.safeParse(raw);
   if (!parsed.success) {
     console.error("Sema hatasi:\n" + JSON.stringify(z.treeifyError(parsed.error), null, 2));
+    await writeFile(path.join(path.dirname(dataPath), "failure-reason.txt"), "Claude çıktısı şemaya uymuyor.", "utf-8").catch(
+      () => {},
+    );
     process.exit(1);
   }
 

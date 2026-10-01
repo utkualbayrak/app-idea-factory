@@ -1,18 +1,32 @@
-import { useEffect, useState } from "react";
-import { fetchCronRuns, fetchTrendSnapshots, type CronRun, type TrendSnapshot } from "@/lib/api";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  fetchCronRuns,
+  fetchTrendSnapshots,
+  fetchWorkflowRuns,
+  type CronRun,
+  type TrendSnapshot,
+  type WorkflowRun,
+} from "@/lib/api";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { formatDateTime, formatDuration } from "@/lib/format-date";
 
-const STATUS_STYLES: Record<CronRun["status"], string> = {
+type RunStatus = WorkflowRun["status"];
+
+const STATUS_STYLES: Record<RunStatus, string> = {
+  queued: "bg-muted text-muted-foreground",
   running: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
   success: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
   failed: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
 };
 
-const STATUS_LABELS: Record<CronRun["status"], string> = {
+const STATUS_LABELS: Record<RunStatus, string> = {
+  queued: "Sırada",
   running: "Çalışıyor",
   success: "Başarılı",
   failed: "Başarısız",
@@ -47,7 +61,144 @@ function RunError({ error }: { error: string }) {
   );
 }
 
+const WORKFLOW_LABELS: Record<WorkflowRun["workflow"], string> = {
+  "reevaluate-idea.yml": "Yeniden değerlendirme",
+  "find-competitors.yml": "Rakip bulma",
+};
+
+// Her sekmenin üstündeki özet şeridi: toplam / başarılı / başarısız / devam eden.
+function SummaryStrip({ statuses }: { statuses: RunStatus[] }) {
+  const count = (...wanted: RunStatus[]) => statuses.filter((s) => wanted.includes(s)).length;
+  const items = [
+    { label: "Toplam", value: statuses.length, className: "text-foreground" },
+    { label: "Başarılı", value: count("success"), className: "text-emerald-700 dark:text-emerald-300" },
+    { label: "Başarısız", value: count("failed"), className: "text-red-700 dark:text-red-300" },
+    { label: "Devam eden", value: count("queued", "running"), className: "text-sky-700 dark:text-sky-300" },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {items.map((item) => (
+        <Card key={item.label} className="py-4">
+          <CardContent className="px-4">
+            <div className={`text-2xl font-semibold tabular-nums ${item.className}`}>{item.value}</div>
+            <div className="text-xs text-muted-foreground">{item.label}</div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+const TABS = ["daily", "jobs"] as const;
+type TabValue = (typeof TABS)[number];
+
+// "Çalışma geçmişi": günlük fikir üretimi (cron_runs) + fikir bazlı arka plan
+// işleri (workflow_runs). Seçili sekme ?tab= ile URL'de tutulur ki gösterge
+// panelinden doğrudan "Fikir işleri"ne link verilebilsin.
 export function CronRunsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const tab: TabValue = TABS.includes(tabParam as TabValue) ? (tabParam as TabValue) : "daily";
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Çalışma geçmişi"
+        description="Günlük fikir üretimi ve fikir bazlı arka plan işleri, en yenisi en üstte."
+      />
+      <Tabs value={tab} onValueChange={(v) => setSearchParams(v === "daily" ? {} : { tab: v }, { replace: true })}>
+        <TabsList>
+          <TabsTrigger value="daily">Günlük fikir üretimi</TabsTrigger>
+          <TabsTrigger value="jobs">Fikir işleri</TabsTrigger>
+        </TabsList>
+        <TabsContent value="daily" className="mt-4">
+          <DailyRunsTab />
+        </TabsContent>
+        <TabsContent value="jobs" className="mt-4">
+          <IdeaJobsTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function IdeaJobsTab() {
+  const [runs, setRuns] = useState<WorkflowRun[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    fetchWorkflowRuns({ limit: 200 })
+      .then((res) => setRuns(res.runs))
+      .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+  }, []);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!runs || !query) return runs ?? [];
+    return runs.filter((run) => (run.idea_name ?? "").toLowerCase().includes(query));
+  }, [runs, search]);
+
+  if (error) return <PageMessage tone="error">Fikir işleri yüklenemedi: {error}</PageMessage>;
+  if (!runs) return <PageMessage>Yükleniyor…</PageMessage>;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SummaryStrip statuses={runs.map((r) => r.status)} />
+
+      <Input
+        placeholder="Fikir adına göre ara…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="sm:max-w-xs"
+      />
+
+      {runs.length === 0 && (
+        <PageMessage>Henüz bir fikir işi çalıştırılmadı (yeniden değerlendirme, rakip bulma).</PageMessage>
+      )}
+      {runs.length > 0 && filtered.length === 0 && <PageMessage>Bu ada uyan iş yok.</PageMessage>}
+
+      <div className="flex flex-col gap-3">
+        {filtered.map((run) => (
+          <Card key={run.id} className="min-w-0">
+            <CardContent className="flex flex-col gap-2 pt-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className={STATUS_STYLES[run.status]}>{STATUS_LABELS[run.status]}</Badge>
+                <span className="font-medium">{WORKFLOW_LABELS[run.workflow] ?? run.workflow}</span>
+                <span className="text-muted-foreground">·</span>
+                <Link to={`/ideas/${run.idea_id}`} className="min-w-0 truncate text-primary underline underline-offset-4">
+                  {run.idea_name ?? "(silinmiş fikir)"}
+                </Link>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Tetiklendi: {formatDateTime(run.created_at)}
+                {run.finished_at && ` — bitti: ${formatDateTime(run.finished_at)}`}
+                {run.finished_at && (
+                  <span className="ml-2 text-foreground">
+                    Süre: {formatDuration(run.started_at ?? run.created_at, run.finished_at)}
+                  </span>
+                )}
+              </div>
+              {(run.error || run.run_url) && (
+                <p className="text-sm break-words">
+                  {run.error && <span className="text-destructive">{run.error}</span>}
+                  {run.error && run.run_url && " — "}
+                  {run.run_url && (
+                    <a href={run.run_url} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+                      Çalışma loglarını gör
+                    </a>
+                  )}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DailyRunsTab() {
   const [runs, setRuns] = useState<CronRun[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
@@ -69,28 +220,12 @@ export function CronRunsPage() {
     }
   }
 
-  const header = (
-    <PageHeader title="Cron geçmişi" description="Günlük fikir üretimi çalışmaları, en yenisi en üstte." />
-  );
-
-  if (error)
-    return (
-      <div className="flex flex-col gap-6">
-        {header}
-        <PageMessage tone="error">Cron geçmişi yüklenemedi: {error}</PageMessage>
-      </div>
-    );
-  if (!runs)
-    return (
-      <div className="flex flex-col gap-6">
-        {header}
-        <PageMessage>Yükleniyor…</PageMessage>
-      </div>
-    );
+  if (error) return <PageMessage tone="error">Cron geçmişi yüklenemedi: {error}</PageMessage>;
+  if (!runs) return <PageMessage>Yükleniyor…</PageMessage>;
 
   return (
-    <div className="flex flex-col gap-6">
-      {header}
+    <div className="flex flex-col gap-4">
+      <SummaryStrip statuses={runs.map((r) => r.status)} />
 
       {runs.length === 0 && <PageMessage>Henüz kayıtlı bir çalışma yok.</PageMessage>}
 

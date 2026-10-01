@@ -30,6 +30,9 @@ export interface IdeaRow {
   user_note_updated_at: string | null;
   last_reevaluated_at: string | null;
   last_reevaluation_summary: string | null;
+  last_activity_at: string | null;
+  last_activity_kind: string | null;
+  activity_seen_at: string | null;
   status: string;
 }
 
@@ -47,6 +50,8 @@ export function serializeIdea(row: IdeaRow): Idea {
     created_at: toUtcIso(row.created_at),
     user_note_updated_at: toUtcIso(row.user_note_updated_at),
     last_reevaluated_at: toUtcIso(row.last_reevaluated_at),
+    last_activity_at: toUtcIso(row.last_activity_at),
+    activity_seen_at: toUtcIso(row.activity_seen_at),
     core_features: JSON.parse(row.core_features),
     inspiration_sources: JSON.parse(row.inspiration_sources),
     tags: JSON.parse(row.tags),
@@ -104,4 +109,18 @@ export interface TrendSnapshot extends Omit<TrendSnapshotRow, "payload"> {
 
 export function serializeTrendSnapshot(row: TrendSnapshotRow): TrendSnapshot {
   return { ...row, fetched_at: toUtcIso(row.fetched_at), payload: JSON.parse(row.payload) };
+}
+
+export interface WorkflowRunRow {
+  id: string;
+  workflow: string;
+  idea_id: string;
+  status: "queued" | "running" | "success" | "failed";
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  run_url: string | null;
+  error: string | null;
+  // GET /admin/workflow-runs JOIN ile ekler (fikir silinmişse de satır kalır).
+  idea_name?: string | null;
 }

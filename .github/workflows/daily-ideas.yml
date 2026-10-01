@@ -104,7 +104,7 @@ jobs:
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 
       - name: Finish cron run (başarısız)
-        if: always() && failure()
+        if: always() && (failure() || cancelled())
         working-directory: scripts
         run: pnpm exec tsx finish-cron-run.ts failed output/trends.json "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:

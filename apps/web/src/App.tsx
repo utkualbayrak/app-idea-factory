@@ -28,7 +28,7 @@ const NAV_ITEMS = [
   { to: "/", label: "Gösterge paneli", icon: LayoutDashboard },
   { to: "/ideas", label: "Fikirler", icon: Lightbulb },
   { to: "/developed", label: "Geliştirilenler", icon: Hammer },
-  { to: "/cron-runs", label: "Cron geçmişi", icon: History },
+  { to: "/cron-runs", label: "Çalışma geçmişi", icon: History },
   { to: "/settings", label: "Ayarlar", icon: Settings },
 ];
 

@@ -1,7 +1,19 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Clipboard, ClipboardCheck, GitCompare, Search, Sparkles } from "lucide-react";
-import { fetchIdea, fetchIdeas, fetchCompetitors, patchIdea, type Idea, type Competitor } from "@/lib/api";
+import {
+  fetchIdea,
+  fetchIdeas,
+  fetchCompetitors,
+  fetchWorkflowRuns,
+  patchIdea,
+  type Idea,
+  type Competitor,
+  type IdeaWorkflow,
+  type WorkflowRun,
+} from "@/lib/api";
+import { ActivityBadge } from "@/components/ActivityBadge";
+import { isActivityUnread } from "@/lib/activity";
 import { ScoreSlider } from "@/components/ScoreSlider";
 import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -56,6 +68,14 @@ export function IdeaDetailPage() {
   const [otherIdeas, setOtherIdeas] = useState<Idea[] | null>(null);
   const [copied, setCopied] = useState(false);
   const [competitors, setCompetitors] = useState<Competitor[] | null>(null);
+  const [runs, setRuns] = useState<WorkflowRun[]>([]);
+
+  const loadRuns = useCallback(() => {
+    if (!id) return;
+    fetchWorkflowRuns({ ideaId: id, limit: 20 })
+      .then((res) => setRuns(res.runs))
+      .catch(() => setRuns([]));
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -63,12 +83,31 @@ export function IdeaDetailPage() {
       .then((res) => {
         setIdea(res.idea);
         setNote(res.idea.user_note ?? "");
+        // Detay açıldı = son aktivite görüldü; listedeki okunmamış noktası kalkar.
+        if (isActivityUnread(res.idea)) {
+          patchIdea(id, { mark_seen: true })
+            .then((seen) => setIdea(seen.idea))
+            .catch(() => {});
+        }
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
     fetchCompetitors(id)
       .then((res) => setCompetitors(res.competitors))
       .catch(() => setCompetitors([]));
-  }, [id]);
+    loadRuns();
+  }, [id, loadRuns]);
+
+  // Bir iş tetiklenince fikrin aktivite rozeti ("Rakip aranıyor…" vb.) ve
+  // son iş satırı hemen güncellensin.
+  const handleTriggered = useCallback(() => {
+    if (!id) return;
+    fetchIdea(id)
+      .then((res) => setIdea(res.idea))
+      .catch(() => {});
+    loadRuns();
+  }, [id, loadRuns]);
+
+  const lastRun = (workflow: IdeaWorkflow) => runs.find((run) => run.workflow === workflow);
 
   async function handleRate(value: number) {
     if (!id) return;
@@ -130,6 +169,7 @@ export function IdeaDetailPage() {
           <h1 className="text-2xl font-semibold">{idea.name}</h1>
           <Badge className={categoryColorClasses(idea.category)}>{idea.category}</Badge>
           <Badge className={statusColorClasses(idea.status)}>{STATUS_LABELS[idea.status]}</Badge>
+          <ActivityBadge idea={idea} />
         </div>
         <p className="mt-1 text-muted-foreground">{idea.one_liner}</p>
       </div>
@@ -248,7 +288,9 @@ export function IdeaDetailPage() {
             workflow="find-competitors.yml"
             inputs={id ? { idea_id: id } : undefined}
             icon={<Search className="size-4" />}
+            onTriggered={handleTriggered}
           />
+          <LastRunLine run={lastRun("find-competitors.yml")} label="Son arama" />
         </CardContent>
       </Card>
 
@@ -291,7 +333,9 @@ export function IdeaDetailPage() {
             inputs={id ? { idea_id: id } : undefined}
             disabled={!idea.user_note}
             icon={<Sparkles className="size-4" />}
+            onTriggered={handleTriggered}
           />
+          <LastRunLine run={lastRun("reevaluate-idea.yml")} label="Son değerlendirme işi" />
           {!idea.user_note && (
             <p className="text-xs text-muted-foreground">Yeniden değerlendirme için önce bir not ekleyip kaydet.</p>
           )}
@@ -361,6 +405,32 @@ export function IdeaDetailPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+const RUN_STATUS_LABELS: Record<WorkflowRun["status"], string> = {
+  queued: "sırada",
+  running: "çalışıyor",
+  success: "başarılı",
+  failed: "başarısız",
+};
+
+// Bu fikir için o türdeki en son arka plan işinin kısa özeti + log linki.
+function LastRunLine({ run, label }: { run: WorkflowRun | undefined; label: string }) {
+  if (!run) return null;
+  return (
+    <p className="text-xs break-words text-muted-foreground">
+      {label}: {formatDateTime(run.created_at)} — {RUN_STATUS_LABELS[run.status]}
+      {run.status === "failed" && run.error && ` (${run.error})`}
+      {run.run_url && (
+        <>
+          {" · "}
+          <a href={run.run_url} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+            log
+          </a>
+        </>
+      )}
+    </p>
   );
 }
 

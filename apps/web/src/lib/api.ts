@@ -37,13 +37,29 @@ export interface Idea {
   user_note_updated_at: string | null;
   last_reevaluated_at: string | null;
   last_reevaluation_summary: string | null;
+  last_activity_at: string | null;
+  last_activity_kind: ActivityKind | null;
+  activity_seen_at: string | null;
   status: IdeaStatus;
 }
+
+// apps/api/src/schema.ts ACTIVITY_KINDS ile aynı.
+export type ActivityKind =
+  | "note_updated"
+  | "rating_updated"
+  | "status_changed"
+  | "reevaluate_queued"
+  | "reevaluated"
+  | "reevaluate_failed"
+  | "competitors_queued"
+  | "competitors_found"
+  | "competitors_failed";
 
 export interface IdeaPatch {
   user_rating?: number | null;
   user_note?: string | null;
   status?: IdeaStatus;
+  mark_seen?: true;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -133,4 +149,26 @@ export interface Competitor {
 
 export function fetchCompetitors(ideaId: string): Promise<{ competitors: Competitor[] }> {
   return request(`/ideas/${ideaId}/competitors`);
+}
+
+// 2. tur Grup C: fikir bazlı işlerin geçmişi (Çalışma geçmişi > Fikir işleri).
+export type IdeaWorkflow = "reevaluate-idea.yml" | "find-competitors.yml";
+
+export interface WorkflowRun {
+  id: string;
+  workflow: IdeaWorkflow;
+  idea_id: string;
+  idea_name: string | null;
+  status: "queued" | "running" | "success" | "failed";
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  run_url: string | null;
+  error: string | null;
+}
+
+export function fetchWorkflowRuns(options: { limit?: number; ideaId?: string } = {}): Promise<{ runs: WorkflowRun[] }> {
+  const params = new URLSearchParams({ limit: String(options.limit ?? 100) });
+  if (options.ideaId) params.set("idea_id", options.ideaId);
+  return request(`/admin/workflow-runs?${params}`);
 }
