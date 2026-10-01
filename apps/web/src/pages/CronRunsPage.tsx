@@ -3,6 +3,8 @@ import { fetchCronRuns, fetchTrendSnapshots, type CronRun, type TrendSnapshot } 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader, PageMessage } from "@/components/PageHeader";
+import { formatDateTime, formatDuration } from "@/lib/format-date";
 
 const STATUS_STYLES: Record<CronRun["status"], string> = {
   running: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
@@ -67,14 +69,30 @@ export function CronRunsPage() {
     }
   }
 
-  if (error) return <p className="py-10 text-center text-destructive">Cron geçmişi yüklenemedi: {error}</p>;
-  if (!runs) return <p className="py-10 text-center text-muted-foreground">Yükleniyor…</p>;
+  const header = (
+    <PageHeader title="Cron geçmişi" description="Günlük fikir üretimi çalışmaları, en yenisi en üstte." />
+  );
+
+  if (error)
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <PageMessage tone="error">Cron geçmişi yüklenemedi: {error}</PageMessage>
+      </div>
+    );
+  if (!runs)
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <PageMessage>Yükleniyor…</PageMessage>
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Cron geçmişi</h1>
+      {header}
 
-      {runs.length === 0 && <p className="py-10 text-center text-muted-foreground">Henüz kayıtlı bir çalışma yok.</p>}
+      {runs.length === 0 && <PageMessage>Henüz kayıtlı bir çalışma yok.</PageMessage>}
 
       <div className="flex flex-col gap-3">
         {runs.map((run) => {
@@ -87,8 +105,11 @@ export function CronRunsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge className={STATUS_STYLES[run.status]}>{STATUS_LABELS[run.status]}</Badge>
                   <span className="text-sm text-muted-foreground">
-                    {new Date(run.started_at).toLocaleString("tr-TR")}
-                    {run.finished_at && ` — ${new Date(run.finished_at).toLocaleString("tr-TR")}`}
+                    {formatDateTime(run.started_at)}
+                    {run.finished_at && ` — ${formatDateTime(run.finished_at)}`}
+                    {run.finished_at && (
+                      <span className="ml-2 text-foreground">Süre: {formatDuration(run.started_at, run.finished_at)}</span>
+                    )}
                   </span>
                 </div>
 

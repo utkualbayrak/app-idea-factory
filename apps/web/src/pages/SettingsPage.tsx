@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchSettings, patchSettings, type SourceSettingKey } from "@/lib/api";
 import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
+import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
@@ -34,12 +35,26 @@ export function SettingsPage() {
     }
   }
 
-  if (error) return <p className="py-10 text-center text-destructive">Ayarlar yüklenemedi: {error}</p>;
-  if (!settings) return <p className="py-10 text-center text-muted-foreground">Yükleniyor…</p>;
+  const header = <PageHeader title="Ayarlar" description="Trend kaynakları ve günlük fikir üretimi." />;
+
+  if (error)
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <PageMessage tone="error">Ayarlar yüklenemedi: {error}</PageMessage>
+      </div>
+    );
+  if (!settings)
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <PageMessage>Yükleniyor…</PageMessage>
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Ayarlar</h1>
+      {header}
 
       <Card>
         <CardHeader>

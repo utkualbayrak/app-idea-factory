@@ -4,6 +4,7 @@ import { ArrowLeft, X } from "lucide-react";
 import { fetchIdea, patchIdea, type Idea } from "@/lib/api";
 import { ScoreSlider } from "@/components/ScoreSlider";
 import { SourceIcon } from "@/components/SourceIcon";
+import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,7 +49,7 @@ export function ComparePage() {
   }
 
   if (ids.length === 0) {
-    return <p className="py-10 text-center text-muted-foreground">Karşılaştırmak için fikirler listesinden seç.</p>;
+    return <PageMessage>Karşılaştırmak için fikirler listesinden seç.</PageMessage>;
   }
 
   // Tek fikir kaldıysa artık normal detay/düzenleme görünümüne dön.
@@ -56,21 +57,21 @@ export function ComparePage() {
     return <Navigate to={`/ideas/${ids[0]}`} replace />;
   }
 
-  if (error) return <p className="py-10 text-center text-destructive">Fikirler yüklenemedi: {error}</p>;
+  if (error) return <PageMessage tone="error">Fikirler yüklenemedi: {error}</PageMessage>;
 
   const loadedIdeas = ids.map((id) => ideas[id]).filter((idea): idea is Idea => idea != null);
   if (loadedIdeas.length < ids.length) {
-    return <p className="py-10 text-center text-muted-foreground">Yükleniyor…</p>;
+    return <PageMessage>Yükleniyor…</PageMessage>;
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <Link to="/ideas" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" />
         Fikirler
       </Link>
 
-      <h1 className="text-2xl font-semibold">Karşılaştırma</h1>
+      <PageHeader title="Karşılaştırma" description={`${loadedIdeas.length} fikir yan yana. Buradan puan da verebilirsin.`} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {loadedIdeas.map((idea) => (

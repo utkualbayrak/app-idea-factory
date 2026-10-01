@@ -5,6 +5,8 @@ import { combinedScore } from "@/lib/scoring";
 import { statusColorClasses } from "@/lib/idea-colors";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader, PageMessage } from "@/components/PageHeader";
+import { formatDateTime } from "@/lib/format-date";
 
 const SOURCE_CHART_COLORS: Record<string, string> = {
   reddit: "var(--chart-1)",
@@ -59,12 +61,26 @@ export function DashboardPage() {
     }));
   }, [latestRun]);
 
-  if (error) return <p className="py-10 text-center text-destructive">Gösterge paneli yüklenemedi: {error}</p>;
-  if (!ideas || !metrics) return <p className="py-10 text-center text-muted-foreground">Yükleniyor…</p>;
+  const header = <PageHeader title="Gösterge paneli" description="Fikirlerin ve günlük çalışmaların genel durumu." />;
+
+  if (error)
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <PageMessage tone="error">Gösterge paneli yüklenemedi: {error}</PageMessage>
+      </div>
+    );
+  if (!ideas || !metrics)
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <PageMessage>Yükleniyor…</PageMessage>
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Gösterge paneli</h1>
+      {header}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <MetricCard label="8.00+ puanlı fikir" value={metrics.highScored} />
@@ -82,7 +98,7 @@ export function DashboardPage() {
           ) : (
             <div className="flex flex-col gap-3">
               <p className="text-sm text-muted-foreground">
-                {new Date(latestRun.started_at).toLocaleString("tr-TR")} — {RUN_STATUS_LABELS[latestRun.status]}
+                {formatDateTime(latestRun.started_at)} — {RUN_STATUS_LABELS[latestRun.status]}
               </p>
               {pieData.length > 0 ? (
                 <PieChart data={pieData} />

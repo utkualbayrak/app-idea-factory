@@ -7,6 +7,8 @@ import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SourceIcon } from "@/components/SourceIcon";
 import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
+import { PageMessage } from "@/components/PageHeader";
+import { formatDateTime } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
 import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
 import { ideaToMarkdown } from "@/lib/export-markdown";
@@ -110,8 +112,8 @@ export function IdeaDetailPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  if (error) return <p className="py-10 text-center text-destructive">Fikir yüklenemedi: {error}</p>;
-  if (!idea) return <p className="py-10 text-center text-muted-foreground">Yükleniyor…</p>;
+  if (error) return <PageMessage tone="error">Fikir yüklenemedi: {error}</PageMessage>;
+  if (!idea) return <PageMessage>Yükleniyor…</PageMessage>;
 
   return (
     <div className="flex flex-col gap-5">
@@ -259,12 +261,12 @@ export function IdeaDetailPage() {
           <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Not</CardTitle>
           {idea.user_note_updated_at && (
             <p className="text-xs text-muted-foreground">
-              Son güncelleme: {new Date(idea.user_note_updated_at).toLocaleString("tr-TR")}
+              Son güncelleme: {formatDateTime(idea.user_note_updated_at)}
             </p>
           )}
           {idea.last_reevaluated_at && (
             <p className="text-xs text-muted-foreground">
-              Son yeniden değerlendirme: {new Date(idea.last_reevaluated_at).toLocaleString("tr-TR")}
+              Son yeniden değerlendirme: {formatDateTime(idea.last_reevaluated_at)}
             </p>
           )}
           {idea.last_reevaluation_summary && (

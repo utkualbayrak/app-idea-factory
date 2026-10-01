@@ -170,7 +170,7 @@ Fourth and last group of the post-Faz-2 feedback pass. Background AI features �
 
 ## 2nd feedback round (pre-Faz-3, 2026-10-01) — process and Grup 0
 
-A second `notes.txt` feedback list (10 items) is being worked through in 6 groups (0, A–E). Approved plan: `/Users/utkualbayrak/.claude/plans/proud-honking-cookie.md`. Groups A–E (time-zone fix + TR date format + page consistency, single table + 20-row pagination, per-idea workflow history + activity badge, dashboard widgets, README + repo protection) are not done yet.
+A second `notes.txt` feedback list (10 items) is being worked through in 6 groups (0, A–E). Approved plan: `/Users/utkualbayrak/.claude/plans/proud-honking-cookie.md`. Groups B–E (single table + 20-row pagination, per-idea workflow history + activity badge, dashboard widgets, README + repo protection) are not done yet.
 
 - **Process rule for this round (supersedes the Grup 1 "Verification protocol" above):** at the end of each group Claude runs `pnpm typecheck && pnpm lint && pnpm build`, then **commits and pushes itself**. The push auto-deploys. Any new D1 migration is applied `--remote` **before** the push. The user tests in production. Claude never uses Chrome to test this app's UI. Wait for the user's OK before starting the next group.
 - **`prompts/*.md` belong to the user.** The user rewrote all three prompts this round. Don't edit or revert prompt content; adapt code to the prompts' output contracts instead, and ask before proposing a prompt change.
@@ -201,6 +201,22 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
 | `reevaluate-idea` | 15 | unchanged |
 
 - Migration `0005_prompt_contract_fields.sql` (`idea_competitors.similarity`, `ideas.last_reevaluation_summary`) is applied to local and remote.
+
+### Grup A — what's live (time zone fix, TR date format, page consistency)
+
+- **Root cause of the "3 hours off" bug:** SQLite's `DEFAULT (datetime('now'))` writes UTC as `"YYYY-MM-DD HH:MM:SS"` with no zone marker, and browsers parse that as *local* time (TR, +3). Every column relying on the DB default was affected. The worst case was `cron_runs`, where `started_at` came from the default but `finished_at` was written with `toISOString()`, so a 20-minute run showed as 3 h 20 min.
+  - **Fix:** `toUtcIso()` in `apps/api/src/db.ts` turns that format into `...Z` ISO and leaves real ISO untouched. Every serializer runs timestamps through it (`serializeIdea`, `serializeCronRun`, `serializeTrendSnapshot`, `serializeCompetitor`). `POST /admin/cron-runs` now writes `started_at` explicitly as ISO. No data migration was needed.
+  - **Rule from now on:** new code writes timestamps with `new Date().toISOString()`, never relying on the `datetime('now')` default. Any new timestamp read path must go through `toUtcIso`.
+  - Don't "fix" the `trend_snapshots` `fetched_at < datetime('now', '-24 hours')` comparisons. Both sides use the same SQLite format there, so they are correct as they are.
+- **All dates go through `apps/web/src/lib/format-date.ts`.** Never call `toLocaleString()` directly.
+  - `formatDate` → `01.10.2026`
+  - `formatDateTime` → `01.10.2026 06:12`. Always rendered in `Europe/Istanbul`, regardless of the browser's time zone.
+  - `formatBatchDate("2026-10-01")` → `01.10.2026`. Plain string reshuffle with no `Date`, so there is no midnight-UTC day shift.
+  - `formatDuration` → `20 dk`, shown as "Süre" on cron runs.
+  - `DateRangeFilter` uses the same format, and its calendar gets the `date-fns` `tr` locale.
+- **`components/PageHeader.tsx`:** `PageHeader` (title, description, actions) and `PageMessage` (loading/error/empty text). Every top-level screen renders the header in its loading and error states too, so the title doesn't jump when data arrives.
+  - The Fikirler list now has a title like every other screen.
+  - `IdeaDetailPage` keeps its own sticky back-link header and only uses `PageMessage`.
 
 ## What this project is
 

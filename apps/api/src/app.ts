@@ -7,6 +7,7 @@ import {
   serializeIdea,
   serializeCronRun,
   serializeTrendSnapshot,
+  serializeCompetitor,
   type IdeaRow,
   type CronRunRow,
   type CompetitorRow,
@@ -284,7 +285,11 @@ app.get("/admin/cron-runs", async (req, res) => {
 
 app.post("/admin/cron-runs", requireWorkflowSecret, async (_req, res) => {
   const id = crypto.randomUUID();
-  await db().prepare("INSERT INTO cron_runs (id) VALUES (?1)").bind(id).run();
+  // started_at açıkça ISO yazılıyor (DB default'u Z'siz format üretir, bkz. toUtcIso).
+  await db()
+    .prepare("INSERT INTO cron_runs (id, started_at) VALUES (?1, ?2)")
+    .bind(id, new Date().toISOString())
+    .run();
   res.status(201).json({ id });
 });
 
@@ -356,7 +361,7 @@ app.get("/ideas/:id/competitors", async (req, res) => {
     .prepare("SELECT * FROM idea_competitors WHERE idea_id = ?1 ORDER BY rowid")
     .bind(req.params.id)
     .all<CompetitorRow>();
-  res.json({ competitors: results });
+  res.json({ competitors: results.map(serializeCompetitor) });
 });
 
 app.post("/admin/competitors", requireWorkflowSecret, async (req, res) => {

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { PageHeader, PageMessage } from "@/components/PageHeader";
+import { formatBatchDate } from "@/lib/format-date";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,11 +146,32 @@ export function IdeaListPage() {
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
   }, [filtered]);
 
-  if (error) return <p className="py-10 text-center text-destructive">Fikirler yüklenemedi: {error}</p>;
-  if (!ideas) return <p className="py-10 text-center text-muted-foreground">Yükleniyor…</p>;
+  const header = (
+    <PageHeader
+      title="Fikirler"
+      description="Yeni ve askıdaki fikirler. Geliştirilenler ayrı ekranda."
+    />
+  );
+
+  if (error)
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <PageMessage tone="error">Fikirler yüklenemedi: {error}</PageMessage>
+      </div>
+    );
+  if (!ideas)
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <PageMessage>Yükleniyor…</PageMessage>
+      </div>
+    );
 
   return (
     <div className="flex flex-col gap-6">
+      {header}
+
       <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="search">Ara</Label>
@@ -283,11 +306,11 @@ export function IdeaListPage() {
         </div>
       </div>
 
-      {groups.length === 0 && <p className="py-10 text-center text-muted-foreground">Bu filtrelere uyan fikir yok.</p>}
+      {groups.length === 0 && <PageMessage>Bu filtrelere uyan fikir yok.</PageMessage>}
 
       {groups.map(([batchDate, batchIdeas]) => (
         <section key={batchDate} className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium tracking-wide text-muted-foreground uppercase">{batchDate}</h2>
+          <h2 className="text-sm font-medium tracking-wide text-muted-foreground uppercase">{formatBatchDate(batchDate)}</h2>
           <IdeaTable
             ideas={batchIdeas}
             selectedIds={selectedIds}

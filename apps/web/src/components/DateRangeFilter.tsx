@@ -1,8 +1,10 @@
 import type { DateRange } from "react-day-picker";
 import { CalendarIcon } from "lucide-react";
+import { tr } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { formatBatchDate } from "@/lib/format-date";
 
 interface DateRangeFilterProps {
   from: string;
@@ -27,7 +29,9 @@ function toIso(date: Date | undefined): string {
 export function DateRangeFilter({ from, to, onChange }: DateRangeFilterProps) {
   const range: DateRange | undefined = from || to ? { from: toDate(from), to: toDate(to) } : undefined;
 
-  const label = from && to ? `${from} – ${to}` : from ? `${from} ve sonrası` : to ? `${to}'a kadar` : "Tüm tarihler";
+  const f = from && formatBatchDate(from);
+  const t = to && formatBatchDate(to);
+  const label = f && t ? `${f} – ${t}` : f ? `${f} ve sonrası` : t ? `${t} tarihine kadar` : "Tüm tarihler";
 
   return (
     <Popover>
@@ -40,6 +44,7 @@ export function DateRangeFilter({ from, to, onChange }: DateRangeFilterProps) {
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="range"
+          locale={tr}
           selected={range}
           onSelect={(r) => onChange(toIso(r?.from), toIso(r?.to))}
           numberOfMonths={1}
