@@ -36,6 +36,7 @@ export interface Idea {
   user_note: string | null;
   user_note_updated_at: string | null;
   last_reevaluated_at: string | null;
+  last_reevaluation_summary: string | null;
   status: IdeaStatus;
 }
 
@@ -124,6 +125,8 @@ export interface Competitor {
   idea_id: string;
   app_name: string;
   url: string | null;
+  // Eski (prompt güncellemesi öncesi) kayıtlarda null.
+  similarity: "direct" | "partial" | "alternative" | null;
   note: string | null;
   created_at: string;
 }

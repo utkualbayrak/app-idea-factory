@@ -14,7 +14,7 @@ permissions:
 jobs:
   find-competitors:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,7 +43,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: "Read prompts/find-competitors.md and follow its instructions exactly for the idea in scripts/output/idea.json. Do not ask for confirmation or clarification — complete the task end to end and write the output file."
-          claude_args: "--max-turns 10 --permission-mode acceptEdits"
+          claude_args: "--max-turns 30 --permission-mode acceptEdits"
 
       - name: Submit competitors
         working-directory: scripts

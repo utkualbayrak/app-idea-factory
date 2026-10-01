@@ -42,6 +42,8 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Bütçe limiti | Uygulama içinde bütçe limiti özelliği yapılmayacak |
 | Fikir dili | Açıklamalar Türkçe; fikrin adı İngilizce, uygulama adı gibi kısa ve akılda kalıcı (örn. "MealMate") |
 | Cron tetikleme yetkisi (Grup 3, 2026-09-30) | Ayarlar ekranındaki "cron'u şimdi tetikle" butonu için ayrı bir token yerine mevcut `SKELETON_REPO_PAT`'e `workflow` scope'u eklendi (aynı token, yeni bir PAT yok). Worker'a `GH_WORKFLOW_DISPATCH_TOKEN` secret'ı olarak eklenmesi gerekiyor — bkz. CLAUDE.md "Grup 3 — what's live". |
+| Prompt sahipliği (2026-10-01) | `prompts/*.md` dosyalarını kullanıcı kendisi optimize ediyor. Claude bu dosyaların içeriğini değiştirmez veya geri almaz; kod tarafını prompt'ların çıktı sözleşmesine uyarlar. Bir prompt değişikliği gerekiyorsa önce sorar. |
+| Grup sonu teslim (2026-10-01) | Her grup sonunda typecheck/lint/build sonrası commit + push'u Claude yapar (push otomatik deploy eder). Varsa yeni migration push'tan önce remote'a uygulanır. Test kullanıcıda, prodda yapılır; Claude kendi arayüzünü Chrome ile test etmez. |
 
 ## Bu kararların mimariye etkisi
 
@@ -196,7 +198,7 @@ Puanlar 0.00-10.00 arası, yalnızca 0.25'in katları (bkz. "Kesinleşen kararla
 
 ## Veri modeli (D1, taslak)
 
-- **ideas:** id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, her alt puan + gerekçesi), user_rating (0.00-10.00, 0.25 adımlarla, boş olabilir), user_note, user_note_updated_at (boş olabilir), last_reevaluated_at (boş olabilir), status (new / on_hold / deleted / in_development / developed)
+- **ideas:** id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, her alt puan + gerekçesi), user_rating (0.00-10.00, 0.25 adımlarla, boş olabilir), user_note, user_note_updated_at (boş olabilir), last_reevaluated_at (boş olabilir), last_reevaluation_summary (boş olabilir), status (new / on_hold / deleted / in_development / developed)
 - **tasks:** id, idea_id, created_at, updated_at, params (json), status (queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
 - **trend_snapshots:** id, fetched_at, source, payload (json)
 

@@ -83,14 +83,18 @@ app.get("/ideas/recent-names", requireWorkflowSecret, async (req, res) => {
   const days = Number(req.query.days ?? 90);
   const safeDays = Number.isFinite(days) && days > 0 ? days : 90;
 
+  // created_at ISO formatında (T/Z'li) yazılıyor; datetime('now', ...) ise
+  // boşluklu format döndürüyor — string karşılaştırması bozulmasın diye
+  // eşik değeri de ISO'ya çevrilip bağlanıyor.
+  const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
   const { results } = await db()
-    .prepare(
-      `SELECT DISTINCT name FROM ideas WHERE created_at >= datetime('now', ?1)`,
-    )
-    .bind(`-${safeDays} days`)
-    .all<{ name: string }>();
+    .prepare(`SELECT name, one_liner, category FROM ideas WHERE created_at >= ?1 ORDER BY created_at DESC`)
+    .bind(since)
+    .all<{ name: string; one_liner: string; category: string }>();
 
-  res.json({ names: results.map((row) => row.name) });
+  // names: geriye dönük uyumluluk + isim tekrarı kontrolü (validate-ideas.ts).
+  // ideas: prompts/daily-ideas.md'nin konsept tekrarını önlemek için okuduğu liste.
+  res.json({ names: [...new Set(results.map((row) => row.name))], ideas: results });
 });
 
 app.get("/ideas/:id", async (req, res) => {
@@ -325,19 +329,31 @@ app.patch("/admin/ideas/:id/reevaluate", requireWorkflowSecret, async (req, res)
   const now = new Date().toISOString();
   const tags = parsed.data.tags ? JSON.stringify(parsed.data.tags) : existing.tags;
 
+  const summary = parsed.data.change_summary;
+
   await db()
-    .prepare(`UPDATE ideas SET scores = ?1, tags = ?2, last_reevaluated_at = ?3 WHERE id = ?4`)
-    .bind(JSON.stringify(parsed.data.scores), tags, now, req.params.id)
+    .prepare(
+      `UPDATE ideas SET scores = ?1, tags = ?2, last_reevaluated_at = ?3, last_reevaluation_summary = ?4 WHERE id = ?5`,
+    )
+    .bind(JSON.stringify(parsed.data.scores), tags, now, summary, req.params.id)
     .run();
 
-  res.json({ idea: serializeIdea({ ...existing, scores: JSON.stringify(parsed.data.scores), tags, last_reevaluated_at: now }) });
+  res.json({
+    idea: serializeIdea({
+      ...existing,
+      scores: JSON.stringify(parsed.data.scores),
+      tags,
+      last_reevaluated_at: now,
+      last_reevaluation_summary: summary,
+    }),
+  });
 });
 
 // Grup 4: rakip/benzer uygulamalar. Her "rakipleri bul" çalışması o fikrin
 // önceki sonuçlarının yerine geçer (tekrar tekrar biriktirmesin diye).
 app.get("/ideas/:id/competitors", async (req, res) => {
   const { results } = await db()
-    .prepare("SELECT * FROM idea_competitors WHERE idea_id = ?1 ORDER BY created_at DESC")
+    .prepare("SELECT * FROM idea_competitors WHERE idea_id = ?1 ORDER BY rowid")
     .bind(req.params.id)
     .all<CompetitorRow>();
   res.json({ competitors: results });
@@ -355,8 +371,10 @@ app.post("/admin/competitors", requireWorkflowSecret, async (req, res) => {
     db().prepare("DELETE FROM idea_competitors WHERE idea_id = ?1").bind(idea_id),
     ...competitors.map((c) =>
       db()
-        .prepare(`INSERT INTO idea_competitors (id, idea_id, app_name, url, note) VALUES (?1, ?2, ?3, ?4, ?5)`)
-        .bind(crypto.randomUUID(), idea_id, c.app_name, c.url ?? null, c.note ?? null),
+        .prepare(
+          `INSERT INTO idea_competitors (id, idea_id, app_name, url, similarity, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+        )
+        .bind(crypto.randomUUID(), idea_id, c.app_name, c.url, c.similarity, c.note),
     ),
   ];
   await db().batch(statements);

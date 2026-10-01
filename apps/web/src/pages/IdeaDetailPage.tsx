@@ -30,6 +30,20 @@ const STATUS_LABELS: Record<Idea["status"], string> = {
   developed: "Geliştirildi",
 };
 
+type Similarity = NonNullable<Competitor["similarity"]>;
+
+const SIMILARITY_LABELS: Record<Similarity, string> = {
+  direct: "Doğrudan",
+  partial: "Kısmi",
+  alternative: "Alternatif",
+};
+
+const SIMILARITY_STYLES: Record<Similarity, string> = {
+  direct: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
+  partial: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
+  alternative: "bg-muted text-muted-foreground",
+};
+
 export function IdeaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -208,7 +222,10 @@ export function IdeaDetailPage() {
             <ul className="flex flex-col gap-2">
               {competitors.map((c) => (
                 <li key={c.id} className="min-w-0 rounded-md border p-2 text-sm">
-                  <div className="flex items-center gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {c.similarity && (
+                      <Badge className={`shrink-0 ${SIMILARITY_STYLES[c.similarity]}`}>{SIMILARITY_LABELS[c.similarity]}</Badge>
+                    )}
                     {c.url ? (
                       <a href={c.url} target="_blank" rel="noreferrer" className="truncate font-medium text-primary underline underline-offset-4">
                         {c.app_name}
@@ -248,6 +265,11 @@ export function IdeaDetailPage() {
           {idea.last_reevaluated_at && (
             <p className="text-xs text-muted-foreground">
               Son yeniden değerlendirme: {new Date(idea.last_reevaluated_at).toLocaleString("tr-TR")}
+            </p>
+          )}
+          {idea.last_reevaluation_summary && (
+            <p className="rounded-md bg-muted px-2 py-1.5 text-xs break-words text-muted-foreground">
+              <span className="font-medium text-foreground">Değerlendirme özeti:</span> {idea.last_reevaluation_summary}
             </p>
           )}
         </CardHeader>

@@ -1,3 +1,5 @@
+import type { Competitor } from "./idea-schema";
+
 const BASE_URL = process.env.API_BASE_URL ?? "https://ideas-api.utkualbayrak.dev";
 
 function requireEnv(name: string): string {
@@ -42,11 +44,18 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function fetchRecentNames(days = 90): Promise<string[]> {
-  const body = await fetchJson<{ names: string[] }>(`${BASE_URL}/ideas/recent-names?days=${days}`, {
-    headers: authHeaders(),
-  });
-  return body.names;
+export interface RecentIdea {
+  name: string;
+  one_liner: string;
+  category: string;
+}
+
+export async function fetchRecentNames(days = 90): Promise<{ names: string[]; ideas: RecentIdea[] }> {
+  const body = await fetchJson<{ names: string[]; ideas?: RecentIdea[] }>(
+    `${BASE_URL}/ideas/recent-names?days=${days}`,
+    { headers: authHeaders() },
+  );
+  return { names: body.names, ideas: body.ideas ?? [] };
 }
 
 export async function submitIdeasBatch(batchDate: string, ideas: unknown[]): Promise<unknown> {
@@ -100,7 +109,7 @@ export async function submitReevaluation(id: string, data: unknown): Promise<voi
   });
 }
 
-export async function submitCompetitors(ideaId: string, competitors: unknown[]): Promise<void> {
+export async function submitCompetitors(ideaId: string, competitors: Competitor[]): Promise<void> {
   await fetchJson(`${BASE_URL}/admin/competitors`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },

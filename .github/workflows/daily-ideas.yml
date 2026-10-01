@@ -13,7 +13,7 @@ permissions:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,11 +75,11 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: "Read prompts/daily-ideas.md and follow its instructions exactly. Do not ask for confirmation or clarification — complete the task end to end and write the output file."
-          claude_args: "--max-turns 15 --permission-mode acceptEdits"
+          claude_args: "--max-turns 30 --permission-mode acceptEdits"
 
       - name: Validate generated ideas (şema + tekrar kontrolü)
         working-directory: scripts
-        run: pnpm exec tsx validate-ideas.ts output/ideas.json output/recent-names.json
+        run: pnpm exec tsx validate-ideas.ts output/ideas.json output/recent-names.json output/trends.json
 
       - name: Submit ideas batch to API
         working-directory: scripts

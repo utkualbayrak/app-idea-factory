@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { finishCronRun } from "./lib/api-client";
 import type { TrendSummary } from "./lib/types";
 
@@ -28,10 +29,24 @@ async function main() {
     }
   }
 
+  // validate-ideas.ts gibi adımlar okunabilir bir hata sebebini
+  // output/failure-reason.txt'e yazar; varsa log linkinin önüne eklenir
+  // (Cron Geçmişi ekranı sondaki URL'yi ayrıca link olarak gösterir).
+  let error = errorMessage;
+  if (status === "failed") {
+    const reasonPath = path.join(trendsPath ? path.dirname(trendsPath) : "output", "failure-reason.txt");
+    try {
+      const reason = (await readFile(reasonPath, "utf-8")).trim();
+      if (reason) error = errorMessage ? `${reason} | ${errorMessage}` : reason;
+    } catch {
+      // sebep dosyası yok — yalnızca log linki gider.
+    }
+  }
+
   await finishCronRun(id, {
     status,
     source_breakdown: sourceBreakdown,
-    error: errorMessage,
+    error,
   });
   console.log(`Cron run ${id} -> ${status}`);
 }

@@ -82,23 +82,30 @@ export type TriggerWorkflow = z.infer<typeof triggerWorkflowSchema>;
 
 // Grup 4: notlarla yeniden değerlendirme — scores aynı şema, ideaInputSchema
 // gibi tüm fikri değil sadece puan+gerekçe+tag alanlarını günceller.
+// change_summary: prompts/reevaluate-idea.md'nin zorunlu kıldığı, notun nasıl
+// yorumlandığını ve hangi puanların neden değiştiğini özetleyen alan.
 export const reevaluationSchema = z.object({
   scores: ideaScoresSchema,
   tags: z.array(z.string().min(1)).min(1).optional(),
+  change_summary: z.string().min(1),
 });
 
 export type Reevaluation = z.infer<typeof reevaluationSchema>;
 
-// Grup 4: rakip/benzer uygulama bulma.
+// Grup 4: rakip/benzer uygulama bulma. prompts/find-competitors.md'deki
+// şemaya göre url, similarity ve note zorunlu; en fazla 5 sonuç.
+export const COMPETITOR_SIMILARITIES = ["direct", "partial", "alternative"] as const;
+
 export const competitorSchema = z.object({
   app_name: z.string().min(1),
-  url: z.string().min(1).nullable().optional(),
-  note: z.string().min(1).nullable().optional(),
+  url: z.url(),
+  similarity: z.enum(COMPETITOR_SIMILARITIES),
+  note: z.string().min(1),
 });
 
 export const competitorsSubmitSchema = z.object({
   idea_id: z.string().min(1),
-  competitors: z.array(competitorSchema).max(10),
+  competitors: z.array(competitorSchema).max(5),
 });
 
 export type CompetitorsSubmit = z.infer<typeof competitorsSubmitSchema>;

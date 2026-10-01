@@ -41,18 +41,28 @@ export type IdeaInput = z.infer<typeof ideaInputSchema>;
 export const reevaluationSchema = z.object({
   scores: ideaScoresSchema,
   tags: z.array(z.string().min(1)).min(1).optional(),
+  change_summary: z.string().min(1),
 });
 
 export type Reevaluation = z.infer<typeof reevaluationSchema>;
 
 // Grup 4: rakip/benzer uygulama bulma (apps/api/src/schema.ts'deki
 // competitorSchema ile aynı olmalı).
+export const COMPETITOR_SIMILARITIES = ["direct", "partial", "alternative"] as const;
+
 export const competitorSchema = z.object({
   app_name: z.string().min(1),
-  url: z.string().min(1).nullable().optional(),
-  note: z.string().min(1).nullable().optional(),
+  url: z.url(),
+  similarity: z.enum(COMPETITOR_SIMILARITIES),
+  note: z.string().min(1),
 });
 
-export const competitorsArraySchema = z.array(competitorSchema).max(10);
+// prompts/find-competitors.md'nin çıktısı: dizi değil, status'lu nesne.
+// status 'ok' değilse competitors her zaman boş (arama/girdi hatası —
+// "rakip yok" ile karıştırılmamalı).
+export const competitorsOutputSchema = z.object({
+  status: z.enum(["ok", "search_failed", "input_error"]),
+  competitors: z.array(competitorSchema).max(5),
+});
 
 export type Competitor = z.infer<typeof competitorSchema>;

@@ -28,6 +28,23 @@ interface SnapshotPayload {
   error?: string;
 }
 
+// error: düz bir sebep, düz bir log URL'si ya da "sebep | URL"
+// (finish-cron-run.ts, failure-reason.txt varsa sebebi log linkinin önüne ekler).
+function RunError({ error }: { error: string }) {
+  const [reason, url] = error.startsWith("http") ? ["", error] : error.split(" | ");
+  return (
+    <>
+      {reason}
+      {reason && url && " — "}
+      {url && (
+        <a href={url} target="_blank" rel="noreferrer" className="underline underline-offset-4">
+          Çalışma loglarını gör
+        </a>
+      )}
+    </>
+  );
+}
+
 export function CronRunsPage() {
   const [runs, setRuns] = useState<CronRun[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,13 +107,7 @@ export function CronRunsPage() {
 
                 {run.error && (
                   <p className="text-sm break-words text-destructive">
-                    {run.error.startsWith("http") ? (
-                      <a href={run.error} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-                        Çalışma loglarını gör
-                      </a>
-                    ) : (
-                      run.error
-                    )}
+                    <RunError error={run.error} />
                   </p>
                 )}
 
