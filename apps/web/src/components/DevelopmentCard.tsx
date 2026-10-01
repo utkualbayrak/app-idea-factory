@@ -1,6 +1,16 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Pencil, RotateCcw } from "lucide-react";
-import type { Task, TaskDocument, WorkflowRun } from "@/lib/api";
+import { ExternalLink, Eye, Pencil, RotateCcw } from "lucide-react";
+import {
+  patchIdea,
+  patchTaskDocument,
+  startBuild,
+  type DocumentKind,
+  type IdeaStatus,
+  type Task,
+  type TaskDocument,
+  type WorkflowRun,
+} from "@/lib/api";
 import {
   AUTH_LABELS,
   BACKEND_LABELS,
@@ -12,12 +22,14 @@ import {
   THEME_LABELS,
 } from "@/lib/task-labels";
 import { formatDateTime } from "@/lib/format-date";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { LastRunLine } from "@/components/LastRunLine";
 import { Markdown } from "@/components/Markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 
 const TASK_STATUS_STYLES: Record<Task["status"], string> = {
   planning: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
@@ -31,17 +43,79 @@ const TASK_STATUS_STYLES: Record<Task["status"], string> = {
 
 interface DevelopmentCardProps {
   ideaId: string;
+  ideaStatus: IdeaStatus;
   task: Task;
   documents: TaskDocument[];
   lastPlanRun: WorkflowRun | undefined;
+  lastBuildRun: WorkflowRun | undefined;
+  /** Görev/fikir/iş listesi sunucudan tazelensin (başlatma, işaretleme sonrası). */
+  onChanged: () => void;
 }
 
-// Fikir detayındaki "Geliştirme" kartı: görev parametreleri, durum ve
-// Claude'un yazdığı planlama belgeleri (şimdilik salt okunur; düzenleme ve
-// "Geliştirmeye başla" Faz 3B'de).
-export function DevelopmentCard({ ideaId, task, documents, lastPlanRun }: DevelopmentCardProps) {
+// Fikir detayındaki "Geliştirme" kartı: görev parametreleri, durum,
+// Claude'un yazdığı planlama belgeleri (görev 'ready' iken düzenlenebilir),
+// "Geliştirmeye başla" / "Tekrar dene" ve iskelet repo/issue linkleri.
+export function DevelopmentCard({
+  ideaId,
+  ideaStatus,
+  task,
+  documents,
+  lastPlanRun,
+  lastBuildRun,
+  onChanged,
+}: DevelopmentCardProps) {
   const { params } = task;
   const canReplan = REPLANNABLE_STATUSES.includes(task.status);
+  const editable = task.status === "ready";
+
+  // Sekmeler arası geçişte kaybolmasın diye taslaklar kartta tutulur
+  // (Radix Tabs pasif sekmenin içeriğini unmount ediyor).
+  const [savedDocs, setSavedDocs] = useState<Partial<Record<DocumentKind, TaskDocument>>>({});
+  const [drafts, setDrafts] = useState<Partial<Record<DocumentKind, string>>>({});
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Kaydedilen belge, sunucu tekrar yüklenene kadar yerel kopyadan gösterilir.
+  const docs = documents.map((doc) => {
+    const saved = savedDocs[doc.kind];
+    return saved && saved.user_edited_at && (!doc.user_edited_at || saved.user_edited_at > doc.user_edited_at) ? saved : doc;
+  });
+  const dirtyKinds = docs.filter((doc) => drafts[doc.kind] != null && drafts[doc.kind] !== doc.content).map((d) => d.kind);
+
+  function setDraft(kind: DocumentKind, value: string | undefined) {
+    setDrafts((prev) => ({ ...prev, [kind]: value }));
+  }
+
+  async function saveDocument(kind: DocumentKind, content: string) {
+    const res = await patchTaskDocument(task.id, kind, content);
+    setSavedDocs((prev) => ({ ...prev, [kind]: res.document }));
+    setDraft(kind, undefined);
+  }
+
+  async function handleBuild() {
+    setActionError(null);
+    try {
+      await startBuild(task.id);
+      onChanged();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setActionError(
+        message.includes("HTTP 500")
+          ? `Başlatılamadı: ${message}. GH_WORKFLOW_DISPATCH_TOKEN Worker secret'ı eklenmemiş olabilir.`
+          : `Başlatılamadı: ${message}`,
+      );
+      onChanged();
+    }
+  }
+
+  async function handleMarkStatus(status: "developed" | "in_development") {
+    setActionError(null);
+    try {
+      await patchIdea(ideaId, { status });
+      onChanged();
+    } catch (err) {
+      setActionError(`Durum değiştirilemedi: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
 
   return (
     <Card className="min-w-0">
@@ -79,53 +153,250 @@ export function DevelopmentCard({ ideaId, task, documents, lastPlanRun }: Develo
           )}
         </dl>
 
-        {task.status === "planning" && (
-          <p className="text-sm text-muted-foreground">
-            Claude planlama belgelerini yazıyor — genelde birkaç dakika sürer, bu sayfa kendini yeniler.
-          </p>
-        )}
-        {task.status === "planning_failed" && task.error && (
-          <p className="rounded-md bg-red-50 px-3 py-2 text-sm break-words text-red-800 dark:bg-red-950 dark:text-red-200">
-            {task.error}
-          </p>
+        {(task.repo_url || task.issue_url) && (
+          <div className="flex flex-wrap gap-2">
+            {task.repo_url && (
+              <Button asChild variant="outline" size="sm">
+                <a href={task.repo_url} target="_blank" rel="noreferrer">
+                  <ExternalLink className="size-4" />
+                  Repo
+                </a>
+              </Button>
+            )}
+            {task.issue_url && (
+              <Button asChild variant="outline" size="sm">
+                <a href={task.issue_url} target="_blank" rel="noreferrer">
+                  <ExternalLink className="size-4" />
+                  Issue
+                </a>
+              </Button>
+            )}
+          </div>
         )}
 
-        {documents.length > 0 && (
-          <Tabs defaultValue={documents[0].kind} className="min-w-0">
+        <StatusMessage task={task} />
+
+        {docs.length > 0 && (
+          <Tabs defaultValue={docs[0].kind} className="min-w-0">
             {/* Mobilde dört sekme sığmazsa satır kendi içinde kayar. */}
             <div className="overflow-x-auto">
               <TabsList>
-                {documents.map((doc) => (
+                {docs.map((doc) => (
                   <TabsTrigger key={doc.kind} value={doc.kind}>
                     {DOCUMENT_LABELS[doc.kind]}
+                    {dirtyKinds.includes(doc.kind) && (
+                      <span className="size-1.5 rounded-full bg-amber-500" aria-label="kaydedilmemiş" />
+                    )}
                   </TabsTrigger>
                 ))}
               </TabsList>
             </div>
-            {documents.map((doc) => (
+            {docs.map((doc) => (
               <TabsContent key={doc.kind} value={doc.kind} className="min-w-0 rounded-md border p-4">
-                <p className="mb-2 text-xs text-muted-foreground">
-                  Üretildi: {formatDateTime(doc.generated_at)}
-                  {doc.user_edited_at && ` · Son düzenleme: ${formatDateTime(doc.user_edited_at)}`}
-                </p>
-                <Markdown>{doc.content}</Markdown>
+                <DocumentPanel
+                  doc={doc}
+                  editable={editable}
+                  draft={drafts[doc.kind]}
+                  onDraftChange={(value) => setDraft(doc.kind, value)}
+                  onSave={(content) => saveDocument(doc.kind, content)}
+                />
               </TabsContent>
             ))}
           </Tabs>
         )}
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-3">
+          {task.status === "ready" && (
+            <ConfirmButton
+              label="Geliştirmeye başla"
+              title="İskelet üretimini başlat?"
+              description="Belgeler kilitlenir. Özel bir GitHub reposu ve issue açılır, Claude Code bu belgelere göre iskeleti kurar (genelde 15-45 dakika). Fikir 'Geliştiriliyor' durumuna geçer."
+              confirmLabel="Başlat"
+              variant="default"
+              disabled={dirtyKinds.length > 0}
+              onConfirm={handleBuild}
+            />
+          )}
+          {task.status === "failed" && (
+            <ConfirmButton
+              label={
+                <>
+                  <RotateCcw className="size-4" />
+                  Tekrar dene
+                </>
+              }
+              title="İskelet üretimini tekrar dene?"
+              description="Aynı repo, aynı issue ve aynı belgelerle baştan çalışır; repodaki önceki deneme içeriğinin yerine yenisi yazılır."
+              confirmLabel="Tekrar dene"
+              variant="default"
+              onConfirm={handleBuild}
+            />
+          )}
           {canReplan && (
-            <Button asChild variant="outline" className="w-fit">
+            <Button asChild variant="outline">
               <Link to={`/ideas/${ideaId}/develop`}>
                 {task.status === "planning_failed" ? <RotateCcw className="size-4" /> : <Pencil className="size-4" />}
                 {task.status === "planning_failed" ? "Parametreleri düzenle ve tekrar dene" : "Parametreleri düzenle, yeniden üret"}
               </Link>
             </Button>
           )}
+          {task.status === "done" && ideaStatus === "in_development" && (
+            <ConfirmButton
+              label="Geliştirildi olarak işaretle"
+              title="Fikri 'Geliştirildi' olarak işaretle?"
+              description="Yalnızca durum değişir; repo ve görev olduğu gibi kalır. İstediğin zaman geri alabilirsin."
+              confirmLabel="İşaretle"
+              onConfirm={() => handleMarkStatus("developed")}
+            />
+          )}
+          {ideaStatus === "developed" && (
+            <ConfirmButton
+              label="Geliştiriliyor'a geri al"
+              title="Fikri tekrar 'Geliştiriliyor' yap?"
+              description="Yalnızca durum değişir."
+              confirmLabel="Geri al"
+              onConfirm={() => handleMarkStatus("in_development")}
+            />
+          )}
+        </div>
+        {task.status === "ready" && dirtyKinds.length > 0 && (
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            Kaydedilmemiş değişiklikler var — başlatmadan önce kaydet ya da vazgeç.
+          </p>
+        )}
+        {actionError && <p className="text-sm break-words text-destructive">{actionError}</p>}
+
+        <div className="flex flex-col gap-1">
           <LastRunLine run={lastPlanRun} label="Son belge üretimi" />
+          <LastRunLine run={lastBuildRun} label="Son iskelet üretimi" />
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function StatusMessage({ task }: { task: Task }) {
+  switch (task.status) {
+    case "planning":
+      return (
+        <p className="text-sm text-muted-foreground">
+          Claude planlama belgelerini yazıyor — genelde birkaç dakika sürer, bu sayfa kendini yeniler.
+        </p>
+      );
+    case "ready":
+      return (
+        <p className="text-sm text-muted-foreground">
+          Belgeleri incele, gerekirse düzenle. Hazır olduğunda "Geliştirmeye başla" ile iskelet kurulur; iskelet yalnızca
+          bu belgelere bakılarak kurulacak.
+        </p>
+      );
+    case "queued":
+    case "running":
+      return (
+        <p className="text-sm text-muted-foreground">
+          İskelet kuruluyor — genelde 15-45 dakika sürer, bu sayfa kendini yeniler. Belgeler bu aşamada kilitli.
+        </p>
+      );
+    case "planning_failed":
+    case "failed":
+      return task.error ? (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm break-words text-red-800 dark:bg-red-950 dark:text-red-200">
+          {task.error}
+        </p>
+      ) : null;
+    default:
+      return null;
+  }
+}
+
+function DocumentPanel({
+  doc,
+  editable,
+  draft,
+  onDraftChange,
+  onSave,
+}: {
+  doc: TaskDocument;
+  editable: boolean;
+  draft: string | undefined;
+  onDraftChange: (value: string | undefined) => void;
+  onSave: (content: string) => Promise<void>;
+}) {
+  const [preview, setPreview] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const editing = draft != null;
+
+  async function handleSave() {
+    if (draft == null) return;
+    if (!draft.trim()) {
+      setError("Belge boş olamaz.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(draft);
+      setPreview(false);
+    } catch (err) {
+      setError(`Kaydedilemedi: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          Üretildi: {formatDateTime(doc.generated_at)}
+          {doc.user_edited_at && ` · Son düzenleme: ${formatDateTime(doc.user_edited_at)}`}
+        </p>
+        {editable && !editing && (
+          <Button variant="outline" size="sm" onClick={() => onDraftChange(doc.content)}>
+            <Pencil className="size-4" />
+            Düzenle
+          </Button>
+        )}
+        {editing && (
+          <Button variant="ghost" size="sm" onClick={() => setPreview((p) => !p)}>
+            {preview ? <Pencil className="size-4" /> : <Eye className="size-4" />}
+            {preview ? "Düzenle" : "Önizle"}
+          </Button>
+        )}
+      </div>
+
+      {editing && !preview ? (
+        <Textarea
+          value={draft}
+          onChange={(e) => onDraftChange(e.target.value)}
+          rows={24}
+          className="min-h-96 font-mono text-xs leading-relaxed"
+          aria-label="Belge içeriği (Markdown)"
+        />
+      ) : (
+        <Markdown>{editing ? draft : doc.content}</Markdown>
+      )}
+
+      {editing && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={handleSave} disabled={saving || draft === doc.content}>
+            {saving ? "Kaydediliyor…" : "Kaydet"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              onDraftChange(undefined);
+              setPreview(false);
+              setError(null);
+            }}
+            disabled={saving}
+          >
+            Vazgeç
+          </Button>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+        </div>
+      )}
+    </div>
   );
 }

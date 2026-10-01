@@ -130,9 +130,10 @@ export type TrendSnapshotsSubmit = z.infer<typeof trendSnapshotsSubmitSchema>;
 
 // 2. tur Grup C: fikir bazlı arka plan işleri (workflow_runs) ve fikir
 // listesindeki aktivite rozeti.
-// plan-idea.yml (Faz 3A) burada ama DISPATCHABLE_WORKFLOWS'ta değil: yalnızca
-// POST /tasks üzerinden (görev formu kaydedilerek) tetiklenebilir.
-export const IDEA_WORKFLOWS = ["reevaluate-idea.yml", "find-competitors.yml", "plan-idea.yml"] as const;
+// plan-idea.yml (Faz 3A) ve build-skeleton.yml (Faz 3C) burada ama
+// DISPATCHABLE_WORKFLOWS'ta değil: yalnızca görev uçları (POST /tasks,
+// POST /tasks/:id/build) üzerinden tetiklenebilirler.
+export const IDEA_WORKFLOWS = ["reevaluate-idea.yml", "find-competitors.yml", "plan-idea.yml", "build-skeleton.yml"] as const;
 export type IdeaWorkflow = (typeof IDEA_WORKFLOWS)[number];
 
 export const ACTIVITY_KINDS = [
@@ -148,6 +149,9 @@ export const ACTIVITY_KINDS = [
   "plan_queued",
   "planned",
   "plan_failed",
+  "skeleton_queued",
+  "skeleton_built",
+  "skeleton_failed",
 ] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
@@ -156,6 +160,7 @@ export const WORKFLOW_ACTIVITY: Record<IdeaWorkflow, [ActivityKind, ActivityKind
   "reevaluate-idea.yml": ["reevaluate_queued", "reevaluated", "reevaluate_failed"],
   "find-competitors.yml": ["competitors_queued", "competitors_found", "competitors_failed"],
   "plan-idea.yml": ["plan_queued", "planned", "plan_failed"],
+  "build-skeleton.yml": ["skeleton_queued", "skeleton_built", "skeleton_failed"],
 };
 
 export const workflowRunPatchSchema = z.object({
@@ -211,6 +216,10 @@ export type TaskStatus = (typeof TASK_STATUSES)[number];
 // queued ve sonrası: iskelet üretimine geçildi, belgeler kilitli.
 export const TASK_REPLANNABLE_STATUSES: readonly TaskStatus[] = ["planning_failed", "ready"];
 
+// İskelet üretimini başlatmaya (ready) ya da tekrar denemeye (failed) izin
+// verilen durumlar. Tekrar deneme aynı repo/issue ve aynı belgelerle çalışır.
+export const TASK_BUILDABLE_STATUSES: readonly TaskStatus[] = ["ready", "failed"];
+
 export const DOCUMENT_KINDS = ["prd", "screens", "tech_plan", "roadmap"] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 
@@ -225,3 +234,21 @@ export const taskDocumentsSubmitSchema = z.object({
     roadmap: documentContent,
   }),
 });
+
+// Faz 3B: kullanıcının arayüzde belge düzenlemesi (yalnızca görev 'ready' iken).
+export const taskDocumentPatchSchema = z.object({
+  content: documentContent,
+});
+
+// Faz 3C: build-skeleton.yml'ın ilerleme/sonuç bildirimi. repo_url/issue_url
+// repo ve issue açılır açılmaz gönderilir (iş sonra patlasa da tekrar deneme
+// aynı repoyu kullansın); status 'done' yalnızca başarı yolunda gelir —
+// başarısızlığı workflow_runs bitişi işler.
+export const taskBuildReportSchema = z
+  .object({
+    idea_id: z.string().min(1),
+    repo_url: z.url().optional(),
+    issue_url: z.url().optional(),
+    status: z.literal("done").optional(),
+  })
+  .refine((d) => d.repo_url || d.issue_url || d.status, "En az bir alan gönderilmeli");

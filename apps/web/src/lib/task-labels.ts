@@ -54,3 +54,6 @@ export const DOCUMENT_LABELS: Record<DocumentKind, string> = {
 // Formu tekrar gönderip belgeleri yeniden üretmeye izin verilen durumlar
 // (apps/api/src/schema.ts TASK_REPLANNABLE_STATUSES ile aynı).
 export const REPLANNABLE_STATUSES: TaskStatus[] = ["planning_failed", "ready"];
+
+// Arka planda bir iş sürerken detay sayfası kendini yeniler.
+export const TASK_IN_PROGRESS_STATUSES: TaskStatus[] = ["planning", "queued", "running"];

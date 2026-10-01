@@ -343,6 +343,14 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   - `awaiting_development` ideas leave the main list and appear in Geliştirilenler (status filter has all 3 dev-flow statuses). The detail page's back link goes to Geliştirilenler for them.
   - `LastRunLine` moved to `components/LastRunLine.tsx`.
 
+## Faz 3B — what's live (doc editing, start build)
+
+- `PATCH /tasks/:id/documents/:kind` saves a user edit (stamps `user_edited_at`), only while the task is `ready` — docs are locked from `queued` on.
+- `POST /tasks/:id/build` starts the skeleton (from `ready`) or retries it (from `failed`, `TASK_BUILDABLE_STATUSES`): task → `queued`, idea → `in_development`, `workflow_runs` row, dispatches `build-skeleton.yml`. Needs all 4 docs. If the GitHub dispatch fails, task and idea go back to their previous statuses and the error is kept on the task.
+- `taskRunHooks()` in `app.ts` maps `plan-idea.yml`/`build-skeleton.yml` run status onto the task: running → `planning`/`running` (and idea `in_development` for a manual build run), failed → `planning_failed`/`failed` with the error. Success paths go through their own endpoints (`/admin/tasks/documents`, `/admin/tasks/build`).
+- `DevelopmentCard` holds per-document drafts in card state (Radix Tabs unmounts inactive tabs, so drafts can't live inside the tab). Each tab: Düzenle → Markdown textarea with Önizle toggle, explicit Kaydet/Vazgeç; a dot on the tab marks unsaved changes, and "Geliştirmeye başla" (confirm dialog) is disabled while any exist. "Tekrar dene" appears on `failed`; "Geliştirildi olarak işaretle" on `done` (and "Geliştiriliyor'a geri al" once developed) — the only UI path to `developed`, via plain `PATCH /ideas/:id`.
+- The detail page polls every 20s while the task is `planning`/`queued`/`running` (`TASK_IN_PROGRESS_STATUSES`).
+
 ## What this project is
 
 A personal automation platform that:

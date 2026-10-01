@@ -24,6 +24,7 @@ import { SourceIcon } from "@/components/SourceIcon";
 import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
 import { LastRunLine } from "@/components/LastRunLine";
 import { DevelopmentCard } from "@/components/DevelopmentCard";
+import { TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
 import { PageMessage } from "@/components/PageHeader";
 import { formatDateTime } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
@@ -108,11 +109,11 @@ export function IdeaDetailPage() {
     loadTask();
   }, [id, loadRuns, loadTask]);
 
-  // Belgeler hazırlanırken (plan-idea.yml birkaç dakika sürer) sayfa kendini
-  // yeniler; hazır olunca ya da iş patlayınca durur.
-  const planning = task?.status === "planning";
+  // Belgeler hazırlanırken / iskelet kurulurken sayfa kendini yeniler; iş
+  // bitince ya da patlayınca durur.
+  const taskInProgress = task != null && TASK_IN_PROGRESS_STATUSES.includes(task.status);
   useEffect(() => {
-    if (!planning || !id) return;
+    if (!taskInProgress || !id) return;
     const timer = setInterval(() => {
       loadTask();
       loadRuns();
@@ -121,7 +122,7 @@ export function IdeaDetailPage() {
         .catch(() => {});
     }, 20_000);
     return () => clearInterval(timer);
-  }, [planning, id, loadTask, loadRuns]);
+  }, [taskInProgress, id, loadTask, loadRuns]);
 
   // Bir iş tetiklenince fikrin aktivite rozeti ("Rakip aranıyor…" vb.) ve
   // son iş satırı hemen güncellensin.
@@ -238,7 +239,15 @@ export function IdeaDetailPage() {
       </Card>
 
       {task && id && (
-        <DevelopmentCard ideaId={id} task={task} documents={documents} lastPlanRun={lastRun("plan-idea.yml")} />
+        <DevelopmentCard
+          ideaId={id}
+          ideaStatus={idea.status}
+          task={task}
+          documents={documents}
+          lastPlanRun={lastRun("plan-idea.yml")}
+          lastBuildRun={lastRun("build-skeleton.yml")}
+          onChanged={handleTriggered}
+        />
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">

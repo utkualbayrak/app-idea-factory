@@ -31,8 +31,11 @@ import {
   workflowRunCreateSchema,
   taskCreateSchema,
   taskDocumentsSubmitSchema,
+  taskDocumentPatchSchema,
+  taskBuildReportSchema,
   DOCUMENT_KINDS,
   TASK_REPLANNABLE_STATUSES,
+  TASK_BUILDABLE_STATUSES,
   SOURCE_SETTING_KEYS,
   IDEA_WORKFLOWS,
   WORKFLOW_ACTIVITY,
@@ -404,7 +407,7 @@ app.post("/admin/workflow-runs", requireWorkflowSecret, async (req, res) => {
       .bind(id, workflow, ideaId, now, runUrl ?? null),
     stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
   ];
-  if (workflow === "plan-idea.yml") statements.push(markTaskPlanning(ideaId, now));
+  statements.push(...taskRunHooks(workflow, ideaId, "running", null, now));
   await db().batch(statements);
   res.status(201).json({ id });
 });
@@ -434,7 +437,7 @@ app.patch("/admin/workflow-runs/:id", requireWorkflowSecret, async (req, res) =>
         .prepare("UPDATE workflow_runs SET status = 'running', started_at = ?1, run_url = COALESCE(?2, run_url) WHERE id = ?3")
         .bind(now, runUrl ?? null, run.id),
     ];
-    if (run.workflow === "plan-idea.yml") statements.push(markTaskPlanning(run.idea_id, now));
+    statements.push(...taskRunHooks(run.workflow, run.idea_id, "running", null, now));
     await db().batch(statements);
   } else {
     const statements = [
@@ -448,17 +451,7 @@ app.patch("/admin/workflow-runs/:id", requireWorkflowSecret, async (req, res) =>
       const [, okKind, failKind] = WORKFLOW_ACTIVITY[run.workflow];
       statements.push(stampActivity(run.idea_id, status === "success" ? okKind : failKind, now));
     }
-    // Belge üretimi patladıysa görev 'planning_failed'e düşer (başarı yolunu
-    // POST /admin/tasks/documents zaten 'ready' yapıyor).
-    if (run.workflow === "plan-idea.yml" && status === "failed") {
-      statements.push(
-        db()
-          .prepare(
-            "UPDATE tasks SET status = 'planning_failed', error = ?1, updated_at = ?2 WHERE idea_id = ?3 AND status = 'planning'",
-          )
-          .bind(error ?? "Belge üretimi başarısız oldu.", now, run.idea_id),
-      );
-    }
+    statements.push(...taskRunHooks(run.workflow, run.idea_id, status, error ?? null, now));
     await db().batch(statements);
   }
 
@@ -470,14 +463,62 @@ app.patch("/admin/workflow-runs/:id", requireWorkflowSecret, async (req, res) =>
 // plan-idea.yml tetiklenir. Fikir başına tek görev: belgeleri yeniden üretmek
 // (planning_failed / ready durumunda) aynı satırı günceller.
 
-// Elle (job_id'siz) başlayan bir plan-idea.yml çalışması da görevi 'planning'e
-// çeker — kilitli (iskelet aşamasındaki) görevlere dokunmaz.
-function markTaskPlanning(ideaId: string, now: string) {
-  return db()
-    .prepare(
-      "UPDATE tasks SET status = 'planning', error = NULL, updated_at = ?1 WHERE idea_id = ?2 AND status IN ('planning', 'planning_failed', 'ready')",
-    )
-    .bind(now, ideaId);
+// Görev workflow'larının (plan-idea.yml, build-skeleton.yml) çalışma durumu
+// göreve yansır. Başarı yolları ayrı uçlarda işlenir (belgeler gelince 'ready',
+// iskelet bitince 'done'); burada başlangıç ve başarısızlık var. Elle
+// (job_id'siz) başlatılan çalışmalar da görevi doğru duruma çeker.
+function taskRunHooks(
+  workflow: string,
+  ideaId: string,
+  status: "running" | "success" | "failed",
+  error: string | null,
+  now: string,
+) {
+  if (workflow === "plan-idea.yml") {
+    if (status === "running") {
+      // Kilitli (iskelet aşamasındaki) görevlere dokunmaz.
+      return [
+        db()
+          .prepare(
+            "UPDATE tasks SET status = 'planning', error = NULL, updated_at = ?1 WHERE idea_id = ?2 AND status IN ('planning', 'planning_failed', 'ready')",
+          )
+          .bind(now, ideaId),
+      ];
+    }
+    if (status === "failed") {
+      return [
+        db()
+          .prepare(
+            "UPDATE tasks SET status = 'planning_failed', error = ?1, updated_at = ?2 WHERE idea_id = ?3 AND status = 'planning'",
+          )
+          .bind(error ?? "Belge üretimi başarısız oldu.", now, ideaId),
+      ];
+    }
+  }
+  if (workflow === "build-skeleton.yml") {
+    if (status === "running") {
+      return [
+        db()
+          .prepare(
+            "UPDATE tasks SET status = 'running', error = NULL, updated_at = ?1 WHERE idea_id = ?2 AND status IN ('ready', 'queued', 'failed')",
+          )
+          .bind(now, ideaId),
+        db()
+          .prepare("UPDATE ideas SET status = 'in_development' WHERE id = ?1 AND status = 'awaiting_development'")
+          .bind(ideaId),
+      ];
+    }
+    if (status === "failed") {
+      return [
+        db()
+          .prepare(
+            "UPDATE tasks SET status = 'failed', error = ?1, updated_at = ?2 WHERE idea_id = ?3 AND status IN ('queued', 'running')",
+          )
+          .bind(error ?? "İskelet üretimi başarısız oldu.", now, ideaId),
+      ];
+    }
+  }
+  return [];
 }
 
 app.post("/tasks", async (req, res) => {
@@ -610,6 +651,143 @@ app.post("/admin/tasks/documents", requireWorkflowSecret, async (req, res) => {
   ]);
 
   res.status(201).json({ ok: true });
+});
+
+// Faz 3B: kullanıcı belgeleri arayüzde düzenler — yalnızca görev 'ready'
+// iken (iskelete geçildikten sonra belgeler kilitli).
+app.patch("/tasks/:id/documents/:kind", async (req, res) => {
+  const parsed = taskDocumentPatchSchema.safeParse(req.body);
+  const kind = DOCUMENT_KINDS.find((k) => k === req.params.kind);
+  if (!parsed.success || !kind) {
+    res.status(400).json({ error: "invalid_body" });
+    return;
+  }
+
+  const task = await db().prepare("SELECT * FROM tasks WHERE id = ?1").bind(req.params.id).first<TaskRow>();
+  if (!task) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (task.status !== "ready") {
+    res.status(409).json({ error: "task_locked", status: task.status });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const result = await db()
+    .prepare("UPDATE task_documents SET content = ?1, user_edited_at = ?2 WHERE task_id = ?3 AND kind = ?4")
+    .bind(parsed.data.content, now, task.id, kind)
+    .run();
+  if (result.meta.changes === 0) {
+    res.status(404).json({ error: "document_not_found" });
+    return;
+  }
+
+  const doc = await db()
+    .prepare("SELECT * FROM task_documents WHERE task_id = ?1 AND kind = ?2")
+    .bind(task.id, kind)
+    .first<TaskDocumentRow>();
+  res.json({ document: doc ? serializeTaskDocument(doc) : null });
+});
+
+// Faz 3B/3C: "Geliştirmeye başla" (ready) ve "Tekrar dene" (failed) —
+// görev 'queued', fikir 'in_development' olur ve build-skeleton.yml tetiklenir.
+// Tekrar deneme aynı repo/issue'yu ve aynı (kilitli) belgeleri kullanır.
+app.post("/tasks/:id/build", async (req, res) => {
+  const { GH_WORKFLOW_DISPATCH_TOKEN } = env as unknown as Env;
+  if (!GH_WORKFLOW_DISPATCH_TOKEN) {
+    res.status(500).json({ error: "not_configured" });
+    return;
+  }
+
+  const task = await db().prepare("SELECT * FROM tasks WHERE id = ?1").bind(req.params.id).first<TaskRow>();
+  if (!task) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (!TASK_BUILDABLE_STATUSES.includes(task.status)) {
+    res.status(409).json({ error: "invalid_task_status", status: task.status });
+    return;
+  }
+  const docCount = await db()
+    .prepare("SELECT count(*) AS n FROM task_documents WHERE task_id = ?1")
+    .bind(task.id)
+    .first<{ n: number }>();
+  if ((docCount?.n ?? 0) < DOCUMENT_KINDS.length) {
+    res.status(409).json({ error: "documents_missing" });
+    return;
+  }
+  const idea = await db().prepare("SELECT status FROM ideas WHERE id = ?1").bind(task.idea_id).first<{ status: string }>();
+
+  const now = new Date().toISOString();
+  const jobId = crypto.randomUUID();
+  const workflow = "build-skeleton.yml";
+
+  await db().batch([
+    db()
+      .prepare("UPDATE tasks SET status = 'queued', error = NULL, updated_at = ?1 WHERE id = ?2")
+      .bind(now, task.id),
+    db().prepare("UPDATE ideas SET status = 'in_development' WHERE id = ?1").bind(task.idea_id),
+    db()
+      .prepare("INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at) VALUES (?1, ?2, ?3, 'queued', ?4)")
+      .bind(jobId, workflow, task.idea_id, now),
+    stampActivity(task.idea_id, WORKFLOW_ACTIVITY[workflow][0], now),
+  ]);
+
+  const ghRes = await dispatchWorkflow(GH_WORKFLOW_DISPATCH_TOKEN, workflow, { idea_id: task.idea_id, job_id: jobId });
+  if (!ghRes.ok) {
+    // Hiçbir şey başlamadı: görev ve fikir önceki durumlarına döner, hata görünür kalır.
+    const error = `GitHub tetikleme başarısız (HTTP ${ghRes.status})`;
+    await db().batch([
+      db()
+        .prepare("UPDATE workflow_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3")
+        .bind(now, error, jobId),
+      db()
+        .prepare("UPDATE tasks SET status = ?1, error = ?2, updated_at = ?3 WHERE id = ?4")
+        .bind(task.status, error, now, task.id),
+      db()
+        .prepare("UPDATE ideas SET status = ?1 WHERE id = ?2")
+        .bind(idea?.status ?? "awaiting_development", task.idea_id),
+      stampActivity(task.idea_id, WORKFLOW_ACTIVITY[workflow][2], now),
+    ]);
+    res.status(502).json({ error: "github_dispatch_failed", status: ghRes.status });
+    return;
+  }
+
+  const updated = await db().prepare("SELECT * FROM tasks WHERE id = ?1").bind(task.id).first<TaskRow>();
+  res.status(202).json({ task: updated ? serializeTask(updated) : null });
+});
+
+// Faz 3C: build-skeleton.yml'ın repo/issue adresleri ve başarı bildirimi.
+app.patch("/admin/tasks/build", requireWorkflowSecret, async (req, res) => {
+  const parsed = taskBuildReportSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const { idea_id: ideaId, repo_url: repoUrl, issue_url: issueUrl, status } = parsed.data;
+  const task = await db().prepare("SELECT * FROM tasks WHERE idea_id = ?1").bind(ideaId).first<TaskRow>();
+  if (!task) {
+    res.status(404).json({ error: "task_not_found" });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const statements = [
+    db()
+      .prepare(
+        `UPDATE tasks SET repo_url = COALESCE(?1, repo_url), issue_url = COALESCE(?2, issue_url),
+           status = COALESCE(?3, status), error = CASE WHEN ?3 IS NULL THEN error ELSE NULL END, updated_at = ?4
+         WHERE id = ?5`,
+      )
+      .bind(repoUrl ?? null, issueUrl ?? null, status ?? null, now, task.id),
+  ];
+  // job_id'siz (elle) çalıştırılsa da rozet güncellensin.
+  if (status === "done") statements.push(stampActivity(ideaId, "skeleton_built", now));
+  await db().batch(statements);
+
+  res.json({ ok: true });
 });
 
 // Grup 3: cron geçmişi ekranı.

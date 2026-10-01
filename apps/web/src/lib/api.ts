@@ -56,7 +56,10 @@ export type ActivityKind =
   | "competitors_failed"
   | "plan_queued"
   | "planned"
-  | "plan_failed";
+  | "plan_failed"
+  | "skeleton_queued"
+  | "skeleton_built"
+  | "skeleton_failed";
 
 export interface IdeaPatch {
   user_rating?: number | null;
@@ -155,7 +158,7 @@ export function fetchCompetitors(ideaId: string): Promise<{ competitors: Competi
 }
 
 // 2. tur Grup C: fikir bazlı işlerin geçmişi (Çalışma geçmişi > Fikir işleri).
-export type IdeaWorkflow = "reevaluate-idea.yml" | "find-competitors.yml" | "plan-idea.yml";
+export type IdeaWorkflow = "reevaluate-idea.yml" | "find-competitors.yml" | "plan-idea.yml" | "build-skeleton.yml";
 
 export interface WorkflowRun {
   id: string;
@@ -226,4 +229,14 @@ export function fetchIdeaTask(ideaId: string): Promise<{ task: Task | null; docu
 // parametreleri günceller ve belgeleri yeniden üretir.
 export function createTask(ideaId: string, params: TaskParams): Promise<{ task: Task }> {
   return request("/tasks", { method: "POST", body: JSON.stringify({ idea_id: ideaId, params }) });
+}
+
+// Faz 3B: belge düzenleme (yalnızca görev 'ready' iken) ve iskelet üretimini
+// başlatma / tekrar deneme (ready veya failed).
+export function patchTaskDocument(taskId: string, kind: DocumentKind, content: string): Promise<{ document: TaskDocument }> {
+  return request(`/tasks/${taskId}/documents/${kind}`, { method: "PATCH", body: JSON.stringify({ content }) });
+}
+
+export function startBuild(taskId: string): Promise<{ task: Task }> {
+  return request(`/tasks/${taskId}/build`, { method: "POST" });
 }
