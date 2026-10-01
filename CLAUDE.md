@@ -246,8 +246,9 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   2. It inserts a `queued` row, stamps `*_queued` activity, and passes the row id to GitHub as the `job_id` dispatch input.
   3. If the GitHub dispatch call fails, the row and the idea activity are marked failed immediately.
   4. Both workflows have an optional `job_id` input, passed to steps via the `JOB_ID` env var rather than inlined into `run:`, to avoid script injection.
-  5. `scripts/start-workflow-run.ts` sets the row to `running` and stores `run_url`.
-  6. `scripts/finish-workflow-run.ts` runs from two `always()` steps and sets success or failed, stamping the idea's ok/failed activity. Both scripts no-op when `job_id` is empty, e.g. a manual run from the GitHub UI.
+  5. `scripts/start-workflow-run.ts` sets the row to `running` and stores `run_url`. When `job_id` is empty (a manual run from the GitHub UI or `gh workflow run`), it instead creates its own `running` row via `POST /admin/workflow-runs` (workflow-only). Without this, such runs were invisible and the detail page kept showing the previous, possibly failed, run. Either way, the row id is written to `$GITHUB_ENV` as `WORKFLOW_RUN_ID`.
+  6. `scripts/finish-workflow-run.ts` runs from two `always()` steps, reads `$WORKFLOW_RUN_ID`, and sets success or failed, stamping the idea's ok/failed activity. Don't set `WORKFLOW_RUN_ID` (or pass `JOB_ID`) in those steps' `env:` — step-level env overrides `$GITHUB_ENV`.
+  7. `find-competitors.yml` needs `--allowedTools WebSearch,WebFetch` in `claude_args`: `acceptEdits` only auto-approves file edits, so in headless mode web tools are silently denied and the prompt reports `search_failed`.
 - **Failure reasons.** `submit-competitors.ts` and `submit-reevaluation.ts` write a readable reason to `output/failure-reason.txt`, and the failure finish step stores it as the run's `error`. Cases covered:
   - missing or invalid output file
   - schema mismatch
