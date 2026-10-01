@@ -23,6 +23,9 @@
     "submit-trend-snapshots": "tsx submit-trend-snapshots.ts",
     "fetch-task": "tsx fetch-task.ts",
     "submit-plan-docs": "tsx submit-plan-docs.ts",
+    "prepare-skeleton-repo": "tsx prepare-skeleton-repo.ts",
+    "write-skeleton-files": "tsx write-skeleton-files.ts",
+    "finish-skeleton": "tsx finish-skeleton.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint"
   },

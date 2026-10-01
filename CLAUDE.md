@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Faz 2 (UI) is done.** `apps/web` is a real app now (not the Vite starter): idea list (grouped by date, sortable, filterable) and idea detail (full fields, user rating, note, on_hold/delete) screens, talking directly to the API cross-origin through CORS. See "Faz 2 — what's live" below.
 
-**Faz 3 (task & skeleton) is in progress (started 2026-10-01).** The flow was redesigned with the user before starting: "Geliştir" → task form → Claude writes 4 planning docs → idea goes to `awaiting_development` → user reviews/edits docs → "Geliştirmeye başla" → skeleton repo. Worked in 3 groups (3A data model + form + doc generation, 3B doc editing + start button, 3C `build-skeleton.yml` + retry), same commit/push-per-group process as the 2nd feedback round. Decisions are in `docs/PROJE.md` "Kesinleşen kararlar" (rows dated Faz 3). See "Faz 3A — what's live" below.
+**Faz 3 (task & skeleton) is code-complete (2026-10-01), pending the user's end-to-end test.** The flow was redesigned with the user before starting: "Geliştir" → task form → Claude writes 4 planning docs → idea goes to `awaiting_development` → user reviews/edits docs → "Geliştirmeye başla" → skeleton repo. Worked in 3 groups (3A data model + form + doc generation, 3B doc editing + start button, 3C `build-skeleton.yml` + retry), same commit/push-per-group process as the 2nd feedback round. Decisions are in `docs/PROJE.md` "Kesinleşen kararlar" (rows dated Faz 3). See "Faz 3A — what's live" below.
 
 **Post-Faz-2 feedback pass is done (2026-09-30):** the user filed a 26-item feedback list (`notes.txt`, gitignored) before starting Faz 3, and asked to work through it first in 4 dependency-ordered groups — see the approved plan for full scope. **All 4 groups (data model/scoring, UI consistency, new screens, background AI features) are done and user-verified in production (2026-10-01)** — see "Grup 1" through "Grup 4 — what's live" below. A second pre-Faz-3 feedback round (`notes.txt` again) comes next, then Faz 3 (task form, `build-skeleton.yml`).
 
@@ -350,6 +350,23 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
 - `taskRunHooks()` in `app.ts` maps `plan-idea.yml`/`build-skeleton.yml` run status onto the task: running → `planning`/`running` (and idea `in_development` for a manual build run), failed → `planning_failed`/`failed` with the error. Success paths go through their own endpoints (`/admin/tasks/documents`, `/admin/tasks/build`).
 - `DevelopmentCard` holds per-document drafts in card state (Radix Tabs unmounts inactive tabs, so drafts can't live inside the tab). Each tab: Düzenle → Markdown textarea with Önizle toggle, explicit Kaydet/Vazgeç; a dot on the tab marks unsaved changes, and "Geliştirmeye başla" (confirm dialog) is disabled while any exist. "Tekrar dene" appears on `failed`; "Geliştirildi olarak işaretle" on `done` (and "Geliştiriliyor'a geri al" once developed) — the only UI path to `developed`, via plain `PATCH /ideas/:id`.
 - The detail page polls every 20s while the task is `planning`/`queued`/`running` (`TASK_IN_PROGRESS_STATUSES`).
+
+## Faz 3C — what's live (skeleton build)
+
+- **`.github/workflows/build-skeleton.yml`** (dispatched only by `POST /tasks/:id/build`, or manually). Steps:
+  1. `fetch-task.ts <idea> output output/approved-docs` writes idea, params, `task.json` (stored repo/issue URLs) and the 4 approved docs. The docs-dir arg is **build-only on purpose**: in `plan-idea.yml` old docs in Claude's output folder would get resubmitted as "new" if Claude failed to write one.
+  2. `prepare-skeleton-repo.ts`: reuses the task's repo/issue on retry (comments "yeniden deneniyor"), otherwise creates a private `<slug>-app` repo (`-2`, `-3`… on collision, `auto_init` so it can be cloned) and an issue with the idea + params + doc links. Reports URLs to `PATCH /admin/tasks/build` immediately, so a later failure still leaves the repo linked for retry. Writes `SKELETON_REPO`/`SKELETON_ISSUE_NUMBER`/`SKELETON_PLATFORM`/`SKELETON_NAME` to `$GITHUB_ENV`.
+  3. Clone into `skeleton/`, then `write-skeleton-files.ts` deletes everything except `.git` (first run: the auto_init README; retry: the previous attempt) and writes `docs/*.md` + `IDEA.md`. Git history is kept.
+  4. Claude Code (`prompts/build-skeleton.md`). Expo: 120 turns + a restricted Bash allowlist (`npm`, `npx`, `node`, `ls`, `mkdir`, `cp`, `mv`, `rm`, `cat`, `cd`). Other platforms: 90 turns, no Bash at all (no toolchain, files only). Claude writes `scripts/output/skeleton-report.json` (`skeletonReportSchema` in `scripts/lib/task-schema.ts`).
+  5. Commit and push run `always()` once the skeleton dir was prepared, so partial work is inspectable even if Claude failed. The step first checks `origin` is still the expected repo (`create-expo-app` does its own `git init`, and a copied `.git` would clobber ours), then deletes nested `.git` dirs.
+  6. `finish-skeleton.ts check` (report must be `ok`), then for Expo an independent `npm install` + `npx tsc --noEmit` gate, then `finish-skeleton.ts success` (issue comment + task `done`). On failure, `finish-skeleton.ts failed` comments the reason on the issue, and `finish-workflow-run.ts` marks the run and, via `taskRunHooks`, the task `failed`.
+- **Secret handling (main repo is public):**
+  - `SKELETON_REPO_PAT` is only in the env of the prepare, clone, push and report steps, never the Claude step.
+  - The main repo is checked out with `persist-credentials: false`. The skeleton repo is cloned and pushed with a one-off `-c http.https://github.com/.extraheader=...` (base64 of `x-access-token:PAT`, masked), the same mechanism `actions/checkout` uses. So no token sits on disk where Claude could read it.
+  - Keep it that way if you touch this workflow.
+- `concurrency: build-skeleton-<idea_id>` prevents two builds writing to the same repo. Job timeout 75 min, Node 22 (newer Expo SDKs need it).
+- `prompts/build-skeleton.md` was drafted by Claude for the user to review (same ownership rule as the other prompts). Non-Expo guidance in it: Flutter writes `lib/` + `pubspec.yaml` and leaves platform folders to `flutter create .`; iOS uses an XcodeGen `project.yml` instead of a hand-written `.xcodeproj`; Android skips the binary `gradle-wrapper.jar`.
+- Not yet verified with a real run. The user tests Faz 3 end to end after 3C. Projects board and Slack are Faz 4.
 
 ## What this project is
 

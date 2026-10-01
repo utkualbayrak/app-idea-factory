@@ -135,14 +135,15 @@ flowchart TD
   - `GET /ideas`, `GET /ideas/:id`, `PATCH /ideas/:id` (kullanıcı puanı, not, durum: `on_hold`/`deleted`)
   - `GET /ideas/recent-names` (tekrar kontrolü için)
   - `POST /ideas/batch` (günlük fikirleri kaydetme; yalnızca workflow çağırır)
-  - `POST /tasks`, `GET /tasks`, `POST /tasks/:id/retry`
-  - `POST /tasks/:id/result` (yalnızca workflow çağırır)
+  - `POST /tasks` (görev formu + belge üretimi), `GET /ideas/:id/task` (görev + belgeler), `PATCH /tasks/:id/documents/:kind` (belge düzenleme), `POST /tasks/:id/build` (iskeleti başlat / tekrar dene)
+  - `POST /admin/tasks/documents`, `PATCH /admin/tasks/build` (yalnızca workflow çağırır)
 - Workflow'un çağırdığı uçlar paylaşılan bir gizli anahtarla korunur.
 - Ücretsiz plan kısıtları: günde 100.000 istek ve çağrı başına 10 ms CPU. Worker ağır iş yapmaz; yalnızca veri okur/yazar ve dış servisleri tetikler.
 
 ### 3. GitHub Actions workflow'ları (`.github/workflows`)
 
 - `daily-ideas.yml`: Günlük cron, fikir üretimi (Akış 1).
+- `plan-idea.yml`: `workflow_dispatch`, planlama belgeleri (Akış 2, adım 2).
 - `build-skeleton.yml`: `workflow_dispatch`, iskelet üretimi (Akış 2).
 - Yardımcı betikler (`scripts/`): trend toplama, JSON doğrulama, API'ye gönderim. Node.js + TypeScript.
 - Claude Code resmi Claude Code GitHub Action ile çalıştırılır; talimat şablonları (`prompts/`) repoda tutulur.

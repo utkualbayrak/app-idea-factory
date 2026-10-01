@@ -26,3 +26,19 @@ export const PLAN_DOCUMENT_FILES = {
 } as const;
 
 export type PlanDocumentKind = keyof typeof PLAN_DOCUMENT_FILES;
+
+// prompts/build-skeleton.md'nin yazdığı rapor (scripts/output/skeleton-report.json).
+const checkResult = z.enum(["passed", "failed", "skipped"]);
+
+export const skeletonReportSchema = z.object({
+  status: z.enum(["ok", "failed"]),
+  summary: z.string().min(1),
+  checks: z.object({
+    install: checkResult,
+    typecheck: checkResult,
+    lint: checkResult,
+  }),
+  notes: z.string().optional(),
+});
+
+export type SkeletonReport = z.infer<typeof skeletonReportSchema>;

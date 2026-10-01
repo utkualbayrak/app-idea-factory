@@ -25,6 +25,7 @@ App Idea Factory, tamamen ücretsiz planlar üzerinde çalışan kişisel ve oto
 3. **Her fikri puanlar:** pazar, solo geliştirici için uygulanabilirlik, özgünlük, genel (0–10, 0.25 adımlarla) — her puanın tek cümlelik gerekçesiyle.
 4. **Mobil öncelikli bir web uygulamasında listeler:** puan ver, not al, filtrele, karşılaştır, kısa liste çıkar.
 5. **İstediğinde arka planda AI işi çalıştırır:** notlarına göre fikri yeniden değerlendirir ya da web'de gerçek rakip uygulamaları arar.
+6. **Seçtiğin fikri projeye dönüştürür:** kısa bir görev formu doldurursun (platform, backend, auth, MVP özellikleri, tasarım), Claude dört planlama belgesi yazar (PRD, ekranlar ve akışlar, teknik plan, yol haritası). Belgeleri uygulamada inceleyip düzenlersin, sonra *Geliştirmeye başla* dersin — Claude Code bu belgelere göre yeni bir **özel** GitHub reposunda uygulama iskeletini kurar ve takip için bir issue açar.
 
 > Arayüz ve fikir açıklamaları **Türkçe**; fikir adları kısa İngilizce uygulama adları (örn. *MealMate*). Dili ya da puanlama ölçütlerini değiştirmek istersen talimatlar [`prompts/`](prompts) klasöründe.
 
@@ -35,6 +36,8 @@ App Idea Factory, tamamen ücretsiz planlar üzerinde çalışan kişisel ve oto
 | **Gösterge paneli** | Anlık sayaçlar, kategori dağılımı, günlük ortalama puan trendi, son işler ve son trend çalışması |
 | **Fikirler** | Tek, sıralanabilir ve filtrelenebilir tablo (arama, kategori, durum, minimum puanlar, tarih aralığı), sayfa başına 20, 4'e kadar karşılaştırma |
 | **Fikir detayı** | Fikrin tamamı, Claude'un gerekçeleriyle puan dökümü, 0–10 puanın ve notun, rakipler, yeniden değerlendirme, Markdown dışa aktarma |
+| **Geliştir** | Fikir için görev formu: platform, backend, auth, MVP özellikleri, tasarım, notlar |
+| **Geliştirilenler** | Geliştirme akışındaki fikirler: planlama belgeleri onayını bekleyenler, iskeleti kurulanlar, geliştirilenler. Detay sayfasında belgeler (başlatana kadar düzenlenebilir), repo/issue linkleri ve tekrar dene |
 | **Karşılaştırma** | 2–4 fikir yan yana, karşılaştırırken puan verme |
 | **Çalışma geçmişi** | Günlük üretim çalışmaları (toplanan her trend öğesiyle) ve fikir bazlı işler; süre ve log linkleriyle |
 | **Ayarlar** | Trend kaynaklarını aç/kapat, günlük çalışmayı elle tetikle |
@@ -50,7 +53,7 @@ flowchart TD
 
     UI["React SPA<br/>web Worker (statik dosyalar)"] -->|"/api/* service binding ile"| API["API Worker<br/>Workers üzerinde Express"]
     API <--> DB[("Cloudflare D1")]
-    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors"]
+    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton"]
     JOBS -->|"sonuç + iş durumu"| API
 
     ACCESS{{"Cloudflare Access<br/>(yalnızca sahibin e-postası)"}} -.korur.- UI
@@ -77,12 +80,14 @@ apps/
   web/          React SPA + onu sunan ve /api/* isteklerini API Worker'a ileten küçük bir Worker
   api/          Express API Worker, D1 migration'ları (apps/api/migrations/*.sql)
 scripts/        Workflow'ların kullandığı trend toplayıcılar, doğrulama, API istemcisi
-prompts/        Claude Code'a verilen talimatlar (günlük fikir, yeniden değerlendirme, rakipler)
+prompts/        Claude Code'a verilen talimatlar (günlük fikir, yeniden değerlendirme, rakipler, planlama belgeleri, iskelet)
 config/         subreddits.json — hangi subreddit'lerin toplanacağı
 .github/workflows/
   daily-ideas.yml        cron + elle: topla → üret → doğrula → gönder
   reevaluate-idea.yml    isteğe bağlı: fikri notuna göre yeniden puanla
   find-competitors.yml   isteğe bağlı: web'de gerçek rakip uygulamaları ara
+  plan-idea.yml          "Geliştir" ile: 4 planlama belgesini yaz
+  build-skeleton.yml     "Geliştirmeye başla" ile: özel repo + issue + onaylı belgelerden iskelet
   deploy.yml             main'e push → iki Worker'ı da deploy et
 ```
 
@@ -147,7 +152,7 @@ Bir kere paylaşılan anahtar üret (`openssl rand -hex 32`) ve aşağıdaki iki
 | Ad | Amaç |
 |---|---|
 | `WORKFLOW_API_SHARED_SECRET` | Workflow'lar yalnızca kendilerine açık uçlara bununla kimlik doğrular |
-| `GH_WORKFLOW_DISPATCH_TOKEN` | `repo` + `workflow` scope'lu klasik GitHub PAT — "şimdi çalıştır", "yeniden değerlendir" ve "rakipleri bul" butonlarını çalıştırır |
+| `GH_WORKFLOW_DISPATCH_TOKEN` | `repo` + `workflow` scope'lu klasik GitHub PAT — "şimdi çalıştır", "yeniden değerlendir", "rakipleri bul", "geliştir" ve "geliştirmeye başla" butonlarını çalıştırır |
 | `SLACK_WEBHOOK_URL` | İsteğe bağlı, yakında gelecek Slack bildirimleri için ayrılmış |
 
 **GitHub Actions secret'ları** (`printf '%s' 'değer' | gh secret set <AD>` — `printf`, Access header'larını sessizce bozan fazladan satır sonunu engeller):
@@ -158,6 +163,7 @@ Bir kere paylaşılan anahtar üret (`openssl rand -hex 32`) ve aşağıdaki iki
 | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | 4. adımdaki Access service token'ı |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `claude setup-token` çıktısı |
 | `CLOUDFLARE_API_TOKEN` | *Edit Cloudflare Workers* şablonundan Cloudflare API token'ı (`deploy.yml` kullanır) |
+| `SKELETON_REPO_PAT` | `repo` (+ yakında gelecek Projects panosu için `project`) scope'lu klasik GitHub PAT — `build-skeleton.yml` özel iskelet reposunu açar, ona push eder ve issue açar/yorum yazar. Claude Code adımına hiç verilmez |
 | `PRODUCTHUNT_TOKEN` | İsteğe bağlı — Product Hunt developer token'ı; yoksa bu kaynak atlanır |
 
 ### 6. Claude GitHub App'i kur

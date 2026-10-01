@@ -25,6 +25,7 @@ App Idea Factory is a personal, fully automated idea pipeline that runs on free 
 3. **Scores each idea** (market, solo-dev feasibility, originality, overall; 0–10 in 0.25 steps), with a one-sentence reason for every score.
 4. **Lists them in a mobile-first web app** where you rate, annotate, filter, compare and shortlist ideas.
 5. **Runs background AI jobs on demand:** re-evaluate an idea in light of your notes, or search the web for real competing apps.
+6. **Turns a chosen idea into a project:** fill a short task form (platform, backend, auth, MVP features, design) and Claude writes four planning documents (PRD, screens & flows, tech plan, roadmap). You review and edit them in the app, then hit *Start development* — Claude Code builds a skeleton app from those documents in a new **private** GitHub repo and opens a tracking issue.
 
 > The UI and idea descriptions are in **Turkish**. Idea names are short English app names (e.g. *MealMate*). Prompts live in [`prompts/`](prompts) if you want to change the language or the scoring rubric.
 
@@ -35,6 +36,8 @@ App Idea Factory is a personal, fully automated idea pipeline that runs on free 
 | **Dashboard** | Live counters, category distribution, daily average score trend, latest jobs and the latest trend run |
 | **Ideas** | One sortable, filterable table (search, category, status, score minimums, date range), 20 per page, compare up to 4 |
 | **Idea detail** | Full idea, score breakdown with Claude's reasoning, your 0–10 rating and note, competitors, re-evaluation, Markdown export |
+| **Develop** | Task form for an idea: platform, backend, auth, MVP features, design, notes |
+| **Developed** | Ideas in the development flow: awaiting your review of the planning docs, skeleton in progress, developed. The detail page shows the docs (editable until you start), repo/issue links and retry |
 | **Compare** | 2–4 ideas side by side, rate while comparing |
 | **Run history** | Daily generation runs (with every collected trend item) and per-idea jobs, with durations and log links |
 | **Settings** | Toggle trend sources, trigger the daily run manually |
@@ -50,7 +53,7 @@ flowchart TD
 
     UI["React SPA<br/>web Worker (static assets)"] -->|"/api/* via service binding"| API["API Worker<br/>Express on Workers"]
     API <--> DB[("Cloudflare D1")]
-    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors"]
+    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton"]
     JOBS -->|"results + run status"| API
 
     ACCESS{{"Cloudflare Access<br/>(owner email only)"}} -.protects.- UI
@@ -77,12 +80,14 @@ apps/
   web/          React SPA + a tiny Worker that serves it and proxies /api/* to the API Worker
   api/          Express API Worker, D1 migrations (apps/api/migrations/*.sql)
 scripts/        Trend collectors, validation, API client used by the workflows
-prompts/        Instructions given to Claude Code (daily ideas, re-evaluation, competitors)
+prompts/        Instructions given to Claude Code (daily ideas, re-evaluation, competitors, planning docs, skeleton)
 config/         subreddits.json — which subreddits are collected
 .github/workflows/
   daily-ideas.yml        cron + manual: collect → generate → validate → submit
   reevaluate-idea.yml    on demand: re-score an idea using your note
   find-competitors.yml   on demand: web-search real competing apps
+  plan-idea.yml          on "Develop": write the 4 planning documents
+  build-skeleton.yml     on "Start development": private repo + issue + skeleton from the approved docs
   deploy.yml             push to main → deploy both Workers
 ```
 
@@ -147,7 +152,7 @@ Generate a shared secret once (`openssl rand -hex 32`) and use the same value in
 | Name | Purpose |
 |---|---|
 | `WORKFLOW_API_SHARED_SECRET` | Workflows authenticate to workflow-only endpoints with it |
-| `GH_WORKFLOW_DISPATCH_TOKEN` | Classic GitHub PAT with `repo` + `workflow` scopes — powers the "run now", "re-evaluate" and "find competitors" buttons |
+| `GH_WORKFLOW_DISPATCH_TOKEN` | Classic GitHub PAT with `repo` + `workflow` scopes — powers the "run now", "re-evaluate", "find competitors", "develop" and "start development" buttons |
 | `SLACK_WEBHOOK_URL` | Optional, reserved for upcoming Slack notifications |
 
 **GitHub Actions secrets** (`printf '%s' 'value' | gh secret set <NAME>` — `printf` avoids a stray newline, which breaks Access headers silently):
@@ -158,6 +163,7 @@ Generate a shared secret once (`openssl rand -hex 32`) and use the same value in
 | `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` | The Access service token from step 4 |
 | `CLAUDE_CODE_OAUTH_TOKEN` | Output of `claude setup-token` |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token from the *Edit Cloudflare Workers* template (used by `deploy.yml`) |
+| `SKELETON_REPO_PAT` | Classic GitHub PAT with `repo` (+ `project` for the upcoming Projects board) scope — `build-skeleton.yml` creates the private skeleton repo, pushes to it and opens/comments the issue. Never exposed to the Claude Code step |
 | `PRODUCTHUNT_TOKEN` | Optional — Product Hunt developer token; the source is skipped without it |
 
 ### 6. Install the Claude GitHub App

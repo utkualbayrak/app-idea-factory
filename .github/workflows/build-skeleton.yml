@@ -1,0 +1,199 @@
+name: Build Skeleton
+
+# Faz 3C: onaylı planlama belgelerinden yeni bir özel repoda uygulama iskeleti
+# kurar. Yalnızca Worker'ın POST /tasks/:id/build ucu tetikler ("Geliştirmeye
+# başla" / "Tekrar dene"); elle de çalıştırılabilir (job_id boş).
+#
+# Güvenlik (ana repo public, loglar herkese açık):
+# - SKELETON_REPO_PAT yalnızca repo hazırlama, push ve sonuç adımlarının env'inde.
+#   Claude Code adımına verilmez.
+# - Ana repo persist-credentials: false ile checkout edilir; iskelet reposu da
+#   token .git/config'e yazılmadan (tek seferlik extraheader ile) clone/push
+#   edilir — Claude'un okuyabileceği diskte token kalmaz.
+# - Bash yalnızca Expo'da ve install/typecheck için gereken komutlarla açılır.
+
+on:
+  workflow_dispatch:
+    inputs:
+      idea_id:
+        description: "İskeleti kurulacak fikrin id'si (görevi ve onaylı belgeleri olmalı)"
+        required: true
+      job_id:
+        description: "Çalışma geçmişi kaydının id'si (Worker tetiklerken verir; elle çalıştırırken boş bırakılabilir)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+# Aynı fikir için iki iskelet işi aynı anda aynı repoya yazmasın.
+concurrency:
+  group: build-skeleton-${{ inputs.idea_id }}
+  cancel-in-progress: false
+
+jobs:
+  build-skeleton:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      IDEA_ID: ${{ inputs.idea_id }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+
+      # Güncel Expo SDK'ları yeni bir Node istiyor; workflow betikleri de 22'de çalışır.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Çalışma geçmişi > Fikir işleri: Worker'ın açtığı 'queued' satırını
+      # 'running' yapar (görev de 'running' olur); job_id boşsa yeni satır açar.
+      - name: Start workflow run (Çalışma geçmişi için)
+        working-directory: scripts
+        run: pnpm exec tsx start-workflow-run.ts "$JOB_ID" "$RUN_URL" build-skeleton.yml "$IDEA_ID"
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Fetch idea, task params and approved documents
+        working-directory: scripts
+        run: pnpm exec tsx fetch-task.ts "$IDEA_ID" output output/approved-docs
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      # Repo (yeni ya da tekrar denemede mevcut) + issue; adresler hemen API'ye
+      # bildirilir. SKELETON_REPO / SKELETON_ISSUE_NUMBER / SKELETON_PLATFORM /
+      # SKELETON_NAME $GITHUB_ENV'e yazılır.
+      - name: Prepare skeleton repo and issue
+        working-directory: scripts
+        run: pnpm exec tsx prepare-skeleton-repo.ts "$IDEA_ID" output
+        env:
+          SKELETON_REPO_PAT: ${{ secrets.SKELETON_REPO_PAT }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Clone skeleton repo
+        run: |
+          AUTH=$(printf 'x-access-token:%s' "$SKELETON_REPO_PAT" | base64 | tr -d '\n')
+          echo "::add-mask::$AUTH"
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $AUTH" clone -q "https://github.com/$SKELETON_REPO.git" skeleton
+        env:
+          SKELETON_REPO_PAT: ${{ secrets.SKELETON_REPO_PAT }}
+
+      # .git dışındaki her şeyi siler (tekrar denemede içerik baştan yazılır),
+      # onaylı belgeleri docs/ altına ve fikri IDEA.md'ye yazar.
+      - name: Write approved documents into skeleton
+        id: write-files
+        working-directory: scripts
+        run: pnpm exec tsx write-skeleton-files.ts output ../skeleton
+
+      - name: Choose Claude Code permissions
+        id: claude-args
+        run: |
+          if [ "$SKELETON_PLATFORM" = "expo" ]; then
+            echo 'args=--max-turns 120 --permission-mode acceptEdits --allowedTools "Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(ls:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*),Bash(rm:*),Bash(cat:*),Bash(cd:*)"' >> "$GITHUB_OUTPUT"
+          else
+            echo 'args=--max-turns 90 --permission-mode acceptEdits' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build skeleton with Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: "Read prompts/build-skeleton.md and follow its instructions exactly. The skeleton repository is checked out at skeleton/ (approved planning documents in skeleton/docs/, the idea in skeleton/IDEA.md) and the task parameters are in scripts/output/task-params.json. Do not ask for confirmation or clarification — complete the task end to end and write scripts/output/skeleton-report.json."
+          claude_args: ${{ steps.claude-args.outputs.args }}
+
+      - name: Note Claude Code failure reason
+        if: failure() && steps.claude.outcome == 'failure'
+        run: echo "Claude Code adımı başarısız oldu (tur veya süre sınırı aşılmış olabilir)." > scripts/output/failure-reason.txt
+
+      # Claude başarısız olsa bile o ana kadarki iş itilir (incelemek için;
+      # "Tekrar dene" zaten baştan yazar). create-expo-app kendi git init'ini
+      # yaptığı için reponun .git'i ezilmiş mi diye origin kontrol edilir ve iç
+      # içe .git klasörleri silinir.
+      - name: Commit and push skeleton
+        if: always() && steps.write-files.outcome == 'success'
+        working-directory: skeleton
+        run: |
+          if [ "$(git remote get-url origin 2>/dev/null)" != "https://github.com/$SKELETON_REPO.git" ]; then
+            echo "İskelet reposunun .git klasörü bozulmuş (origin beklenen repo değil); push yapılamadı." > ../scripts/output/failure-reason.txt
+            exit 1
+          fi
+          find . -mindepth 2 -name .git -prune -exec rm -rf {} +
+          if [ -d node_modules ] && ! git check-ignore -q node_modules; then echo "node_modules/" >> .gitignore; fi
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Commit edilecek değişiklik yok."
+            exit 0
+          fi
+          git -c user.name="App Idea Factory" -c user.email="app-idea-factory@users.noreply.github.com" commit -q -m "İskelet: $SKELETON_NAME"
+          AUTH=$(printf 'x-access-token:%s' "$SKELETON_REPO_PAT" | base64 | tr -d '\n')
+          echo "::add-mask::$AUTH"
+          git -c http.https://github.com/.extraheader="AUTHORIZATION: basic $AUTH" push -q origin HEAD
+        env:
+          SKELETON_REPO_PAT: ${{ secrets.SKELETON_REPO_PAT }}
+
+      - name: Check Claude Code report
+        working-directory: scripts
+        run: pnpm exec tsx finish-skeleton.ts check output
+
+      # Claude'un kendi kontrollerinden bağımsız son kapı (yalnızca Expo —
+      # diğer platformlarda toolchain kurulmuyor, bkz. docs/PROJE.md).
+      - name: Verify Expo skeleton (install + typecheck)
+        if: env.SKELETON_PLATFORM == 'expo'
+        working-directory: skeleton
+        run: |
+          npm install --no-audit --no-fund || { echo "Doğrulama: npm install başarısız." > ../scripts/output/failure-reason.txt; exit 1; }
+          npx tsc --noEmit || { echo "Doğrulama: tip kontrolü (tsc --noEmit) başarısız." > ../scripts/output/failure-reason.txt; exit 1; }
+
+      - name: Report success (issue comment + task done)
+        working-directory: scripts
+        run: pnpm exec tsx finish-skeleton.ts success "$IDEA_ID" output
+        env:
+          SKELETON_REPO_PAT: ${{ secrets.SKELETON_REPO_PAT }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Report failure on issue
+        if: always() && (failure() || cancelled())
+        working-directory: scripts
+        run: pnpm exec tsx finish-skeleton.ts failed "$IDEA_ID" output
+        env:
+          SKELETON_REPO_PAT: ${{ secrets.SKELETON_REPO_PAT }}
+
+      # `always()` olmasa önceki bir adım patladığında bu adımlar hiç çalışmaz,
+      # kayıt "running"de asılı kalırdı. Başarısızlıkta görev de 'failed' olur.
+      - name: Finish workflow run (başarılı)
+        if: always() && success()
+        working-directory: scripts
+        run: pnpm exec tsx finish-workflow-run.ts "$WORKFLOW_RUN_ID" success
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Finish workflow run (başarısız)
+        if: always() && (failure() || cancelled())
+        working-directory: scripts
+        run: pnpm exec tsx finish-workflow-run.ts "$WORKFLOW_RUN_ID" failed output/failure-reason.txt
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

@@ -162,8 +162,27 @@ export async function patchWorkflowRun(
 }
 
 // Faz 3A: "Geliştir" görevi ve planlama belgeleri (plan-idea.yml).
-export async function fetchIdeaTask(ideaId: string): Promise<{ task: { id: string; params: unknown } | null }> {
+export interface IdeaTaskResponse {
+  task: { id: string; params: unknown; status: string; repo_url: string | null; issue_url: string | null } | null;
+  documents: { kind: string; content: string }[];
+}
+
+export async function fetchIdeaTask(ideaId: string): Promise<IdeaTaskResponse> {
   return fetchJson(`${BASE_URL}/ideas/${ideaId}/task`, { headers: authHeaders() });
+}
+
+// Faz 3C: build-skeleton.yml repo/issue adreslerini ve başarıyı bildirir.
+export async function reportTaskBuild(body: {
+  idea_id: string;
+  repo_url?: string;
+  issue_url?: string;
+  status?: "done";
+}): Promise<void> {
+  await fetchJson(`${BASE_URL}/admin/tasks/build`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 export async function submitTaskDocuments(ideaId: string, documents: Record<string, string>): Promise<void> {

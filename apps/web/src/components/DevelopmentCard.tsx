@@ -297,6 +297,13 @@ function StatusMessage({ task }: { task: Task }) {
           İskelet kuruluyor — genelde 15-45 dakika sürer, bu sayfa kendini yeniler. Belgeler bu aşamada kilitli.
         </p>
       );
+    case "done":
+      return (
+        <p className="text-sm text-muted-foreground">
+          İskelet hazır — kurulum ve mimari için reponun README'sine, Claude'un özeti için issue'ya bak. Geliştirmeyi
+          bitirdiğinde fikri "Geliştirildi" olarak işaretleyebilirsin.
+        </p>
+      );
     case "planning_failed":
     case "failed":
       return task.error ? (

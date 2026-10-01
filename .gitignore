@@ -13,3 +13,6 @@ scripts/output/
 notes.txt
 HANDOFF.md
 DEMO_PLAN.md
+# build-skeleton.yml çalışma klasörleri (yerelde denenirse)
+skeleton/
+skeleton-work/
