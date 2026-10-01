@@ -30,6 +30,7 @@ function checksMarkdown(report: SkeletonReport): string {
     `- Kurulum: ${CHECK_LABELS[report.checks.install]}`,
     `- Tip kontrolü: ${CHECK_LABELS[report.checks.typecheck]}`,
     `- Lint: ${CHECK_LABELS[report.checks.lint]}`,
+    ...(report.checks.test ? [`- Testler: ${CHECK_LABELS[report.checks.test]}`] : []),
   ].join("\n");
 }
 
@@ -51,7 +52,7 @@ async function main() {
       process.exit(1);
     }
     if (report.status !== "ok") {
-      await writeReason(outDir, `Claude iskeleti tamamlayamadı: ${report.notes ?? report.summary}`.slice(0, 500));
+      await writeReason(outDir, `Claude iskeleti tamamlayamadı: ${report.notes?.trim() || report.summary}`.slice(0, 500));
       process.exit(1);
     }
     console.log("Rapor: ok");
@@ -69,7 +70,7 @@ async function main() {
       await commentOnIssue(
         repo,
         issueNumber,
-        [`## ✅ İskelet hazır`, "", report.summary, "", "### Kontroller", checksMarkdown(report), ...(report.notes ? ["", report.notes] : []), "", `Çalışma: ${runUrl}`].join("\n"),
+        [`## ✅ İskelet hazır`, "", report.summary, "", "### Kontroller", checksMarkdown(report), ...(report.notes?.trim() ? ["", "### Notlar", report.notes] : []), "", `Çalışma: ${runUrl}`].join("\n"),
       );
     }
     await reportTaskBuild({ idea_id: ideaId, status: "done" });

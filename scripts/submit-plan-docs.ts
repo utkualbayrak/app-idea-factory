@@ -35,6 +35,11 @@ async function main() {
     documents[kind] = content;
   }
 
+  // prompts/plan-idea.md girdi geçersizse (fikir/parametre dosyası okunamadı,
+  // zorunlu alan eksik) bilerek hiçbir dosya yazmıyor.
+  if (Object.keys(documents).length === 0) {
+    await fail("Claude hiç belge yazmadı — girdi (fikir ya da görev parametreleri) geçersiz bulunmuş olabilir, ayrıntılar loglarda.");
+  }
   if (problems.length > 0) await fail(`Planlama belgeleri eksik veya geçersiz: ${problems.join(", ")}.`);
 
   await submitTaskDocuments(ideaId, documents);

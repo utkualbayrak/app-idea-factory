@@ -37,7 +37,10 @@ export const skeletonReportSchema = z.object({
     install: checkResult,
     typecheck: checkResult,
     lint: checkResult,
+    // prompts/build-skeleton.md'nin sonraki sürümüyle geldi; eski raporlarda yok.
+    test: checkResult.optional(),
   }),
+  // Boş string olabilir ("not yok").
   notes: z.string().optional(),
 });
 
