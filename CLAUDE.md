@@ -233,6 +233,11 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   - "Toplam X kayıt", or "Toplam X kayıt · filtre sonrası Y" when the optional `totalCount` prop (pre-filter count) differs from TanStack's `getPrePaginationRowModel().rows.length`.
   - "· a–b arası gösteriliyor".
   - First, previous, next and last page buttons.
+- **List screens fill the viewport and the table scrolls internally (post-Grup-E feedback, 2026-10-01).** `ListPageLayout` (`components/PageHeader.tsx`) is `h-[calc(100svh-6.5rem)]` (header `h-14` + main `py-6`) with `data-fill-viewport`, which drops `main`'s `pb-16` via `has-[[data-fill-viewport]]:pb-6` in `App.tsx`. Used by `IdeaListPage` and `DevelopedPage`.
+  - `IdeaTable` is `flex-1 min-h-64`. The desktop table scrolls via the new `containerClassName` prop on `ui/table.tsx`'s `Table` and has a sticky header, whose bottom line is an inset shadow because border-collapse borders scroll away on sticky cells. The mobile card list scrolls in its own `overflow-y-auto` div. The pagination footer stays fixed below.
+  - `min-h-64` is a deliberate escape hatch: on short phones with the tall filter panel, the page scrolls a little rather than shrinking the list to nothing.
+  - The compare pill is no longer `sticky bottom-4`. It sits in normal flow under the table and shrinks it when it appears.
+  - If the header height or `main` padding changes, update the `6.5rem` too.
 - **The empty state is rendered inside the table** (a `colSpan` row, or a mobile `<p>`) via the `emptyMessage` prop, so the counts stay visible even when a filter matches nothing.
 
 ### Grup C — what's live (per-idea job history, activity badge)

@@ -23,6 +23,18 @@ export function PageHeader({ title, description, actions }: PageHeaderProps) {
   );
 }
 
+// Liste ekranlarının kabı: görünür yüksekliği tam doldurur (üst bar h-14 +
+// main'in py-6'sı = 6.5rem), sayfa aşağı kaymaz — tablo kendi içinde kayar.
+// İçerideki tablo flex-1/min-h-0 ile kalan alanı alır. data-fill-viewport,
+// App'teki main'in alt boşluğunu (pb-16) bu ekranlarda kaldırır.
+export function ListPageLayout({ children }: { children: ReactNode }) {
+  return (
+    <div data-fill-viewport className="flex h-[calc(100svh-6.5rem)] flex-col gap-6">
+      {children}
+    </div>
+  );
+}
+
 // Sayfa içi yükleniyor / hata / boş durum mesajı — her ekranda aynı görünüm.
 export function PageMessage({ children, tone = "muted" }: { children: ReactNode; tone?: "muted" | "error" }) {
   return (

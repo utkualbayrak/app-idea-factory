@@ -82,7 +82,7 @@ function App() {
           <SidebarTrigger />
           <ThemeToggle />
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-16">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 pb-16 has-[[data-fill-viewport]]:pb-6">
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/ideas" element={<IdeaListPage />} />

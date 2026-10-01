@@ -295,11 +295,15 @@ export function IdeaTable({
   const isFiltered = totalCount != null && totalCount !== filteredCount;
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* Masaüstü: tablo, tum sutunlar */}
-      <div className="hidden rounded-lg border md:block">
-        <Table className="table-fixed">
-          <TableHeader>
+    // Kalan yüksekliği doldurur, liste kendi içinde kayar (ListPageLayout).
+    // min-h-64: çok kısa ekranda (örn. telefonda uzun filtre paneli) liste
+    // hiç görünmez hale gelmesin — o durumda sayfa biraz kayar.
+    <div className="flex min-h-64 flex-1 flex-col gap-2">
+      {/* Masaüstü: tablo, tum sutunlar — başlık satırı kaydırırken sabit kalır */}
+      <div className="hidden min-h-0 flex-1 flex-col overflow-hidden rounded-lg border md:flex">
+        <Table className="table-fixed" containerClassName="min-h-0 flex-1 overflow-auto">
+          {/* border-collapse'ta sticky hücrenin border'ı kayıp gidiyor, alt çizgi gölgeyle çiziliyor */}
+          <TableHeader className="sticky top-0 z-10 bg-background [&_th]:shadow-[inset_0_-1px_0_var(--color-border)] [&_tr]:border-b-0">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -336,7 +340,7 @@ export function IdeaTable({
       </div>
 
       {/* Mobil: sadece ad + kategori + Claude puanı (gerisi detay sayfasında) */}
-      <div className="flex flex-col gap-2 md:hidden">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto md:hidden">
         {rows.length === 0 && <p className="py-10 text-center text-muted-foreground">{emptyMessage}</p>}
         {rows.map((row) => {
           const idea = row.original;
@@ -345,7 +349,7 @@ export function IdeaTable({
             <div
               key={row.id}
               onClick={() => navigate(`/ideas/${idea.id}`)}
-              className="flex cursor-pointer items-center gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50"
+              className="flex shrink-0 cursor-pointer items-center gap-3 rounded-lg border bg-card p-3 transition-colors hover:bg-muted/50"
             >
               {hasSelection && (
                 <Checkbox
@@ -379,7 +383,7 @@ export function IdeaTable({
       </div>
 
       {/* Kayıt sayıları + sayfalama: her zaman görünür (tek sayfa olsa bile). */}
-      <div className="flex flex-col gap-2 pt-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex shrink-0 flex-col gap-2 pt-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
         <span>
           {isFiltered ? (
             <>

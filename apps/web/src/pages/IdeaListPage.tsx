@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { PageHeader, PageMessage } from "@/components/PageHeader";
+import { ListPageLayout, PageHeader, PageMessage } from "@/components/PageHeader";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -159,7 +159,7 @@ export function IdeaListPage() {
     );
 
   return (
-    <div className="flex flex-col gap-6">
+    <ListPageLayout>
       {header}
 
       <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
@@ -304,8 +304,10 @@ export function IdeaListPage() {
         selectionFull={selectedIds.size >= MAX_COMPARE}
       />
 
+      {/* Sayfa artık kaymadığı için sticky değil, tablonun altında akışta duruyor:
+          görününce tablo kısalır, hiçbir satırın üstünü kapatmaz. */}
       {selectedIds.size > 0 && (
-        <div className="sticky bottom-4 z-10 mx-auto flex w-fit items-center gap-3 rounded-full border bg-card px-4 py-2 shadow-lg">
+        <div className="mx-auto flex w-fit items-center gap-3 rounded-full border bg-card px-4 py-2 shadow-lg">
           <span className="text-sm text-muted-foreground">
             {selectedIds.size} fikir seçildi{selectedIds.size >= MAX_COMPARE ? ` (maks. ${MAX_COMPARE})` : ""}
           </span>
@@ -321,6 +323,6 @@ export function IdeaListPage() {
           </Button>
         </div>
       )}
-    </div>
+    </ListPageLayout>
   );
 }

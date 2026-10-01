@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
-import { PageHeader, PageMessage } from "@/components/PageHeader";
+import { ListPageLayout, PageHeader, PageMessage } from "@/components/PageHeader";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -60,7 +60,7 @@ export function DevelopedPage() {
     );
 
   return (
-    <div className="flex flex-col gap-6">
+    <ListPageLayout>
       {header}
 
       <div className="flex flex-col gap-1.5 sm:w-64">
@@ -87,6 +87,6 @@ export function DevelopedPage() {
           developing.length === 0 ? "Henüz geliştirilmeye başlanan bir fikir yok." : "Bu duruma uyan fikir yok."
         }
       />
-    </div>
+    </ListPageLayout>
   );
 }
