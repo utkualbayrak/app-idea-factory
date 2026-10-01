@@ -5,7 +5,7 @@
 // yerel API'ye (http://localhost:8787) bağlanır.
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-export type IdeaStatus = "new" | "on_hold" | "deleted" | "in_development" | "developed";
+export type IdeaStatus = "new" | "on_hold" | "deleted" | "awaiting_development" | "in_development" | "developed";
 
 export interface IdeaScores {
   market: number;
@@ -53,7 +53,10 @@ export type ActivityKind =
   | "reevaluate_failed"
   | "competitors_queued"
   | "competitors_found"
-  | "competitors_failed";
+  | "competitors_failed"
+  | "plan_queued"
+  | "planned"
+  | "plan_failed";
 
 export interface IdeaPatch {
   user_rating?: number | null;
@@ -152,7 +155,7 @@ export function fetchCompetitors(ideaId: string): Promise<{ competitors: Competi
 }
 
 // 2. tur Grup C: fikir bazlı işlerin geçmişi (Çalışma geçmişi > Fikir işleri).
-export type IdeaWorkflow = "reevaluate-idea.yml" | "find-competitors.yml";
+export type IdeaWorkflow = "reevaluate-idea.yml" | "find-competitors.yml" | "plan-idea.yml";
 
 export interface WorkflowRun {
   id: string;
@@ -171,4 +174,56 @@ export function fetchWorkflowRuns(options: { limit?: number; ideaId?: string } =
   const params = new URLSearchParams({ limit: String(options.limit ?? 100) });
   if (options.ideaId) params.set("idea_id", options.ideaId);
   return request(`/admin/workflow-runs?${params}`);
+}
+
+// Faz 3A: "Geliştir" görev formu + Claude'un ürettiği planlama belgeleri.
+// apps/api/src/schema.ts taskParamsSchema ile aynı.
+export type TaskPlatform = "ios_swift" | "android_kotlin" | "expo" | "flutter";
+export type TaskBackend = "none" | "supabase" | "firebase" | "custom_api";
+export type TaskAuth = "none" | "email" | "social";
+export type TaskTheme = "light" | "dark" | "both";
+export type TaskStyle = "minimal" | "colorful";
+
+export interface TaskParams {
+  platform: TaskPlatform;
+  backend: TaskBackend;
+  auth: TaskAuth;
+  mvp_features: string[];
+  design: { theme: TaskTheme; style: TaskStyle };
+  notes?: string;
+}
+
+export type TaskStatus = "planning" | "planning_failed" | "ready" | "queued" | "running" | "done" | "failed";
+
+export interface Task {
+  id: string;
+  idea_id: string;
+  created_at: string;
+  updated_at: string;
+  params: TaskParams;
+  status: TaskStatus;
+  repo_url: string | null;
+  issue_url: string | null;
+  error: string | null;
+}
+
+export type DocumentKind = "prd" | "screens" | "tech_plan" | "roadmap";
+
+export interface TaskDocument {
+  task_id: string;
+  kind: DocumentKind;
+  content: string;
+  generated_at: string;
+  user_edited_at: string | null;
+}
+
+export function fetchIdeaTask(ideaId: string): Promise<{ task: Task | null; documents: TaskDocument[] }> {
+  return request(`/ideas/${ideaId}/task`);
+}
+
+// Formu kaydeder, fikri "Geliştirme bekliyor"a alır ve belge üretimini tetikler.
+// planning_failed / ready durumundaki bir görev için tekrar çağrılırsa
+// parametreleri günceller ve belgeleri yeniden üretir.
+export function createTask(ideaId: string, params: TaskParams): Promise<{ task: Task }> {
+  return request("/tasks", { method: "POST", body: JSON.stringify({ idea_id: ideaId, params }) });
 }

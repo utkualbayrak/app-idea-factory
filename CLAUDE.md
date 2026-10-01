@@ -10,6 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Faz 2 (UI) is done.** `apps/web` is a real app now (not the Vite starter): idea list (grouped by date, sortable, filterable) and idea detail (full fields, user rating, note, on_hold/delete) screens, talking directly to the API cross-origin through CORS. See "Faz 2 — what's live" below.
 
+**Faz 3 (task & skeleton) is in progress (started 2026-10-01).** The flow was redesigned with the user before starting: "Geliştir" → task form → Claude writes 4 planning docs → idea goes to `awaiting_development` → user reviews/edits docs → "Geliştirmeye başla" → skeleton repo. Worked in 3 groups (3A data model + form + doc generation, 3B doc editing + start button, 3C `build-skeleton.yml` + retry), same commit/push-per-group process as the 2nd feedback round. Decisions are in `docs/PROJE.md` "Kesinleşen kararlar" (rows dated Faz 3). See "Faz 3A — what's live" below.
+
 **Post-Faz-2 feedback pass is done (2026-09-30):** the user filed a 26-item feedback list (`notes.txt`, gitignored) before starting Faz 3, and asked to work through it first in 4 dependency-ordered groups — see the approved plan for full scope. **All 4 groups (data model/scoring, UI consistency, new screens, background AI features) are done and user-verified in production (2026-10-01)** — see "Grup 1" through "Grup 4 — what's live" below. A second pre-Faz-3 feedback round (`notes.txt` again) comes next, then Faz 3 (task form, `build-skeleton.yml`).
 
 **Critical process rule from `docs/PROJE.md`'s final section:** do not code around anything listed under "Açık sorular" (open questions) without clarifying with the user first — don't assume, ask. As decisions are made, keep the "Kesinleşen kararlar" (finalized decisions) table and "Açık sorular" list in `docs/PROJE.md` up to date. Work phase by phase (see Roadmap below), and at the end of each phase show the user how to test what was built.
@@ -317,6 +319,30 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   - Repo-level `has_projects` was deliberately **left on**, because Faz 4 uses GitHub Projects (v2) and it wasn't worth risking.
   - Default `GITHUB_TOKEN` permissions were already read-only; no workflow uses `pull_request_target`.
 
+## Faz 3A — what's live (task form, planning docs)
+
+- **Migration `0007_tasks_and_planning_docs.sql`:**
+  - `ideas.status` gains `awaiting_development` ("Geliştirme bekliyor"). The table is rebuilt (CHECK can't be altered).
+  - **Rebuilding `ideas` now means rebuilding its FK children too.** D1 enforces foreign keys, and `workflow_runs`/`idea_competitors` reference `ideas(id)`. `PRAGMA defer_foreign_keys = true` does **not** work for drop-and-rename: SQLite counts deferred violations, the `DROP` increments the counter, the rows reappearing under the renamed table don't decrement it, and the commit fails (verified locally with `sqlite3`). 0007 copies children to `*_bak` tables, drops them, rebuilds `ideas`, recreates the children with identical schemas/indexes and copies back (competitors in `rowid` order). Any future `ideas` rebuild must do the same, and must include every child table that exists by then (`tasks` too).
+  - `tasks` recreated (was empty): `idea_id` is `UNIQUE` (one task per idea), status `planning → ready → queued → running → done/failed`, plus `planning_failed`.
+  - New `task_documents` (`task_id`, `kind` ∈ `prd`/`screens`/`tech_plan`/`roadmap`, Markdown `content`, `generated_at`, `user_edited_at`).
+- **API:**
+  - `POST /tasks` (`taskCreateSchema`): saves the form, sets the idea to `awaiting_development`, opens a `queued` `workflow_runs` row and dispatches `plan-idea.yml`. Allowed for a new/on_hold idea with no task, or to re-plan a task in `planning_failed`/`ready` (`TASK_REPLANNABLE_STATUSES`); otherwise `409`. Dispatch failure marks the task `planning_failed`.
+  - `GET /ideas/:id/task` → `{ task, documents }` (task `null` if none). Also read by the workflow.
+  - `POST /admin/tasks/documents` (workflow-only): replaces all 4 docs, sets the task `ready`, stamps `planned`. Refuses (`409`) once the task is past `ready`.
+  - `plan-idea.yml` is in `IDEA_WORKFLOWS` (job history, activity badge: `plan_queued`/`planned`/`plan_failed`) but **not** in `DISPATCHABLE_WORKFLOWS` — it can only be started through `POST /tasks`. When its run fails, `PATCH /admin/workflow-runs/:id` also moves the task to `planning_failed` with the error; a manual (job_id-less) run moves a replannable task back to `planning`.
+  - `express.json` limit raised to `1mb` for the documents payload.
+  - `dispatchWorkflow()` helper is shared by `/admin/trigger-workflow` and `/tasks`.
+- **Workflow `plan-idea.yml`:** same shape as `find-competitors.yml`. `scripts/fetch-task.ts` writes `output/idea.json` + `output/task-params.json`; Claude (`prompts/plan-idea.md`, 30 turns, 25 min, no web tools) writes `scripts/output/docs/{prd,screens,tech-plan,roadmap}.md`; `scripts/submit-plan-docs.ts` checks each exists, is ≥200 chars and starts with `# `, then submits. Any missing/invalid doc sends nothing (previous docs stay) and writes `failure-reason.txt`.
+  - `scripts/lib/task-schema.ts` mirrors `taskParamsSchema` from `apps/api/src/schema.ts` by hand — keep them in sync.
+  - `prompts/plan-idea.md` was drafted by Claude at the user's request; the user reviews it. Same ownership rule as the other prompts applies from here on.
+- **Web:**
+  - `/ideas/:id/develop` (`DevelopPage.tsx`): the task form. Selects for platform/backend/auth/theme/style, checkboxes over the idea's `core_features` (first 5 pre-selected) plus free-text additions (max 10, 3–5 suggested with a warning outside that), notes. Prefilled from the existing task when re-planning.
+  - `IdeaDetailPage`: "Geliştir" (only for new/on_hold ideas without a task) links to the form. `DevelopmentCard` shows status, params, and the docs as read-only tabs rendered with `components/Markdown.tsx` (`react-markdown` + `remark-gfm`, styled per element, no raw HTML, no typography plugin). While the task is `planning` the page polls every 20s.
+  - Status labels/colors and the dev-flow status set are centralized in `lib/idea-colors.ts` (`STATUS_LABELS`, `DEVELOPMENT_STATUSES`, `isInDevelopmentFlow`); workflow labels in `lib/activity.ts` (`WORKFLOW_LABELS`). Don't re-add per-page copies.
+  - `awaiting_development` ideas leave the main list and appear in Geliştirilenler (status filter has all 3 dev-flow statuses). The detail page's back link goes to Geliştirilenler for them.
+  - `LastRunLine` moved to `components/LastRunLine.tsx`.
+
 ## What this project is
 
 A personal automation platform that:
@@ -423,8 +449,9 @@ Private repo, name derived from the idea's English name (e.g. `mealmate-app`, su
 
 ## Data model (D1, draft)
 
-- **ideas**: id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, each sub-score + its reason text), user_rating (0.00-10.00 step 0.25, nullable), user_note, user_note_updated_at (nullable), last_reevaluated_at (nullable), last_reevaluation_summary (nullable), last_activity_at / last_activity_kind / activity_seen_at (nullable, 2nd round Grup C), status (new / on_hold / deleted / in_development / developed)
-- **tasks**: id, idea_id, created_at, updated_at, params (json), status (queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
+- **ideas**: id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, each sub-score + its reason text), user_rating (0.00-10.00 step 0.25, nullable), user_note, user_note_updated_at (nullable), last_reevaluated_at (nullable), last_reevaluation_summary (nullable), last_activity_at / last_activity_kind / activity_seen_at (nullable, 2nd round Grup C), status (new / on_hold / deleted / awaiting_development / in_development / developed)
+- **tasks** (rebuilt in Faz 3A): id, idea_id (UNIQUE), created_at, updated_at, params (json), status (planning / planning_failed / ready / queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
+- **task_documents** (Faz 3A): task_id, kind (prd / screens / tech_plan / roadmap), content (Markdown), generated_at, user_edited_at
 - **trend_snapshots**: id, fetched_at, source, payload (json), cron_run_id (nullable, added Grup 4 — links a snapshot back to the run that produced it)
 - **app_settings** (Grup 3): key, value, updated_at — key-value, a missing key means that setting is enabled (see `SOURCE_SETTING_KEYS` in `apps/api/src/schema.ts`)
 - **cron_runs** (Grup 3): id, started_at, finished_at (nullable), status (running / success / failed), source_breakdown (json, nullable), error (nullable)

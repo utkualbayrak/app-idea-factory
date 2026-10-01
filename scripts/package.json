@@ -21,6 +21,8 @@
     "submit-reevaluation": "tsx submit-reevaluation.ts",
     "submit-competitors": "tsx submit-competitors.ts",
     "submit-trend-snapshots": "tsx submit-trend-snapshots.ts",
+    "fetch-task": "tsx fetch-task.ts",
+    "submit-plan-docs": "tsx submit-plan-docs.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint"
   },

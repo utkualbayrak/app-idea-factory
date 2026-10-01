@@ -1,0 +1,93 @@
+name: Plan Idea
+
+on:
+  workflow_dispatch:
+    inputs:
+      idea_id:
+        description: "Planlama belgeleri üretilecek fikrin id'si (görev formu önceden kaydedilmiş olmalı)"
+        required: true
+      job_id:
+        description: "Çalışma geçmişi kaydının id'si (Worker tetiklerken verir; elle çalıştırırken boş bırakılabilir)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  plan-idea:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Çalışma geçmişi > Fikir işleri: Worker'ın açtığı 'queued' satırını
+      # 'running' yapar; job_id boşsa (elle çalıştırma) yeni satır açar. Kullanılan
+      # id WORKFLOW_RUN_ID olarak $GITHUB_ENV'e yazılır, bitiş adımları onu okur.
+      - name: Start workflow run (Çalışma geçmişi için)
+        working-directory: scripts
+        run: pnpm exec tsx start-workflow-run.ts "$JOB_ID" "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" plan-idea.yml "$IDEA_ID"
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          IDEA_ID: ${{ inputs.idea_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Fetch idea and task params
+        working-directory: scripts
+        run: pnpm exec tsx fetch-task.ts "$IDEA_ID" output
+        env:
+          IDEA_ID: ${{ inputs.idea_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Write planning documents with Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: "Read prompts/plan-idea.md and follow its instructions exactly for the idea in scripts/output/idea.json and the task parameters in scripts/output/task-params.json. Do not ask for confirmation or clarification — complete the task end to end and write all four output files."
+          claude_args: "--max-turns 30 --permission-mode acceptEdits"
+
+      - name: Submit planning documents
+        working-directory: scripts
+        run: pnpm exec tsx submit-plan-docs.ts "$IDEA_ID" output/docs
+        env:
+          IDEA_ID: ${{ inputs.idea_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      # `always()` olmasa önceki bir adım patladığında bu adımlar hiç çalışmaz,
+      # kayıt "running"de asılı kalırdı. success()/failure() ile yalnızca biri çalışır.
+      - name: Finish workflow run (başarılı)
+        if: always() && success()
+        working-directory: scripts
+        run: pnpm exec tsx finish-workflow-run.ts "$WORKFLOW_RUN_ID" success
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Finish workflow run (başarısız)
+        if: always() && (failure() || cancelled())
+        working-directory: scripts
+        run: pnpm exec tsx finish-workflow-run.ts "$WORKFLOW_RUN_ID" failed output/failure-reason.txt
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

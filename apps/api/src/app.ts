@@ -8,7 +8,11 @@ import {
   serializeCronRun,
   serializeTrendSnapshot,
   serializeCompetitor,
+  serializeTask,
+  serializeTaskDocument,
   type IdeaRow,
+  type TaskRow,
+  type TaskDocumentRow,
   type CronRunRow,
   type CompetitorRow,
   type TrendSnapshotRow,
@@ -25,6 +29,10 @@ import {
   trendSnapshotsSubmitSchema,
   workflowRunPatchSchema,
   workflowRunCreateSchema,
+  taskCreateSchema,
+  taskDocumentsSubmitSchema,
+  DOCUMENT_KINDS,
+  TASK_REPLANNABLE_STATUSES,
   SOURCE_SETTING_KEYS,
   IDEA_WORKFLOWS,
   WORKFLOW_ACTIVITY,
@@ -57,7 +65,9 @@ app.use(
     credentials: true,
   }),
 );
-app.use(express.json());
+// 1mb: planlama belgeleri (4 Markdown dosyası) express'in 100kb varsayılanını
+// aşabilir.
+app.use(express.json({ limit: "1mb" }));
 
 function db() {
   return (env as unknown as Env).DB;
@@ -72,6 +82,21 @@ function stampActivity(ideaId: string, kind: ActivityKind, at: string) {
   return db()
     .prepare("UPDATE ideas SET last_activity_at = ?1, last_activity_kind = ?2 WHERE id = ?3")
     .bind(at, kind, ideaId);
+}
+
+// GitHub'ın workflow_dispatch API'si. GH_WORKFLOW_DISPATCH_TOKEN, 'workflow'
+// scope'lu bir PAT — Worker secret olarak eklenmesi gerekiyor (bkz. CLAUDE.md).
+async function dispatchWorkflow(token: string, workflow: string, inputs: Record<string, string>) {
+  return fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${workflow}/dispatches`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "app-idea-factory-worker",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ref: "main", inputs }),
+  });
 }
 
 app.get("/health", async (_req, res) => {
@@ -276,9 +301,7 @@ app.patch("/admin/settings", async (req, res) => {
 
 // GitHub'ın workflow_dispatch API'sini tetikler — manuel "cron'u şimdi
 // çalıştır", "yeniden değerlendir" ve "rakipleri bul" butonlarının hepsi
-// aynı mekanizmayı kullanıyor, tek uç. GH_WORKFLOW_DISPATCH_TOKEN,
-// 'workflow' scope'lu bir PAT — Worker secret olarak eklenmesi gerekiyor
-// (bkz. CLAUDE.md).
+// aynı mekanizmayı kullanıyor, tek uç.
 app.post("/admin/trigger-workflow", async (req, res) => {
   const parsed = triggerWorkflowSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -321,19 +344,7 @@ app.post("/admin/trigger-workflow", async (req, res) => {
     ]);
   }
 
-  const ghRes = await fetch(
-    `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${workflow}/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GH_WORKFLOW_DISPATCH_TOKEN}`,
-        Accept: "application/vnd.github+json",
-        "User-Agent": "app-idea-factory-worker",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ref: "main", inputs }),
-    },
-  );
+  const ghRes = await dispatchWorkflow(GH_WORKFLOW_DISPATCH_TOKEN, workflow, inputs);
 
   if (!ghRes.ok) {
     if (jobId && isIdeaWorkflow(workflow)) {
@@ -385,14 +396,16 @@ app.post("/admin/workflow-runs", requireWorkflowSecret, async (req, res) => {
 
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
-  await db().batch([
+  const statements = [
     db()
       .prepare(
         "INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at, started_at, run_url) VALUES (?1, ?2, ?3, 'running', ?4, ?4, ?5)",
       )
       .bind(id, workflow, ideaId, now, runUrl ?? null),
     stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
-  ]);
+  ];
+  if (workflow === "plan-idea.yml") statements.push(markTaskPlanning(ideaId, now));
+  await db().batch(statements);
   res.status(201).json({ id });
 });
 
@@ -416,10 +429,13 @@ app.patch("/admin/workflow-runs/:id", requireWorkflowSecret, async (req, res) =>
   const { status, run_url: runUrl, error } = parsed.data;
 
   if (status === "running") {
-    await db()
-      .prepare("UPDATE workflow_runs SET status = 'running', started_at = ?1, run_url = COALESCE(?2, run_url) WHERE id = ?3")
-      .bind(now, runUrl ?? null, run.id)
-      .run();
+    const statements = [
+      db()
+        .prepare("UPDATE workflow_runs SET status = 'running', started_at = ?1, run_url = COALESCE(?2, run_url) WHERE id = ?3")
+        .bind(now, runUrl ?? null, run.id),
+    ];
+    if (run.workflow === "plan-idea.yml") statements.push(markTaskPlanning(run.idea_id, now));
+    await db().batch(statements);
   } else {
     const statements = [
       db()
@@ -432,10 +448,168 @@ app.patch("/admin/workflow-runs/:id", requireWorkflowSecret, async (req, res) =>
       const [, okKind, failKind] = WORKFLOW_ACTIVITY[run.workflow];
       statements.push(stampActivity(run.idea_id, status === "success" ? okKind : failKind, now));
     }
+    // Belge üretimi patladıysa görev 'planning_failed'e düşer (başarı yolunu
+    // POST /admin/tasks/documents zaten 'ready' yapıyor).
+    if (run.workflow === "plan-idea.yml" && status === "failed") {
+      statements.push(
+        db()
+          .prepare(
+            "UPDATE tasks SET status = 'planning_failed', error = ?1, updated_at = ?2 WHERE idea_id = ?3 AND status = 'planning'",
+          )
+          .bind(error ?? "Belge üretimi başarısız oldu.", now, run.idea_id),
+      );
+    }
     await db().batch(statements);
   }
 
   res.json({ ok: true });
+});
+
+// Faz 3A: "Geliştir" akışı. Görev formu kaydedilir, fikir
+// 'awaiting_development' olur ve Claude'un planlama belgelerini yazdığı
+// plan-idea.yml tetiklenir. Fikir başına tek görev: belgeleri yeniden üretmek
+// (planning_failed / ready durumunda) aynı satırı günceller.
+
+// Elle (job_id'siz) başlayan bir plan-idea.yml çalışması da görevi 'planning'e
+// çeker — kilitli (iskelet aşamasındaki) görevlere dokunmaz.
+function markTaskPlanning(ideaId: string, now: string) {
+  return db()
+    .prepare(
+      "UPDATE tasks SET status = 'planning', error = NULL, updated_at = ?1 WHERE idea_id = ?2 AND status IN ('planning', 'planning_failed', 'ready')",
+    )
+    .bind(now, ideaId);
+}
+
+app.post("/tasks", async (req, res) => {
+  const parsed = taskCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const { GH_WORKFLOW_DISPATCH_TOKEN } = env as unknown as Env;
+  if (!GH_WORKFLOW_DISPATCH_TOKEN) {
+    res.status(500).json({ error: "not_configured" });
+    return;
+  }
+
+  const { idea_id: ideaId, params } = parsed.data;
+  const idea = await db().prepare("SELECT * FROM ideas WHERE id = ?1").bind(ideaId).first<IdeaRow>();
+  if (!idea) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+
+  const existing = await db().prepare("SELECT * FROM tasks WHERE idea_id = ?1").bind(ideaId).first<TaskRow>();
+  if (existing && !TASK_REPLANNABLE_STATUSES.includes(existing.status)) {
+    // planning: zaten üretiliyor; queued ve sonrası: iskelete geçildi, belgeler kilitli.
+    res.status(409).json({ error: "task_locked", status: existing.status });
+    return;
+  }
+  if (!existing && !["new", "on_hold"].includes(idea.status)) {
+    res.status(409).json({ error: "invalid_idea_status", status: idea.status });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const taskId = existing?.id ?? crypto.randomUUID();
+  const jobId = crypto.randomUUID();
+  const workflow = "plan-idea.yml";
+
+  await db().batch([
+    existing
+      ? db()
+          .prepare("UPDATE tasks SET params = ?1, status = 'planning', error = NULL, updated_at = ?2 WHERE id = ?3")
+          .bind(JSON.stringify(params), now, taskId)
+      : db()
+          .prepare(
+            "INSERT INTO tasks (id, idea_id, created_at, updated_at, params, status) VALUES (?1, ?2, ?3, ?3, ?4, 'planning')",
+          )
+          .bind(taskId, ideaId, now, JSON.stringify(params)),
+    db()
+      .prepare("UPDATE ideas SET status = 'awaiting_development' WHERE id = ?1")
+      .bind(ideaId),
+    db()
+      .prepare("INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at) VALUES (?1, ?2, ?3, 'queued', ?4)")
+      .bind(jobId, workflow, ideaId, now),
+    stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
+  ]);
+
+  const ghRes = await dispatchWorkflow(GH_WORKFLOW_DISPATCH_TOKEN, workflow, { idea_id: ideaId, job_id: jobId });
+  if (!ghRes.ok) {
+    const error = `GitHub tetikleme başarısız (HTTP ${ghRes.status})`;
+    await db().batch([
+      db()
+        .prepare("UPDATE workflow_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3")
+        .bind(now, error, jobId),
+      db()
+        .prepare("UPDATE tasks SET status = 'planning_failed', error = ?1, updated_at = ?2 WHERE id = ?3")
+        .bind(error, now, taskId),
+      stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][2], now),
+    ]);
+    res.status(502).json({ error: "github_dispatch_failed", status: ghRes.status });
+    return;
+  }
+
+  const task = await db().prepare("SELECT * FROM tasks WHERE id = ?1").bind(taskId).first<TaskRow>();
+  res.status(existing ? 200 : 201).json({ task: task ? serializeTask(task) : null });
+});
+
+// Fikrin görevi + belgeleri (detay sayfası). Workflow da (fetch-task.ts)
+// Access service token ile buradan okur. Görev yoksa task: null.
+app.get("/ideas/:id/task", async (req, res) => {
+  const task = await db().prepare("SELECT * FROM tasks WHERE idea_id = ?1").bind(req.params.id).first<TaskRow>();
+  if (!task) {
+    res.json({ task: null, documents: [] });
+    return;
+  }
+
+  const { results } = await db()
+    .prepare("SELECT * FROM task_documents WHERE task_id = ?1")
+    .bind(task.id)
+    .all<TaskDocumentRow>();
+  const order = (kind: string) => DOCUMENT_KINDS.indexOf(kind as (typeof DOCUMENT_KINDS)[number]);
+  const documents = results.sort((a, b) => order(a.kind) - order(b.kind)).map(serializeTaskDocument);
+
+  res.json({ task: serializeTask(task), documents });
+});
+
+// plan-idea.yml'ın ürettiği 4 belgeyi yazar (her üretim öncekilerin yerine
+// geçer, kullanıcı düzenlemeleri dahil) ve görevi 'ready' yapar.
+app.post("/admin/tasks/documents", requireWorkflowSecret, async (req, res) => {
+  const parsed = taskDocumentsSubmitSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const { idea_id: ideaId, documents } = parsed.data;
+  const task = await db().prepare("SELECT * FROM tasks WHERE idea_id = ?1").bind(ideaId).first<TaskRow>();
+  if (!task) {
+    res.status(404).json({ error: "task_not_found" });
+    return;
+  }
+  if (!["planning", ...TASK_REPLANNABLE_STATUSES].includes(task.status)) {
+    res.status(409).json({ error: "task_locked", status: task.status });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  await db().batch([
+    db().prepare("DELETE FROM task_documents WHERE task_id = ?1").bind(task.id),
+    ...DOCUMENT_KINDS.map((kind) =>
+      db()
+        .prepare("INSERT INTO task_documents (task_id, kind, content, generated_at) VALUES (?1, ?2, ?3, ?4)")
+        .bind(task.id, kind, documents[kind], now),
+    ),
+    db()
+      .prepare("UPDATE tasks SET status = 'ready', error = NULL, updated_at = ?1 WHERE id = ?2")
+      .bind(now, task.id),
+    // job_id'siz (elle) çalıştırılsa da rozet güncellensin.
+    stampActivity(ideaId, "planned", now),
+  ]);
+
+  res.status(201).json({ ok: true });
 });
 
 // Grup 3: cron geçmişi ekranı.

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
+import { isInDevelopmentFlow } from "@/lib/idea-colors";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { ListPageLayout, PageHeader, PageMessage } from "@/components/PageHeader";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const MAX_COMPARE = 4;
 
-// 'deleted' API'den hiç dönmez; 'in_development'/'developed' ise artık bu
-// listede hiç görünmüyor (Grup 3 — /developed ekranına taşındı), bu yüzden
-// filtre seçeneklerinde de yok.
+// 'deleted' API'den hiç dönmez; "Geliştir" denmiş fikirler (awaiting_development /
+// in_development / developed) ise bu listede hiç görünmüyor (/developed
+// ekranında), bu yüzden filtre seçeneklerinde de yok.
 const STATUS_LABELS: Record<"new" | "on_hold", string> = {
   new: "Yeni",
   on_hold: "Askıda",
@@ -96,10 +97,10 @@ export function IdeaListPage() {
 
   const isFiltered = useMemo(() => JSON.stringify(filters) !== JSON.stringify(DEFAULT_FILTERS), [filters]);
 
-  // Geliştirme aşamasına geçen fikirler ana listeden tamamen çıkar,
-  // /developed ekranında görünür (Grup 3).
+  // Geliştirme akışına giren fikirler ana listeden tamamen çıkar,
+  // /developed ekranında görünür.
   const activeIdeas = useMemo(
-    () => (ideas ?? []).filter((idea) => idea.status !== "in_development" && idea.status !== "developed"),
+    () => (ideas ?? []).filter((idea) => !isInDevelopmentFlow(idea.status)),
     [ideas],
   );
 

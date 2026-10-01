@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { formatDateTime, formatDuration } from "@/lib/format-date";
+import { WORKFLOW_LABELS } from "@/lib/activity";
 
 type RunStatus = WorkflowRun["status"];
 
@@ -60,11 +61,6 @@ function RunError({ error }: { error: string }) {
     </>
   );
 }
-
-const WORKFLOW_LABELS: Record<WorkflowRun["workflow"], string> = {
-  "reevaluate-idea.yml": "Yeniden değerlendirme",
-  "find-competitors.yml": "Rakip bulma",
-};
 
 // Her sekmenin üstündeki özet şeridi: toplam / başarılı / başarısız / devam eden.
 function SummaryStrip({ statuses }: { statuses: RunStatus[] }) {

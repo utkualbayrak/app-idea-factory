@@ -32,9 +32,27 @@ const STATUS_PALETTE: Record<IdeaStatus, string> = {
   new: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
   on_hold: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
   deleted: "bg-muted text-muted-foreground",
+  awaiting_development: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200",
   in_development: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200",
   developed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
 };
+
+// Tüm ekranlarda ortak durum etiketleri.
+export const STATUS_LABELS: Record<IdeaStatus, string> = {
+  new: "Yeni",
+  on_hold: "Askıda",
+  deleted: "Silinmiş",
+  awaiting_development: "Geliştirme bekliyor",
+  in_development: "Geliştiriliyor",
+  developed: "Geliştirildi",
+};
+
+// "Geliştir" denmiş fikirler: ana listeden çıkar, Geliştirilenler ekranında görünür.
+export const DEVELOPMENT_STATUSES: IdeaStatus[] = ["awaiting_development", "in_development", "developed"];
+
+export function isInDevelopmentFlow(status: IdeaStatus): boolean {
+  return DEVELOPMENT_STATUSES.includes(status);
+}
 
 export function statusColorClasses(status: IdeaStatus): string {
   return STATUS_PALETTE[status];

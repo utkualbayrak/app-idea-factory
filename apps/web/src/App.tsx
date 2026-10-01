@@ -3,6 +3,7 @@ import { Hammer, History, Lightbulb, LayoutDashboard, LogOut, Settings } from "l
 import { DashboardPage } from "@/pages/DashboardPage";
 import { IdeaListPage } from "@/pages/IdeaListPage";
 import { IdeaDetailPage } from "@/pages/IdeaDetailPage";
+import { DevelopPage } from "@/pages/DevelopPage";
 import { DevelopedPage } from "@/pages/DevelopedPage";
 import { ComparePage } from "@/pages/ComparePage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -87,6 +88,7 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/ideas" element={<IdeaListPage />} />
             <Route path="/ideas/:id" element={<IdeaDetailPage />} />
+            <Route path="/ideas/:id/develop" element={<DevelopPage />} />
             <Route path="/developed" element={<DevelopedPage />} />
             <Route path="/compare" element={<ComparePage />} />
             <Route path="/settings" element={<SettingsPage />} />

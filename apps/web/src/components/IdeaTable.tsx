@@ -13,7 +13,7 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import type { Idea } from "@/lib/api";
-import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
+import { categoryColorClasses, statusColorClasses, STATUS_LABELS } from "@/lib/idea-colors";
 import { combinedScore } from "@/lib/scoring";
 import { formatBatchDate } from "@/lib/format-date";
 import { ActivityBadge } from "@/components/ActivityBadge";
@@ -28,13 +28,6 @@ const PAGE_SIZE = 20;
 // Varsayılan: en yeni fikir en üstte (tek tablo, tarih grupları yok).
 const DEFAULT_SORTING: SortingState = [{ id: "date", desc: true }];
 
-const STATUS_LABELS: Record<Idea["status"], string> = {
-  new: "Yeni",
-  on_hold: "Askıda",
-  deleted: "Silinmiş",
-  in_development: "Geliştiriliyor",
-  developed: "Geliştirildi",
-};
 
 function ClaudeScoreCell({ idea }: { idea: Idea }) {
   return (

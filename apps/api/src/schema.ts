@@ -130,7 +130,9 @@ export type TrendSnapshotsSubmit = z.infer<typeof trendSnapshotsSubmitSchema>;
 
 // 2. tur Grup C: fikir bazlı arka plan işleri (workflow_runs) ve fikir
 // listesindeki aktivite rozeti.
-export const IDEA_WORKFLOWS = ["reevaluate-idea.yml", "find-competitors.yml"] as const;
+// plan-idea.yml (Faz 3A) burada ama DISPATCHABLE_WORKFLOWS'ta değil: yalnızca
+// POST /tasks üzerinden (görev formu kaydedilerek) tetiklenebilir.
+export const IDEA_WORKFLOWS = ["reevaluate-idea.yml", "find-competitors.yml", "plan-idea.yml"] as const;
 export type IdeaWorkflow = (typeof IDEA_WORKFLOWS)[number];
 
 export const ACTIVITY_KINDS = [
@@ -143,6 +145,9 @@ export const ACTIVITY_KINDS = [
   "competitors_queued",
   "competitors_found",
   "competitors_failed",
+  "plan_queued",
+  "planned",
+  "plan_failed",
 ] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
@@ -150,6 +155,7 @@ export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 export const WORKFLOW_ACTIVITY: Record<IdeaWorkflow, [ActivityKind, ActivityKind, ActivityKind]> = {
   "reevaluate-idea.yml": ["reevaluate_queued", "reevaluated", "reevaluate_failed"],
   "find-competitors.yml": ["competitors_queued", "competitors_found", "competitors_failed"],
+  "plan-idea.yml": ["plan_queued", "planned", "plan_failed"],
 };
 
 export const workflowRunPatchSchema = z.object({
@@ -166,4 +172,56 @@ export const workflowRunCreateSchema = z.object({
   workflow: z.enum(IDEA_WORKFLOWS),
   idea_id: z.string().min(1),
   run_url: z.string().optional(),
+});
+
+// Faz 3A: "Geliştir" görev formu (docs/PROJE.md "Görev formu alanları") ve
+// Claude'un ürettiği planlama belgeleri. scripts/lib/task-schema.ts ile aynı
+// olmalı — paketler arası paylaşım yok, ikisini birlikte güncelle.
+export const TASK_PLATFORMS = ["ios_swift", "android_kotlin", "expo", "flutter"] as const;
+export const TASK_BACKENDS = ["none", "supabase", "firebase", "custom_api"] as const;
+export const TASK_AUTHS = ["none", "email", "social"] as const;
+export const TASK_THEMES = ["light", "dark", "both"] as const;
+export const TASK_STYLES = ["minimal", "colorful"] as const;
+
+export const taskParamsSchema = z.object({
+  platform: z.enum(TASK_PLATFORMS),
+  backend: z.enum(TASK_BACKENDS),
+  auth: z.enum(TASK_AUTHS),
+  // Fikrin core_features'ından seçilenler + kullanıcının serbest eklemeleri
+  // (3-5 önerilir, form bunu uyarı olarak gösterir; sınır daha geniş).
+  mvp_features: z.array(z.string().trim().min(1).max(300)).min(1).max(10),
+  design: z.object({
+    theme: z.enum(TASK_THEMES),
+    style: z.enum(TASK_STYLES),
+  }),
+  notes: z.string().max(4000).optional(),
+});
+
+export type TaskParams = z.infer<typeof taskParamsSchema>;
+
+export const taskCreateSchema = z.object({
+  idea_id: z.string().min(1),
+  params: taskParamsSchema,
+});
+
+export const TASK_STATUSES = ["planning", "planning_failed", "ready", "queued", "running", "done", "failed"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+
+// Belgeleri yeniden üretmeye / formu tekrar göndermeye izin verilen durumlar.
+// queued ve sonrası: iskelet üretimine geçildi, belgeler kilitli.
+export const TASK_REPLANNABLE_STATUSES: readonly TaskStatus[] = ["planning_failed", "ready"];
+
+export const DOCUMENT_KINDS = ["prd", "screens", "tech_plan", "roadmap"] as const;
+export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
+
+const documentContent = z.string().trim().min(1).max(200_000);
+
+export const taskDocumentsSubmitSchema = z.object({
+  idea_id: z.string().min(1),
+  documents: z.object({
+    prd: documentContent,
+    screens: documentContent,
+    tech_plan: documentContent,
+    roadmap: documentContent,
+  }),
 });

@@ -28,7 +28,7 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Arayüz koruması | Cloudflare Access (Zero Trust ücretsiz plan), yalnızca sahibin e-postası |
 | Fikir üretim saati | Her gün 06:00 Türkiye saati (03:00 UTC, cron `0 3 * * *`) |
 | Geliştirme kapsamı | Üretilen fikirlerin hiçbiri otomatik geliştirilmez. Repo ve iskelet yalnızca kullanıcının "Geliştir" dediği fikirler için oluşturulur. |
-| Geliştir tetikleme | Görev formu gönderilince iskelet üretimi onay beklemeden otomatik başlar. Claude Code yalnızca iskeleti kurar; iskeletten sonra geliştirmeye kendiliğinden devam etmez. |
+| Geliştir tetikleme | ~~Görev formu gönderilince iskelet üretimi onay beklemeden otomatik başlar.~~ Faz 3'te değişti: önce planlama belgeleri üretilir, iskelet kullanıcı "Geliştirmeye başla" deyince kurulur (bkz. "Geliştir akışı"). Claude Code yalnızca iskeleti kurar; iskeletten sonra geliştirmeye kendiliğinden devam etmez. |
 | Kullanıcı puanı | Her fikre 0.00-10.00 arası (0.25 adımlarla, slider component'i ile) kullanıcı puanı ve isteğe bağlı kısa not. Claude'un ürettiği puanlarla aynı ölçek ama ayrı tutulur. |
 | Claude puanları | 0.00-10.00 arası, 0.25 adımlarla; her alt puanın (`market`, `feasibility_solo_dev`, `originality`, `overall`) yanında Claude'un o puanı neden verdiğini açıklayan kısa bir metin (`*_reason`) de üretiliyor. `feasibility_solo_dev` ayrıca gerekli API/kaynaklara erişimin ücretsiz/kolay mı yoksa ücretli/kısıtlı mı olduğunu da değerlendiriyor. |
 | Fikir durumu | Üç ayrı durum: aktif (`new`), `on_hold` (kullanıcı üzerinde düşünüyor, listede soluk görünür ama görünür kalır), `deleted` (listeden tamamen gizlenir, yalnızca isim tekrarı kontrolü için DB'de kalır). Eski "arşivle" kavramı `on_hold`'a karşılık geliyor — ayrı bir "arşiv" durumu yok. |
@@ -45,6 +45,11 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Prompt sahipliği (2026-10-01) | `prompts/*.md` dosyalarını kullanıcı kendisi optimize ediyor. Claude bu dosyaların içeriğini değiştirmez veya geri almaz; kod tarafını prompt'ların çıktı sözleşmesine uyarlar. Bir prompt değişikliği gerekiyorsa önce sorar. |
 | Grup sonu teslim (2026-10-01) | Her grup sonunda typecheck/lint/build sonrası commit + push'u Claude yapar (push otomatik deploy eder). Varsa yeni migration push'tan önce remote'a uygulanır. Test kullanıcıda, prodda yapılır; Claude kendi arayüzünü Chrome ile test etmez. |
 | Lisans (2026-10-01) | Proje açık kaynak, MIT lisansı (`LICENSE`). Her iki README de lisansa bağlanıyor. |
+| Geliştir akışı (Faz 3, 2026-10-01) | "Geliştir" iskeleti hemen kurmaz. Önce görev formu doldurulur, Claude dört planlama belgesi yazar (ürün belgesi/PRD, ekranlar ve akışlar, teknik plan, yol haritası) ve fikir **"Geliştirme bekliyor"** (`awaiting_development`) durumuna geçip Geliştirilenler listesine gider. Kullanıcı belgeleri arayüzde inceleyip düzenler, sonra **"Geliştirmeye başla"** der; ancak o zaman repo açılır ve iskelet kurulur (`in_development`). **"Geliştirildi"** durumuna kullanıcı elle geçirir. Bu, "görev formu gönderilince iskelet onay beklemeden başlar" kararının yerini alır. |
+| Planlama belgeleri (Faz 3) | Türkçe, Markdown. Arayüzde her belge bir sekme; düzenleme düz Markdown textarea + önizleme ile (zengin editör yok). İskelet üretiminde repoya `docs/` altına kopyalanır. Belge talimatı `prompts/plan-idea.md`, iskelet talimatı `prompts/build-skeleton.md`: ilk taslakları Claude yazar, kullanıcı son kontrolden geçirir. |
+| Görev formu zamanı (Faz 3) | Form belgelerden **önce** doldurulur; belgeler seçilen platform/backend/auth/tasarıma göre yazılır. Belgeler hazırken form tekrar açılıp belgeler yeniden üretilebilir. |
+| İskelet doğrulama (Faz 3) | Yalnızca JS/TS tabanlı platformda (Expo/React Native) install + typecheck/lint çalışır, hatalar Claude'a düzelttirilir. Swift, Kotlin ve Flutter'da toolchain kurulmaz, sadece dosyalar üretilir ve README'de belirtilir. İleride genişletilebilir. |
+| Tekrar dene (Faz 3) | Başarısız iskelet görevi aynı repo, aynı issue ve aynı (onaylı) belgelerle yeniden çalışır. Fikir başına en fazla bir görev ve bir repo. |
 
 ## Bu kararların mimariye etkisi
 
@@ -103,11 +108,12 @@ flowchart TD
 ### Akış 2: İskelet üretimi (manuel)
 
 1. Kullanıcı arayüzde fikri seçer, görev formunu doldurur.
-2. Worker görevi D1'e `queued` olarak kaydeder ve iskelet workflow'unu `workflow_dispatch` ile tetikler.
-3. Workflow yeni özel GitHub reposunu oluşturur, bu repoda fikir ve görev parametrelerini içeren bir issue açar, issue'yu Projects panosuna "In progress" olarak ekler.
-4. Workflow Claude Code'u fikir + görev parametreleriyle çalıştırır, sonucu yeni repoya iter, issue'ya özet yorum yazar, pano durumunu "Done" (hata varsa "Failed") yapar.
-5. Workflow sonucu (repo URL'si, issue URL'si, durum, hata) Worker API'sine bildirir.
-6. Worker görevi günceller ve Slack'e repo linkiyle mesaj atar.
+2. Worker görevi D1'e `planning` olarak kaydeder, fikri `awaiting_development` yapar ve `plan-idea.yml`'ı tetikler. Claude dört planlama belgesini yazar, görev `ready` olur.
+3. Kullanıcı belgeleri inceler/düzenler ve "Geliştirmeye başla" der. Worker görevi `queued`, fikri `in_development` yapar ve iskelet workflow'unu `workflow_dispatch` ile tetikler.
+4. Workflow yeni özel GitHub reposunu oluşturur, bu repoda fikir ve görev parametrelerini içeren bir issue açar, issue'yu Projects panosuna "In progress" olarak ekler (pano Faz 4).
+5. Workflow Claude Code'u onaylı belgelerle çalıştırır, sonucu yeni repoya iter, issue'ya özet yorum yazar, pano durumunu "Done" (hata varsa "Failed") yapar.
+6. Workflow sonucu (repo URL'si, issue URL'si, durum, hata) Worker API'sine bildirir.
+7. Worker görevi günceller ve Slack'e repo linkiyle mesaj atar (Slack Faz 4).
 
 ## Bileşenler
 
@@ -199,10 +205,11 @@ Puanlar 0.00-10.00 arası, yalnızca 0.25'in katları (bkz. "Kesinleşen kararla
 
 ## Veri modeli (D1, taslak)
 
-- **ideas:** id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, her alt puan + gerekçesi), user_rating (0.00-10.00, 0.25 adımlarla, boş olabilir), user_note, user_note_updated_at (boş olabilir), last_reevaluated_at (boş olabilir), last_reevaluation_summary (boş olabilir), last_activity_at / last_activity_kind / activity_seen_at (boş olabilir; fikir listesindeki aktivite rozeti için), status (new / on_hold / deleted / in_development / developed)
-- **tasks:** id, idea_id, created_at, updated_at, params (json), status (queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
+- **ideas:** id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, her alt puan + gerekçesi), user_rating (0.00-10.00, 0.25 adımlarla, boş olabilir), user_note, user_note_updated_at (boş olabilir), last_reevaluated_at (boş olabilir), last_reevaluation_summary (boş olabilir), last_activity_at / last_activity_kind / activity_seen_at (boş olabilir; fikir listesindeki aktivite rozeti için), status (new / on_hold / deleted / awaiting_development / in_development / developed)
+- **tasks:** id, idea_id (fikir başına tek görev), created_at, updated_at, params (json), status (planning / planning_failed / ready / queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
+- **task_documents:** task_id, kind (prd / screens / tech_plan / roadmap), content (Markdown), generated_at, user_edited_at
 - **trend_snapshots:** id, fetched_at, source, payload (json)
-- **workflow_runs:** id, workflow, idea_id, status (queued / running / success / failed), created_at, started_at, finished_at, run_url, error — fikir bazlı arka plan işlerinin (yeniden değerlendirme, rakip bulma) geçmişi
+- **workflow_runs:** id, workflow, idea_id, status (queued / running / success / failed), created_at, started_at, finished_at, run_url, error — fikir bazlı arka plan işlerinin (yeniden değerlendirme, rakip bulma, planlama belgeleri) geçmişi
 
 ## Önerilen klasör yapısı
 

@@ -160,3 +160,16 @@ export async function patchWorkflowRun(
     body: JSON.stringify(patch),
   });
 }
+
+// Faz 3A: "Geliştir" görevi ve planlama belgeleri (plan-idea.yml).
+export async function fetchIdeaTask(ideaId: string): Promise<{ task: { id: string; params: unknown } | null }> {
+  return fetchJson(`${BASE_URL}/ideas/${ideaId}/task`, { headers: authHeaders() });
+}
+
+export async function submitTaskDocuments(ideaId: string, documents: Record<string, string>): Promise<void> {
+  await fetchJson(`${BASE_URL}/admin/tasks/documents`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ idea_id: ideaId, documents }),
+  });
+}

@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Clipboard, ClipboardCheck, GitCompare, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, Clipboard, ClipboardCheck, GitCompare, Hammer, Search, Sparkles } from "lucide-react";
 import {
   fetchIdea,
   fetchIdeas,
+  fetchIdeaTask,
   fetchCompetitors,
   fetchWorkflowRuns,
   patchIdea,
   type Idea,
   type Competitor,
   type IdeaWorkflow,
+  type Task,
+  type TaskDocument,
   type WorkflowRun,
 } from "@/lib/api";
 import { ActivityBadge } from "@/components/ActivityBadge";
@@ -19,10 +22,12 @@ import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SourceIcon } from "@/components/SourceIcon";
 import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
+import { LastRunLine } from "@/components/LastRunLine";
+import { DevelopmentCard } from "@/components/DevelopmentCard";
 import { PageMessage } from "@/components/PageHeader";
 import { formatDateTime } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
-import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
+import { categoryColorClasses, isInDevelopmentFlow, statusColorClasses, STATUS_LABELS } from "@/lib/idea-colors";
 import { ideaToMarkdown } from "@/lib/export-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,13 +41,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const STATUS_LABELS: Record<Idea["status"], string> = {
-  new: "Yeni",
-  on_hold: "Askıda",
-  deleted: "Silinmiş",
-  in_development: "Geliştiriliyor",
-  developed: "Geliştirildi",
-};
 
 type Similarity = NonNullable<Competitor["similarity"]>;
 
@@ -69,12 +67,24 @@ export function IdeaDetailPage() {
   const [copied, setCopied] = useState(false);
   const [competitors, setCompetitors] = useState<Competitor[] | null>(null);
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
+  const [task, setTask] = useState<Task | null>(null);
+  const [documents, setDocuments] = useState<TaskDocument[]>([]);
 
   const loadRuns = useCallback(() => {
     if (!id) return;
     fetchWorkflowRuns({ ideaId: id, limit: 20 })
       .then((res) => setRuns(res.runs))
       .catch(() => setRuns([]));
+  }, [id]);
+
+  const loadTask = useCallback(() => {
+    if (!id) return;
+    fetchIdeaTask(id)
+      .then((res) => {
+        setTask(res.task);
+        setDocuments(res.documents);
+      })
+      .catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -95,7 +105,23 @@ export function IdeaDetailPage() {
       .then((res) => setCompetitors(res.competitors))
       .catch(() => setCompetitors([]));
     loadRuns();
-  }, [id, loadRuns]);
+    loadTask();
+  }, [id, loadRuns, loadTask]);
+
+  // Belgeler hazırlanırken (plan-idea.yml birkaç dakika sürer) sayfa kendini
+  // yeniler; hazır olunca ya da iş patlayınca durur.
+  const planning = task?.status === "planning";
+  useEffect(() => {
+    if (!planning || !id) return;
+    const timer = setInterval(() => {
+      loadTask();
+      loadRuns();
+      fetchIdea(id)
+        .then((res) => setIdea(res.idea))
+        .catch(() => {});
+    }, 20_000);
+    return () => clearInterval(timer);
+  }, [planning, id, loadTask, loadRuns]);
 
   // Bir iş tetiklenince fikrin aktivite rozeti ("Rakip aranıyor…" vb.) ve
   // son iş satırı hemen güncellensin.
@@ -105,7 +131,8 @@ export function IdeaDetailPage() {
       .then((res) => setIdea(res.idea))
       .catch(() => {});
     loadRuns();
-  }, [id, loadRuns]);
+    loadTask();
+  }, [id, loadRuns, loadTask]);
 
   const lastRun = (workflow: IdeaWorkflow) => runs.find((run) => run.workflow === workflow);
 
@@ -161,9 +188,12 @@ export function IdeaDetailPage() {
           devam eder ("scroll atildikca fikirler back butonu ve fikrin adi
           ile kisa aciklamasi sabit kalsin" isteği). */}
       <div className="sticky top-14 z-[5] -mx-4 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <Link to="/ideas" className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          to={isInDevelopmentFlow(idea.status) ? "/developed" : "/ideas"}
+          className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="size-4" />
-          Fikirler
+          {isInDevelopmentFlow(idea.status) ? "Geliştirilenler" : "Fikirler"}
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold">{idea.name}</h1>
@@ -207,12 +237,8 @@ export function IdeaDetailPage() {
         </CardContent>
       </Card>
 
-      {(idea.status === "in_development" || idea.status === "developed") && (
-        <InfoCard title="Geliştirme bilgileri">
-          <p className="text-muted-foreground">
-            Repo/issue linkleri henüz yok — görev formu ve iskelet üretimi Faz 3'te geliyor.
-          </p>
-        </InfoCard>
+      {task && id && (
+        <DevelopmentCard ideaId={id} task={task} documents={documents} lastPlanRun={lastRun("plan-idea.yml")} />
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -400,37 +426,16 @@ export function IdeaDetailPage() {
           disabled={idea.status === "deleted"}
           onConfirm={handleDelete}
         />
-        <Button disabled title="Faz 3'te gelecek">
-          Geliştir (yakında)
-        </Button>
+        {!task && (idea.status === "new" || idea.status === "on_hold") && (
+          <Button asChild>
+            <Link to={`/ideas/${id}/develop`}>
+              <Hammer className="size-4" />
+              Geliştir
+            </Link>
+          </Button>
+        )}
       </div>
     </div>
-  );
-}
-
-const RUN_STATUS_LABELS: Record<WorkflowRun["status"], string> = {
-  queued: "sırada",
-  running: "çalışıyor",
-  success: "başarılı",
-  failed: "başarısız",
-};
-
-// Bu fikir için o türdeki en son arka plan işinin kısa özeti + log linki.
-function LastRunLine({ run, label }: { run: WorkflowRun | undefined; label: string }) {
-  if (!run) return null;
-  return (
-    <p className="text-xs break-words text-muted-foreground">
-      {label}: {formatDateTime(run.created_at)} — {RUN_STATUS_LABELS[run.status]}
-      {run.status === "failed" && run.error && ` (${run.error})`}
-      {run.run_url && (
-        <>
-          {" · "}
-          <a href={run.run_url} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-            log
-          </a>
-        </>
-      )}
-    </p>
   );
 }
 

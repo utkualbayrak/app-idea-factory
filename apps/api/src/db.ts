@@ -1,4 +1,4 @@
-import type { IdeaInput } from "./schema";
+import type { DocumentKind, IdeaInput, TaskParams, TaskStatus } from "./schema";
 
 // SQLite'ın datetime('now') default'u UTC ama "YYYY-MM-DD HH:MM:SS" formatında,
 // saat dilimi işareti olmadan yazıyor. Tarayıcı bunu yerel saat (TR, +3) sanıp
@@ -123,4 +123,43 @@ export interface WorkflowRunRow {
   error: string | null;
   // GET /admin/workflow-runs JOIN ile ekler (fikir silinmişse de satır kalır).
   idea_name?: string | null;
+}
+
+export interface TaskRow {
+  id: string;
+  idea_id: string;
+  created_at: string;
+  updated_at: string;
+  params: string;
+  status: TaskStatus;
+  repo_url: string | null;
+  issue_url: string | null;
+  project_item_id: string | null;
+  workflow_run_id: string | null;
+  error: string | null;
+}
+
+export interface Task extends Omit<TaskRow, "params"> {
+  params: TaskParams;
+}
+
+export function serializeTask(row: TaskRow): Task {
+  return {
+    ...row,
+    created_at: toUtcIso(row.created_at),
+    updated_at: toUtcIso(row.updated_at),
+    params: JSON.parse(row.params),
+  };
+}
+
+export interface TaskDocumentRow {
+  task_id: string;
+  kind: DocumentKind;
+  content: string;
+  generated_at: string;
+  user_edited_at: string | null;
+}
+
+export function serializeTaskDocument(row: TaskDocumentRow): TaskDocumentRow {
+  return { ...row, generated_at: toUtcIso(row.generated_at), user_edited_at: toUtcIso(row.user_edited_at) };
 }

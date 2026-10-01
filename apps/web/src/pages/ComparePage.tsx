@@ -5,18 +5,11 @@ import { fetchIdea, patchIdea, type Idea } from "@/lib/api";
 import { ScoreSlider } from "@/components/ScoreSlider";
 import { SourceIcon } from "@/components/SourceIcon";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
-import { categoryColorClasses, statusColorClasses } from "@/lib/idea-colors";
+import { categoryColorClasses, statusColorClasses, STATUS_LABELS } from "@/lib/idea-colors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const STATUS_LABELS: Record<Idea["status"], string> = {
-  new: "Yeni",
-  on_hold: "Askıda",
-  deleted: "Silinmiş",
-  in_development: "Geliştiriliyor",
-  developed: "Geliştirildi",
-};
 
 export function ComparePage() {
   const [searchParams, setSearchParams] = useSearchParams();

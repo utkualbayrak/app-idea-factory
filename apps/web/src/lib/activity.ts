@@ -1,4 +1,4 @@
-import type { ActivityKind, Idea } from "@/lib/api";
+import type { ActivityKind, Idea, IdeaWorkflow } from "@/lib/api";
 
 // Fikir aktivite rozeti için saf yardımcılar (components/ActivityBadge.tsx
 // ve detay sayfası kullanır).
@@ -17,11 +17,21 @@ export const ACTIVITY_LABELS: Record<ActivityKind, string> = {
   competitors_queued: "Rakip aranıyor…",
   competitors_found: "Rakipler bulundu",
   competitors_failed: "Rakip arama başarısız",
+  plan_queued: "Belgeler hazırlanıyor…",
+  planned: "Belgeler hazır",
+  plan_failed: "Belge üretimi başarısız",
 };
 
-export const IN_PROGRESS_KINDS: ActivityKind[] = ["reevaluate_queued", "competitors_queued"];
-export const SUCCESS_KINDS: ActivityKind[] = ["reevaluated", "competitors_found"];
-export const FAILED_KINDS: ActivityKind[] = ["reevaluate_failed", "competitors_failed"];
+// Çalışma geçmişi ve gösterge panelindeki iş türü etiketleri.
+export const WORKFLOW_LABELS: Record<IdeaWorkflow, string> = {
+  "reevaluate-idea.yml": "Yeniden değerlendirme",
+  "find-competitors.yml": "Rakip bulma",
+  "plan-idea.yml": "Planlama belgeleri",
+};
+
+export const IN_PROGRESS_KINDS: ActivityKind[] = ["reevaluate_queued", "competitors_queued", "plan_queued"];
+export const SUCCESS_KINDS: ActivityKind[] = ["reevaluated", "competitors_found", "planned"];
+export const FAILED_KINDS: ActivityKind[] = ["reevaluate_failed", "competitors_failed", "plan_failed"];
 
 export type ActivityIdea = Pick<Idea, "last_activity_at" | "last_activity_kind" | "activity_seen_at">;
 

@@ -9,7 +9,8 @@ import {
   type WorkflowRun,
 } from "@/lib/api";
 import { combinedScore } from "@/lib/scoring";
-import { statusColorClasses } from "@/lib/idea-colors";
+import { isInDevelopmentFlow, statusColorClasses, STATUS_LABELS } from "@/lib/idea-colors";
+import { WORKFLOW_LABELS } from "@/lib/activity";
 import { formatDateTime } from "@/lib/format-date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,11 +37,6 @@ const JOB_STATUS: Record<WorkflowRun["status"], { label: string; className: stri
   running: { label: "Çalışıyor", className: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200" },
   success: { label: "Başarılı", className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200" },
   failed: { label: "Başarısız", className: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200" },
-};
-
-const JOB_LABELS: Record<WorkflowRun["workflow"], string> = {
-  "reevaluate-idea.yml": "Yeniden değerlendirme",
-  "find-competitors.yml": "Rakip bulma",
 };
 
 const RANGES = [
@@ -123,7 +119,7 @@ export function DashboardPage() {
   const recentDevIdeas = useMemo(() => {
     if (!ideas) return [];
     return ideas
-      .filter((i) => i.status === "in_development" || i.status === "developed")
+      .filter((i) => isInDevelopmentFlow(i.status))
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .slice(0, 5);
   }, [ideas]);
@@ -240,7 +236,7 @@ export function DashboardPage() {
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{job.idea_name ?? "(silinmiş fikir)"}</span>
                     <span className="block text-xs text-muted-foreground">
-                      {JOB_LABELS[job.workflow] ?? job.workflow} · {formatDateTime(job.created_at)}
+                      {WORKFLOW_LABELS[job.workflow] ?? job.workflow} · {formatDateTime(job.created_at)}
                     </span>
                   </span>
                   <Badge className={`shrink-0 ${JOB_STATUS[job.status].className}`}>{JOB_STATUS[job.status].label}</Badge>
@@ -293,7 +289,7 @@ export function DashboardPage() {
               >
                 <span className="min-w-0 truncate font-medium">{idea.name}</span>
                 <Badge className={statusColorClasses(idea.status)}>
-                  {idea.status === "developed" ? "Geliştirildi" : "Geliştiriliyor"}
+                  {STATUS_LABELS[idea.status]}
                 </Badge>
               </Link>
             ))}
