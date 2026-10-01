@@ -205,3 +205,7 @@ SKIP_REDDIT=true pnpm collect-trends     # collect trends locally into scripts/o
 ## Status
 
 Idea generation, the UI, run history and the on-demand AI jobs are live. Next up: picking an idea and having Claude Code scaffold it into its own private repository, with GitHub Issues/Projects tracking and Slack notifications. See [`docs/PROJE.md`](docs/PROJE.md) (Turkish) for the full plan.
+
+## License
+
+[MIT](LICENSE)

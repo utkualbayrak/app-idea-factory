@@ -205,3 +205,7 @@ SKIP_REDDIT=true pnpm collect-trends     # trendleri yerelde scripts/output/ alt
 ## Durum
 
 Fikir üretimi, arayüz, çalışma geçmişi ve isteğe bağlı AI işleri canlıda. Sıradaki: bir fikri seçip Claude Code'a kendi özel reposunda iskeletini kurdurmak; GitHub Issues/Projects takibi ve Slack bildirimleriyle birlikte. Planın tamamı için [`docs/PROJE.md`](docs/PROJE.md).
+
+## Lisans
+
+[MIT](LICENSE)

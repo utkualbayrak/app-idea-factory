@@ -44,6 +44,7 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Cron tetikleme yetkisi (Grup 3, 2026-09-30) | Ayarlar ekranındaki "cron'u şimdi tetikle" butonu için ayrı bir token yerine mevcut `SKELETON_REPO_PAT`'e `workflow` scope'u eklendi (aynı token, yeni bir PAT yok). Worker'a `GH_WORKFLOW_DISPATCH_TOKEN` secret'ı olarak eklenmesi gerekiyor — bkz. CLAUDE.md "Grup 3 — what's live". |
 | Prompt sahipliği (2026-10-01) | `prompts/*.md` dosyalarını kullanıcı kendisi optimize ediyor. Claude bu dosyaların içeriğini değiştirmez veya geri almaz; kod tarafını prompt'ların çıktı sözleşmesine uyarlar. Bir prompt değişikliği gerekiyorsa önce sorar. |
 | Grup sonu teslim (2026-10-01) | Her grup sonunda typecheck/lint/build sonrası commit + push'u Claude yapar (push otomatik deploy eder). Varsa yeni migration push'tan önce remote'a uygulanır. Test kullanıcıda, prodda yapılır; Claude kendi arayüzünü Chrome ile test etmez. |
+| Lisans (2026-10-01) | Proje açık kaynak, MIT lisansı (`LICENSE`). Her iki README de lisansa bağlanıyor. |
 
 ## Bu kararların mimariye etkisi
 

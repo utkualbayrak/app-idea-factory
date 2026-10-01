@@ -302,7 +302,7 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   - tech stack and repo layout
   - a full **"run your own copy"** guide: every owner-specific value to replace, by file; the Access setup order (Access app before custom domain); every Worker/GitHub secret and its purpose; Claude GitHub App; migrations-before-push; first run
   - local dev commands and a short gotchas list
-  - No license file exists yet. That is the owner's call; don't add one unasked.
+  - Licensed MIT (`LICENSE`, added 2026-10-01 at the owner's request); both READMEs link it under "License"/"Lisans".
 - **`deploy.yml` now declares `permissions: contents: read`.** The other three workflows already declared their own.
 - **Repo protection ("orta" level, chosen by the user).** Applied via `gh api` after showing the user the exact commands:
   - a `main` branch ruleset blocking deletion and force-push, with **no** PR requirement, so direct pushes and auto-deploy keep working
