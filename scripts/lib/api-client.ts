@@ -250,3 +250,22 @@ export async function finalizeMaintenance(runId?: string): Promise<{ purged: num
     body: JSON.stringify({ run_id: runId }),
   });
 }
+
+// Grup 3: repo yokken kabul edilmiş özellik önerileri, iskelet kurulunca issue olur.
+export async function fetchPendingFeatureIssues(
+  ideaId: string,
+): Promise<{ id: string; title: string; body: string }[]> {
+  const body = await fetchJson<{ issues: { id: string; title: string; body: string }[] }>(
+    `${BASE_URL}/admin/ideas/${ideaId}/feature-issues`,
+    { headers: authHeaders() },
+  );
+  return body.issues;
+}
+
+export async function reportProposalIssue(proposalId: string, issueUrl: string): Promise<void> {
+  await fetchJson(`${BASE_URL}/admin/proposals/${proposalId}/issue`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ issue_url: issueUrl }),
+  });
+}

@@ -1,6 +1,6 @@
 import { appendFile, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { reportTaskBuild } from "./lib/api-client";
+import { fetchPendingFeatureIssues, reportProposalIssue, reportTaskBuild } from "./lib/api-client";
 import { gh, parseGithubUrl, type GhIssue, type GhRepo } from "./lib/github";
 import { taskParamsSchema, PLAN_DOCUMENT_FILES } from "./lib/task-schema";
 
@@ -12,6 +12,7 @@ import { taskParamsSchema, PLAN_DOCUMENT_FILES } from "./lib/task-schema";
 // - issue_url varsa o issue'ya yeni deneme yorumu düşülür; yoksa issue açılır.
 // - Adresler hemen API'ye bildirilir ki iş sonradan patlasa da tekrar deneme
 //   aynı repoyu bulsun.
+// - Repo yokken kabul edilmiş havuz bakımı özellik önerileri issue olarak açılır.
 // Sonuçlar $GITHUB_ENV'e yazılır: SKELETON_REPO (owner/name), SKELETON_ISSUE_NUMBER,
 // SKELETON_PLATFORM, SKELETON_NAME.
 interface IdeaFile {
@@ -141,6 +142,8 @@ async function main() {
 
   await reportTaskBuild({ idea_id: ideaId, repo_url: repo.html_url, issue_url: issue.html_url });
 
+  await openFeatureIssues(ideaId, repo.full_name);
+
   const githubEnv = process.env.GITHUB_ENV;
   if (githubEnv) {
     // İsim yalnızca commit mesajında kullanılıyor; satır sonu env dosyasını bozmasın.
@@ -150,6 +153,32 @@ async function main() {
       `SKELETON_REPO=${repo.full_name}\nSKELETON_ISSUE_NUMBER=${issue.number}\nSKELETON_PLATFORM=${params.platform}\nSKELETON_NAME=${safeName}\n`,
       "utf-8",
     );
+  }
+}
+
+// Havuz bakımının bu fikre önerdiği ve repo yokken kabul edilen özellikler.
+// İskeletten bağımsız: biri açılamazsa kurulum sürer, öneri issue'suz kalır ve
+// bir sonraki denemede yine açılmaya çalışılır.
+async function openFeatureIssues(ideaId: string, fullName: string) {
+  let pending: Awaited<ReturnType<typeof fetchPendingFeatureIssues>>;
+  try {
+    pending = await fetchPendingFeatureIssues(ideaId);
+  } catch (err) {
+    console.warn(`UYARI: bekleyen özellik önerileri okunamadı: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  for (const feature of pending) {
+    try {
+      const created = await gh<GhIssue>(`/repos/${fullName}/issues`, {
+        method: "POST",
+        body: JSON.stringify({ title: feature.title, body: feature.body }),
+      });
+      if (!created) throw new Error("issue açılamadı");
+      await reportProposalIssue(feature.id, created.html_url);
+      console.log(`Özellik önerisi issue'su açıldı: ${created.html_url}`);
+    } catch (err) {
+      console.warn(`UYARI: "${feature.title}" issue'su açılamadı: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }
 

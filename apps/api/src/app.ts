@@ -42,6 +42,7 @@ import {
   IDEA_JOB_STALE_MS,
   proposalsSubmitSchema,
   maintenanceFinalizeSchema,
+  proposalIssueSchema,
   maintenanceScore,
   ARCHIVE_SCORE_THRESHOLD,
   ARCHIVE_AFTER_RUNS,
@@ -2375,6 +2376,53 @@ app.post("/ideas/:id/restore", async (req, res) => {
     ok: true,
     dispatch_error: job.ok ? null : `Claude işi tetiklenemedi (GitHub HTTP ${job.status}); detay sayfasından tekrar deneyebilirsin.`,
   });
+});
+
+// Kabul edilmiş ama repo yokken issue'su açılamamış özellik önerileri
+// (workflow-only): build-skeleton.yml repo hazır olunca bunları issue olarak
+// açar. Başlık ve gövde burada üretilir ki kabul anında açılan issue'larla
+// aynı görünsünler.
+app.get("/admin/ideas/:id/feature-issues", requireWorkflowSecret, async (req, res) => {
+  const { results } = await db()
+    .prepare(
+      `SELECT * FROM pool_proposals
+       WHERE kind = 'feature' AND status = 'applied' AND issue_url IS NULL AND target_idea_id = ?1
+       ORDER BY decided_at`,
+    )
+    .bind(req.params.id)
+    .all<ProposalRow>();
+  const sources = new Map(
+    (await ideasByIds([...new Set(results.map((p) => (JSON.parse(p.source_ids) as string[])[0]))])).map((row) => [
+      row.id,
+      row,
+    ]),
+  );
+  res.json({
+    issues: results.flatMap((proposal) => {
+      const payload = JSON.parse(proposal.payload) as { title: string; description: string };
+      const source = sources.get((JSON.parse(proposal.source_ids) as string[])[0]);
+      return source
+        ? [{ id: proposal.id, title: payload.title, body: featureIssueBody(payload, proposal.reason, source) }]
+        : [{ id: proposal.id, title: payload.title, body: `${payload.description}\n\n**Neden:** ${proposal.reason}` }];
+    }),
+  });
+});
+
+app.patch("/admin/proposals/:id/issue", requireWorkflowSecret, async (req, res) => {
+  const parsed = proposalIssueSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+  const result = await db()
+    .prepare("UPDATE pool_proposals SET issue_url = ?1 WHERE id = ?2 AND kind = 'feature' AND issue_url IS NULL")
+    .bind(parsed.data.issue_url, req.params.id)
+    .run();
+  if (result.meta.changes === 0) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 export default app;

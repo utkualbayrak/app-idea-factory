@@ -26,6 +26,7 @@ App Idea Factory is a personal, fully automated idea pipeline that runs on free 
 4. **Lists them in a mobile-first web app** where you rate, annotate, filter, compare and shortlist ideas.
 5. **Runs background AI jobs on demand:** re-evaluate an idea in light of your notes, or search the web for real competing apps.
 6. **Turns a chosen idea into a project:** fill a short task form (platform, backend, auth, MVP features, design) and Claude writes four planning documents (PRD, screens & flows, tech plan, roadmap). You review and edit them in the app, then hit *Start development* — Claude Code builds a skeleton app from those documents in a new **private** GitHub repo and opens a tracking issue.
+7. **Keeps the pool tidy:** every few days (3 by default) Claude merges near-duplicate ideas into one, and suggests features to ideas already in development when a pool idea fits them better than a separate app. Merges of ideas you never touched apply automatically and can be undone; the rest wait for your approval. Ideas whose score stays below 7.00 for three maintenance runs are archived as a short summary and permanently deleted after a configurable period.
 
 > The UI and idea descriptions are in **Turkish**. Idea names are short English app names (e.g. *MealMate*). Prompts live in [`prompts/`](prompts) if you want to change the language or the scoring rubric.
 
@@ -43,8 +44,10 @@ App Idea Factory is a personal, fully automated idea pipeline that runs on free 
 | **Test** | Developed ideas waiting for or under testing. A test plan (testers, days, platforms, channel, scenarios, success criteria) starts a round; the result form records per-scenario outcomes, findings and the decision: approve, or send back to development with a reason |
 | **Ready to ship** | Ideas whose test was approved |
 | **Compare** | 2–4 ideas side by side, rate while comparing |
-| **Run history** | Daily generation runs (with every collected trend item) and per-idea jobs, with durations and log links |
-| **Settings** | Toggle trend sources, trigger the daily run manually |
+| **Proposals** | Pool-maintenance proposals: merges (sources with your notes and ratings, the merged idea, the reason) and feature suggestions for ideas in development. Approve, reject, or undo an applied merge; an accepted feature becomes an issue in the skeleton repo |
+| **Archive** | Ideas archived by pool maintenance (summary only), their deletion date, and *Restore* — Claude rewrites the missing fields from the summary |
+| **Run history** | Daily generation runs (with every collected trend item), per-idea jobs and pool-maintenance runs, with durations and log links |
+| **Settings** | Toggle trend sources, maintenance interval and deletion period, users, and a job runner that can start every workflow except deploy (with live status, locked while running) |
 
 ## Architecture
 
@@ -57,7 +60,7 @@ flowchart TD
 
     UI["React SPA<br/>web Worker (static assets)"] -->|"/api/* via service binding"| API["API Worker<br/>Express on Workers"]
     API <--> DB[("Cloudflare D1")]
-    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton · evaluate-idea"]
+    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton · evaluate-idea<br/>merge-ideas (pool maintenance)"]
     JOBS -->|"results + run status"| API
 
     ACCESS{{"Cloudflare Access<br/>(owner email only)"}} -.protects.- UI
@@ -84,7 +87,7 @@ apps/
   web/          React SPA + a tiny Worker that serves it and proxies /api/* to the API Worker
   api/          Express API Worker, D1 migrations (apps/api/migrations/*.sql)
 scripts/        Trend collectors, validation, API client used by the workflows
-prompts/        Instructions given to Claude Code (daily ideas, re-evaluation, competitors, planning docs, skeleton)
+prompts/        Instructions given to Claude Code (daily ideas, re-evaluation, competitors, evaluation, pool maintenance, planning docs, skeleton)
 config/         subreddits.json — which subreddits are collected
 .github/workflows/
   daily-ideas.yml        cron + manual: collect → generate → validate → submit
@@ -92,6 +95,8 @@ config/         subreddits.json — which subreddits are collected
   find-competitors.yml   on demand: web-search real competing apps
   plan-idea.yml          on "Develop": write the 4 planning documents
   build-skeleton.yml     on "Start development": private repo + issue + skeleton from the approved docs
+  evaluate-idea.yml      on demand: fill in and/or score a manually added or restored idea
+  merge-ideas.yml        daily check, runs every N days: merge near-duplicates, suggest features, archive and purge
   deploy.yml             push to main → deploy both Workers
 ```
 

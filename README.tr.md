@@ -26,6 +26,7 @@ App Idea Factory, tamamen ücretsiz planlar üzerinde çalışan kişisel ve oto
 4. **Mobil öncelikli bir web uygulamasında listeler:** puan ver, not al, filtrele, karşılaştır, kısa liste çıkar.
 5. **İstediğinde arka planda AI işi çalıştırır:** notlarına göre fikri yeniden değerlendirir ya da web'de gerçek rakip uygulamaları arar.
 6. **Seçtiğin fikri projeye dönüştürür:** kısa bir görev formu doldurursun (platform, backend, auth, MVP özellikleri, tasarım), Claude dört planlama belgesi yazar (PRD, ekranlar ve akışlar, teknik plan, yol haritası). Belgeleri uygulamada inceleyip düzenlersin, sonra *Geliştirmeye başla* dersin — Claude Code bu belgelere göre yeni bir **özel** GitHub reposunda uygulama iskeletini kurar ve takip için bir issue açar.
+7. **Havuzu düzenli tutar:** birkaç günde bir (varsayılan 3) Claude birbirine çok yakın fikirleri tek fikirde birleştirir; bir havuz fikri ayrı bir uygulamadan çok geliştirmedeki bir fikre uyuyorsa ona özellik önerir. Hiç dokunmadığın fikirlerin birleştirmesi otomatik uygulanır ve geri alınabilir; gerisi onayını bekler. Puanı üç bakım boyunca 7.00'ın altında kalan fikirler kısa bir özet olarak arşivlenir ve ayarlanabilir bir süre sonra kalıcı silinir.
 
 > Arayüz ve fikir açıklamaları **Türkçe**; fikir adları kısa İngilizce uygulama adları (örn. *MealMate*). Dili ya da puanlama ölçütlerini değiştirmek istersen talimatlar [`prompts/`](prompts) klasöründe.
 
@@ -43,8 +44,10 @@ App Idea Factory, tamamen ücretsiz planlar üzerinde çalışan kişisel ve oto
 | **Test** | Geliştirilmiş, test bekleyen ya da testi süren fikirler. Test planı (kişi, gün, platform, kanal, senaryolar, başarı kriterleri) bir tur başlatır; sonuç formu senaryo sonuçlarını, bulguları ve kararı kaydeder: onay ya da sebebiyle geliştirmeye geri gönderme |
 | **Dağıtıma hazır** | Testi onaylanmış fikirler |
 | **Karşılaştırma** | 2–4 fikir yan yana, karşılaştırırken puan verme |
-| **Çalışma geçmişi** | Günlük üretim çalışmaları (toplanan her trend öğesiyle) ve fikir bazlı işler; süre ve log linkleriyle |
-| **Ayarlar** | Trend kaynaklarını aç/kapat, günlük çalışmayı elle tetikle |
+| **Öneriler** | Havuz bakımının önerileri: birleştirmeler (notların ve puanlarınla kaynaklar, birleşik fikir, gerekçe) ve geliştirmedeki fikirlere özellik önerileri. Onayla, reddet ya da uygulanmış birleştirmeyi geri al; kabul edilen özellik iskelet reposunda issue olur |
+| **Arşiv** | Havuz bakımının arşivlediği fikirler (yalnızca özet), silinme tarihleri ve *Geri getir* — Claude eksik alanları özetten yeniden yazar |
+| **Çalışma geçmişi** | Günlük üretim çalışmaları (toplanan her trend öğesiyle), fikir bazlı işler ve havuz bakımı koşuları; süre ve log linkleriyle |
+| **Ayarlar** | Trend kaynaklarını aç/kapat, bakım aralığı ve silme süresi, kullanıcılar ve deploy dışındaki her workflow'u başlatabilen iş paneli (canlı durum, çalışırken kilitli) |
 
 ## Mimari
 
@@ -57,7 +60,7 @@ flowchart TD
 
     UI["React SPA<br/>web Worker (statik dosyalar)"] -->|"/api/* service binding ile"| API["API Worker<br/>Workers üzerinde Express"]
     API <--> DB[("Cloudflare D1")]
-    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton · evaluate-idea"]
+    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton · evaluate-idea<br/>merge-ideas (havuz bakımı)"]
     JOBS -->|"sonuç + iş durumu"| API
 
     ACCESS{{"Cloudflare Access<br/>(yalnızca sahibin e-postası)"}} -.korur.- UI
@@ -84,7 +87,7 @@ apps/
   web/          React SPA + onu sunan ve /api/* isteklerini API Worker'a ileten küçük bir Worker
   api/          Express API Worker, D1 migration'ları (apps/api/migrations/*.sql)
 scripts/        Workflow'ların kullandığı trend toplayıcılar, doğrulama, API istemcisi
-prompts/        Claude Code'a verilen talimatlar (günlük fikir, yeniden değerlendirme, rakipler, planlama belgeleri, iskelet)
+prompts/        Claude Code'a verilen talimatlar (günlük fikir, yeniden değerlendirme, rakipler, değerlendirme, havuz bakımı, planlama belgeleri, iskelet)
 config/         subreddits.json — hangi subreddit'lerin toplanacağı
 .github/workflows/
   daily-ideas.yml        cron + elle: topla → üret → doğrula → gönder
@@ -92,6 +95,8 @@ config/         subreddits.json — hangi subreddit'lerin toplanacağı
   find-competitors.yml   isteğe bağlı: web'de gerçek rakip uygulamaları ara
   plan-idea.yml          "Geliştir" ile: 4 planlama belgesini yaz
   build-skeleton.yml     "Geliştirmeye başla" ile: özel repo + issue + onaylı belgelerden iskelet
+  evaluate-idea.yml      isteğe bağlı: elle eklenen ya da arşivden dönen fikri doldur ve/veya puanla
+  merge-ideas.yml        her gün kontrol, N günde bir çalışır: yakın fikirleri birleştir, özellik öner, arşivle ve sil
   deploy.yml             main'e push → iki Worker'ı da deploy et
 ```
 

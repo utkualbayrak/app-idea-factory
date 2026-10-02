@@ -536,5 +536,9 @@ export function maintenanceScore(overall: number, userRating: number | null): nu
   return userRating == null ? overall : overall * 0.4 + userRating * 0.6;
 }
 
+// Grup 3: repo henüz yokken kabul edilen özellik önerisinin issue'su iskelet
+// kurulurken açılır (prepare-skeleton-repo.ts) ve adresi buraya yazılır.
+export const proposalIssueSchema = z.object({ issue_url: z.url() });
+
 export const maintenanceFinalizeSchema = z.object({ run_id: z.string().min(1).optional() });
 export type MergedIdea = z.infer<typeof mergedIdeaSchema>;

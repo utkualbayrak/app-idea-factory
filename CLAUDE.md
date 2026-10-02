@@ -454,7 +454,7 @@ Access lets several emails in now, so records keep **who last changed them**. Th
 
 ## Pool maintenance — Grup 1 (2026-10-03): backend, workflow, prompt draft
 
-Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wigderson.md` (groups 1, 2 UI, 2b archive, 3 issues). Decisions are the "Havuz bakımı" rows in `docs/PROJE.md`.
+Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wigderson.md` (groups 1, 2 UI, 2b archive, 3 issues — all done). Decisions are the "Havuz bakımı" rows in `docs/PROJE.md`.
 - **Migration `0016`** (ADD COLUMN + new tables only):
   - `ideas.merged_into_id`, `stale_runs`, `archived_at`, `deleted_at` (the last three are for Grup 2b; `deleted_at` is already stamped by `PATCH /ideas/:id`).
   - `cron_runs.kind` (`daily`/`merge`) + `summary`.
@@ -528,6 +528,13 @@ Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wi
   - `ArchivedBanner` on the detail page.
   - Settings has a "Kalıcı silme" select (30/60/90/180/365 days) plus a rule explanation.
   - Dashboard has an "Arşive yaklaşan" tile (12 tiles, 6 columns).
+
+## Pool maintenance — Grup 3 (2026-10-03): feature issues for repo-less ideas
+
+- A feature proposal accepted while the target has no skeleton repo yet stays `applied` with `issue_url = NULL`.
+- `prepare-skeleton-repo.ts` (`openFeatureIssues`) runs right after the repo and main issue are reported. It reads `GET /admin/ideas/:id/feature-issues` (workflow-only; the title and body come from the same `featureIssueBody()` as accept-time issues), opens each issue with `SKELETON_REPO_PAT`, and reports it back via `PATCH /admin/proposals/:id/issue`, which only fills an empty `issue_url`.
+- Failures only warn; the build continues and the pending ones are retried on the next build attempt.
+- All pool-maintenance groups (1, 2, 2b, 3) are done. READMEs (EN/TR) describe pool maintenance, the Proposals/Archive screens and the Settings job runner.
 
 ## What this project is
 
