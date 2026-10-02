@@ -129,7 +129,7 @@ npx wrangler d1 migrations apply app-idea-factory-db --remote
 
 | File | What to change |
 |---|---|
-| `apps/api/wrangler.jsonc` | `database_id`; the `routes` custom domain (or remove `routes` and set `"workers_dev": true`); `WEB_ORIGIN` (your web app URL(s), comma-separated) |
+| `apps/api/wrangler.jsonc` | `database_id`; the `routes` custom domain (or remove `routes` and set `"workers_dev": true`); `WEB_ORIGIN` (your web app URL(s), comma-separated); `ACCESS_TEAM_DOMAIN` (`<team>.cloudflareaccess.com`) and `ACCESS_AUDS` (the AUD tags of the web and API Access applications, comma-separated — used to verify the Access JWT for "last updated by") |
 | `apps/web/wrangler.jsonc` | `name` if you want a different Worker name; `services[0].service` must match the API Worker's `name` |
 | `apps/api/src/app.ts` | `GITHUB_REPO` → `<you>/app-idea-factory` (used to dispatch workflows) |
 | `scripts/lib/api-client.ts` | Default `BASE_URL` → your API URL (or set an `API_BASE_URL` env var in the workflows) |

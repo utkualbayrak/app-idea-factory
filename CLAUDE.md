@@ -425,6 +425,30 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   - `components/ui/dialog.tsx` was hand-written (shadcn new-york, same reason as `tabs.tsx`).
   - **`ideas.status_changed_at`** (migration `0013`) is written by a SQLite trigger (`ideas_status_changed_at`, fires on any status change) instead of in every status-changing code path; backfilled from the last `status_changed` activity or `created_at`. It is null for ideas inserted later whose status never changed, so the UI falls back to `created_at`. **Any future `ideas` rebuild must recreate this trigger.**
 
+## Last updated by — what's live (2026-10-02)
+
+Access lets several emails in now, so records keep **who last changed them**. There is no history or audit log, only the last change.
+- **Identity:** `apps/api/src/identity.ts` (`resolveActor`, registered globally after `express.json`) verifies the `Cf-Access-Jwt-Assertion` JWT with WebCrypto against `https://<ACCESS_TEAM_DOMAIN>/cdn-cgi/access/certs`. The keys are cached at module scope and refetched on an unknown `kid` or after 1 h.
+  - The result goes into `res.locals.actor` (read it with `actorOf(res)`):
+    - user login → the JWT's email, lowercased
+    - service token → `SYSTEM_ACTOR` (`"system"`)
+    - anything unverifiable → `null`
+  - Requests are never rejected here, since Access already guards the edge. `Cf-Access-Authenticated-User-Email` is deliberately ignored, because it can be spoofed.
+  - `ACCESS_AUDS` must list **both** AUD tags. Requests through the web Worker's `/api` proxy carry the web app's AUD, while direct `ideas-api` requests carry the API app's. The AUD shows up as `kid=` in the Access login redirect URL.
+  - Local dev has no JWT, so `DEV_ACTOR_EMAIL` in `.dev.vars` is used instead.
+- **Columns (migration `0014`, all `ADD COLUMN`):**
+  - On `ideas`: `updated_at`/`updated_by` (user changes only), plus `last_activity_by`. `stampActivity()` now takes a required `by` argument; workflow endpoints pass `SYSTEM_ACTOR`.
+  - `tasks.updated_by` stays consistent with `tasks.updated_at`, so workflow hooks write `'system'`.
+  - Also added: `task_documents.edited_by`, `dev_reports.updated_by`, `test_rounds.updated_by`, `app_settings.updated_by`, `repo_syncs.synced_by`.
+  - New `user_names` table (email → display name).
+  - **New user-facing write endpoints must stamp `actorOf(res)`.** Endpoints that change an idea's status also call `touchIdea()`. A `PATCH /ideas/:id` carrying only `mark_seen` stamps nothing.
+- **Names:**
+  - `GET/PUT/DELETE /admin/user-names[/:email]`. The `GET` also returns emails seen in any actor column, plus the caller's own email as `me`.
+  - D1 rejects long `UNION` chains ("too many terms in compound SELECT"), so these are separate `SELECT DISTINCT`s inside one `batch`.
+  - Web: `lib/user-names.tsx` (`UserNamesProvider` in `main.tsx`, `displayName()`: mapping → part before `@`, `system` → "Otomasyon"), `components/UpdatedBy.tsx`, and `components/UserNamesCard.tsx` on Settings.
+  - Shown on: the detail header, `DevelopmentCard`, doc tabs, `RepoSyncPanel`, `DevReportsCard`, `TestCard` rounds and the `ActivityBadge` tooltip.
+- Not per-user: `activity_seen_at` is still a single value per idea.
+
 ## What this project is
 
 A personal automation platform that:
@@ -447,7 +471,7 @@ These are locked in and should not be second-guessed without discussing with the
 - **Claude access:** Claude Pro subscription only, via the official Claude Code GitHub Action using an OAuth token from `claude setup-token`. **No direct Anthropic API usage/credits** — this is why all Claude work (including idea generation) runs inside GitHub Actions, never from the Worker.
 - **Scheduling:** daily idea generation via GitHub Actions `schedule` cron at 06:00 Türkiye time (`0 3 * * *` UTC); the Worker never runs the scheduler, only serves the API/DB.
 - **Scaffolding output:** each chosen idea gets its own **private** GitHub repo on the personal account; the main repo stays **public** (so Actions minutes are unlimited, but nothing secret can live in it).
-- **UI protection:** Cloudflare Access (Zero Trust free tier), restricted to the owner's email only.
+- **UI protection:** Cloudflare Access (Zero Trust free tier), restricted to the emails in the Access policy (owner-only at first; several users since 2026-10-02, see "Last updated by").
 - **No auto-development:** generated ideas are never developed automatically — a repo/skeleton is created only when the user explicitly clicks "Develop"; Claude Code only scaffolds, it does not continue building afterward.
 - **Scaffold trigger:** submitting the task form starts skeleton generation immediately, without a separate approval step.
 - **Ratings are cosmetic only:** user star ratings/notes never feed back into idea generation (only past idea *names* are used, for duplicate avoidance).
@@ -564,7 +588,7 @@ Private repo, name derived from the idea's English name (e.g. `mealmate-app`, su
 
 ## Security constraints
 
-- UI and API must sit behind Cloudflare Access; only the owner's email can log in.
+- UI and API must sit behind Cloudflare Access; only emails in the Access policy can log in.
 - GitHub Actions → API calls pass Cloudflare Access via a service token, plus an app-level shared-secret check.
 - Because the main repo is public:
   - No secrets, internal config beyond the API address, or personal data may be committed.

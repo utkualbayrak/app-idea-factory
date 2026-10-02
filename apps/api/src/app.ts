@@ -3,6 +3,7 @@ import cors from "cors";
 import { z } from "zod";
 import { env } from "cloudflare:workers";
 import { requireWorkflowSecret } from "./auth";
+import { actorOf, resolveActor, SYSTEM_ACTOR } from "./identity";
 import { fetchLastCommit, loadRepoState, RepoSyncError, syncRepo } from "./repo-sync";
 import { serializeDevReport, serializeTestRound, type DevReportRow, type TestRoundRow } from "./lifecycle";
 import {
@@ -33,6 +34,8 @@ import {
   settingsPatchSchema,
   cronRunPatchSchema,
   triggerWorkflowSchema,
+  userNameEmailSchema,
+  userNamePutSchema,
   reevaluationSchema,
   competitorsSubmitSchema,
   trendSnapshotsSubmitSchema,
@@ -80,6 +83,8 @@ app.use(
 // 1mb: planlama belgeleri (4 Markdown dosyası) express'in 100kb varsayılanını
 // aşabilir.
 app.use(express.json({ limit: "1mb" }));
+// "En son kim güncelledi": res.locals.actor (bkz. identity.ts).
+app.use(resolveActor);
 
 function db() {
   return (env as unknown as Env).DB;
@@ -89,11 +94,17 @@ function isIdeaWorkflow(workflow: string): workflow is IdeaWorkflow {
   return (IDEA_WORKFLOWS as readonly string[]).includes(workflow);
 }
 
-// Fikir listesindeki aktivite rozeti için (2. tur Grup C).
-function stampActivity(ideaId: string, kind: ActivityKind, at: string) {
+// Fikir listesindeki aktivite rozeti için (2. tur Grup C). by: isteği yapan
+// kişi, workflow sonuçlarında SYSTEM_ACTOR.
+function stampActivity(ideaId: string, kind: ActivityKind, at: string, by: string | null) {
   return db()
-    .prepare("UPDATE ideas SET last_activity_at = ?1, last_activity_kind = ?2 WHERE id = ?3")
-    .bind(at, kind, ideaId);
+    .prepare("UPDATE ideas SET last_activity_at = ?1, last_activity_kind = ?2, last_activity_by = ?3 WHERE id = ?4")
+    .bind(at, kind, by, ideaId);
+}
+
+// Fikirdeki "en son kim güncelledi" — yalnızca kullanıcı değişikliklerinde.
+function touchIdea(ideaId: string, at: string, by: string | null) {
+  return db().prepare("UPDATE ideas SET updated_at = ?1, updated_by = ?2 WHERE id = ?3").bind(at, by, ideaId);
 }
 
 // GitHub'ın workflow_dispatch API'si. GH_WORKFLOW_DISPATCH_TOKEN, 'workflow'
@@ -117,14 +128,14 @@ async function dispatchWorkflow(token: string, workflow: string, inputs: Record<
 // başlarken/biterken bu satırı günceller (scripts/start-workflow-run.ts,
 // finish-workflow-run.ts). GitHub tetiklemesi başarısızsa satır ve fikir
 // aktivitesi hemen 'failed' olur.
-async function queueIdeaJob(token: string, workflow: IdeaWorkflow, ideaId: string) {
+async function queueIdeaJob(token: string, workflow: IdeaWorkflow, ideaId: string, actor: string | null) {
   const now = new Date().toISOString();
   const jobId = crypto.randomUUID();
   await db().batch([
     db()
       .prepare("INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at) VALUES (?1, ?2, ?3, 'queued', ?4)")
       .bind(jobId, workflow, ideaId, now),
-    stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
+    stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now, actor),
   ]);
 
   const ghRes = await dispatchWorkflow(token, workflow, { idea_id: ideaId, job_id: jobId });
@@ -133,7 +144,7 @@ async function queueIdeaJob(token: string, workflow: IdeaWorkflow, ideaId: strin
       db()
         .prepare("UPDATE workflow_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3")
         .bind(now, `GitHub tetikleme başarısız (HTTP ${ghRes.status})`, jobId),
-      stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][2], now),
+      stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][2], now, SYSTEM_ACTOR),
     ]);
   }
   return { ok: ghRes.ok, status: ghRes.status, jobId };
@@ -296,15 +307,22 @@ app.patch("/ideas/:id", async (req, res) => {
   else if (Object.hasOwn(fields, "user_rating") && fields.user_rating !== existing.user_rating)
     activityKind = "rating_updated";
 
+  // Gerçek bir değişiklik varsa (aktivite damgalandıysa) "en son kim
+  // güncelledi" de damgalanır; yalnızca mark_seen bir okuma işaretidir.
+  const actor = actorOf(res);
   const lastActivityAt = activityKind ? now : existing.last_activity_at;
   const lastActivityKind = activityKind ?? existing.last_activity_kind;
+  const lastActivityBy = activityKind ? actor : existing.last_activity_by;
+  const updatedAt = activityKind ? now : existing.updated_at;
+  const updatedBy = activityKind ? actor : existing.updated_by;
   const activitySeenAt = markSeen ? now : existing.activity_seen_at;
 
   await db()
     .prepare(
       `UPDATE ideas SET user_rating = ?1, user_note = ?2, user_note_updated_at = ?3, status = ?4,
-         last_activity_at = ?5, last_activity_kind = ?6, activity_seen_at = ?7
-       WHERE id = ?8`,
+         last_activity_at = ?5, last_activity_kind = ?6, last_activity_by = ?7, activity_seen_at = ?8,
+         updated_at = ?9, updated_by = ?10
+       WHERE id = ?11`,
     )
     .bind(
       next.user_rating ?? null,
@@ -313,7 +331,10 @@ app.patch("/ideas/:id", async (req, res) => {
       next.status,
       lastActivityAt,
       lastActivityKind,
+      lastActivityBy,
       activitySeenAt,
+      updatedAt,
+      updatedBy,
       req.params.id,
     )
     .run();
@@ -324,7 +345,10 @@ app.patch("/ideas/:id", async (req, res) => {
       user_note_updated_at: userNoteUpdatedAt,
       last_activity_at: lastActivityAt,
       last_activity_kind: lastActivityKind,
+      last_activity_by: lastActivityBy,
       activity_seen_at: activitySeenAt,
+      updated_at: updatedAt,
+      updated_by: updatedBy,
     } as IdeaRow),
   });
 });
@@ -354,12 +378,81 @@ app.patch("/admin/settings", async (req, res) => {
   const now = new Date().toISOString();
   await db()
     .prepare(
-      `INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, ?3)
-       ON CONFLICT(key) DO UPDATE SET value = ?2, updated_at = ?3`,
+      `INSERT INTO app_settings (key, value, updated_at, updated_by) VALUES (?1, ?2, ?3, ?4)
+       ON CONFLICT(key) DO UPDATE SET value = ?2, updated_at = ?3, updated_by = ?4`,
     )
-    .bind(parsed.data.key, String(parsed.data.value), now)
+    .bind(parsed.data.key, String(parsed.data.value), now, actorOf(res))
     .run();
 
+  res.json({ ok: true });
+});
+
+// Ayarlar > Kullanıcılar: e-posta → görünen ad eşlemesi. Liste, eşlemesi
+// olanlarla birlikte kayıtlarda geçen ama henüz adlandırılmamış e-postaları da
+// içerir (display_name: null), böylece Ayarlar'da elle e-posta yazmak gerekmez.
+app.get("/admin/user-names", async (_req, res) => {
+  // D1 uzun UNION zincirlerini reddediyor (compound SELECT limiti); her
+  // sütun ayrı sorgu, tek batch.
+  const actorColumns = [
+    ["ideas", "updated_by"],
+    ["ideas", "last_activity_by"],
+    ["tasks", "updated_by"],
+    ["task_documents", "edited_by"],
+    ["dev_reports", "updated_by"],
+    ["test_rounds", "updated_by"],
+    ["app_settings", "updated_by"],
+    ["repo_syncs", "synced_by"],
+  ] as const;
+  const [mapped, ...seen] = await db().batch<{ email: string; display_name?: string; updated_at?: string }>([
+    db().prepare("SELECT email, display_name, updated_at FROM user_names"),
+    ...actorColumns.map(([table, column]) =>
+      db().prepare(`SELECT DISTINCT ${column} AS email FROM ${table} WHERE ${column} IS NOT NULL`),
+    ),
+  ]);
+
+  const users = new Map<string, { email: string; display_name: string | null; updated_at: string | null }>();
+  for (const { email } of seen.flatMap((r) => r.results)) {
+    if (email !== SYSTEM_ACTOR) users.set(email, { email, display_name: null, updated_at: null });
+  }
+  for (const row of mapped.results) {
+    users.set(row.email, { email: row.email, display_name: row.display_name ?? null, updated_at: row.updated_at ?? null });
+  }
+  // Kendi e-postan, henüz hiçbir şey değiştirmemiş olsan da listede olsun.
+  const me = actorOf(res);
+  if (me && me !== SYSTEM_ACTOR && !users.has(me)) users.set(me, { email: me, display_name: null, updated_at: null });
+
+  res.json({
+    users: [...users.values()].sort((a, b) => a.email.localeCompare(b.email)),
+    me,
+  });
+});
+
+app.put("/admin/user-names/:email", async (req, res) => {
+  const email = userNameEmailSchema.safeParse(req.params.email);
+  const parsed = userNamePutSchema.safeParse(req.body);
+  if (!email.success || !parsed.success) {
+    res.status(400).json({ error: "invalid_body" });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  await db()
+    .prepare(
+      `INSERT INTO user_names (email, display_name, updated_at) VALUES (?1, ?2, ?3)
+       ON CONFLICT(email) DO UPDATE SET display_name = ?2, updated_at = ?3`,
+    )
+    .bind(email.data, parsed.data.display_name, now)
+    .run();
+  res.json({ user: { email: email.data, display_name: parsed.data.display_name, updated_at: now } });
+});
+
+app.delete("/admin/user-names/:email", async (req, res) => {
+  const email = userNameEmailSchema.safeParse(req.params.email);
+  if (!email.success) {
+    res.status(400).json({ error: "invalid_body" });
+    return;
+  }
+  await db().prepare("DELETE FROM user_names WHERE email = ?1").bind(email.data).run();
   res.json({ ok: true });
 });
 
@@ -392,7 +485,7 @@ app.post("/admin/trigger-workflow", async (req, res) => {
       return;
     }
 
-    const job = await queueIdeaJob(GH_WORKFLOW_DISPATCH_TOKEN, workflow, ideaId);
+    const job = await queueIdeaJob(GH_WORKFLOW_DISPATCH_TOKEN, workflow, ideaId, actorOf(res));
     if (!job.ok) {
       res.status(502).json({ error: "github_dispatch_failed", status: job.status });
       return;
@@ -449,7 +542,7 @@ app.post("/admin/workflow-runs", requireWorkflowSecret, async (req, res) => {
         "INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at, started_at, run_url) VALUES (?1, ?2, ?3, 'running', ?4, ?4, ?5)",
       )
       .bind(id, workflow, ideaId, now, runUrl ?? null),
-    stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
+    stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now, SYSTEM_ACTOR),
   ];
   statements.push(...taskRunHooks(workflow, ideaId, "running", null, now));
   await db().batch(statements);
@@ -493,7 +586,7 @@ app.patch("/admin/workflow-runs/:id", requireWorkflowSecret, async (req, res) =>
     ];
     if (isIdeaWorkflow(run.workflow)) {
       const [, okKind, failKind] = WORKFLOW_ACTIVITY[run.workflow];
-      statements.push(stampActivity(run.idea_id, status === "success" ? okKind : failKind, now));
+      statements.push(stampActivity(run.idea_id, status === "success" ? okKind : failKind, now, SYSTEM_ACTOR));
     }
     statements.push(...taskRunHooks(run.workflow, run.idea_id, status, error ?? null, now));
     await db().batch(statements);
@@ -524,7 +617,7 @@ function taskRunHooks(
       return [
         db()
           .prepare(
-            "UPDATE tasks SET status = 'planning', error = NULL, updated_at = ?1 WHERE idea_id = ?2 AND status IN ('planning', 'planning_failed', 'ready')",
+            "UPDATE tasks SET status = 'planning', error = NULL, updated_at = ?1, updated_by = 'system' WHERE idea_id = ?2 AND status IN ('planning', 'planning_failed', 'ready')",
           )
           .bind(now, ideaId),
       ];
@@ -533,7 +626,7 @@ function taskRunHooks(
       return [
         db()
           .prepare(
-            "UPDATE tasks SET status = 'planning_failed', error = ?1, updated_at = ?2 WHERE idea_id = ?3 AND status = 'planning'",
+            "UPDATE tasks SET status = 'planning_failed', error = ?1, updated_at = ?2, updated_by = 'system' WHERE idea_id = ?3 AND status = 'planning'",
           )
           .bind(error ?? "Belge üretimi başarısız oldu.", now, ideaId),
       ];
@@ -544,7 +637,7 @@ function taskRunHooks(
       return [
         db()
           .prepare(
-            "UPDATE tasks SET status = 'running', error = NULL, updated_at = ?1 WHERE idea_id = ?2 AND status IN ('ready', 'queued', 'failed')",
+            "UPDATE tasks SET status = 'running', error = NULL, updated_at = ?1, updated_by = 'system' WHERE idea_id = ?2 AND status IN ('ready', 'queued', 'failed')",
           )
           .bind(now, ideaId),
         db()
@@ -556,7 +649,7 @@ function taskRunHooks(
       return [
         db()
           .prepare(
-            "UPDATE tasks SET status = 'failed', error = ?1, updated_at = ?2 WHERE idea_id = ?3 AND status IN ('queued', 'running')",
+            "UPDATE tasks SET status = 'failed', error = ?1, updated_at = ?2, updated_by = 'system' WHERE idea_id = ?3 AND status IN ('queued', 'running')",
           )
           .bind(error ?? "İskelet üretimi başarısız oldu.", now, ideaId),
       ];
@@ -602,6 +695,7 @@ app.post("/tasks", async (req, res) => {
   }
 
   const now = new Date().toISOString();
+  const actor = actorOf(res);
   const taskId = existing?.id ?? crypto.randomUUID();
   const jobId = crypto.randomUUID();
   const workflow = "plan-idea.yml";
@@ -609,20 +703,23 @@ app.post("/tasks", async (req, res) => {
   await db().batch([
     existing
       ? db()
-          .prepare("UPDATE tasks SET params = ?1, status = 'planning', error = NULL, updated_at = ?2 WHERE id = ?3")
-          .bind(JSON.stringify(params), now, taskId)
+          .prepare(
+            "UPDATE tasks SET params = ?1, status = 'planning', error = NULL, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
+          )
+          .bind(JSON.stringify(params), now, actor, taskId)
       : db()
           .prepare(
-            "INSERT INTO tasks (id, idea_id, created_at, updated_at, params, status) VALUES (?1, ?2, ?3, ?3, ?4, 'planning')",
+            "INSERT INTO tasks (id, idea_id, created_at, updated_at, updated_by, params, status) VALUES (?1, ?2, ?3, ?3, ?4, ?5, 'planning')",
           )
-          .bind(taskId, ideaId, now, JSON.stringify(params)),
+          .bind(taskId, ideaId, now, actor, JSON.stringify(params)),
     db()
       .prepare("UPDATE ideas SET status = 'awaiting_development' WHERE id = ?1")
       .bind(ideaId),
+    touchIdea(ideaId, now, actor),
     db()
       .prepare("INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at) VALUES (?1, ?2, ?3, 'queued', ?4)")
       .bind(jobId, workflow, ideaId, now),
-    stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
+    stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now, actor),
   ]);
 
   const ghRes = await dispatchWorkflow(GH_WORKFLOW_DISPATCH_TOKEN, workflow, { idea_id: ideaId, job_id: jobId });
@@ -633,9 +730,9 @@ app.post("/tasks", async (req, res) => {
         .prepare("UPDATE workflow_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3")
         .bind(now, error, jobId),
       db()
-        .prepare("UPDATE tasks SET status = 'planning_failed', error = ?1, updated_at = ?2 WHERE id = ?3")
+        .prepare("UPDATE tasks SET status = 'planning_failed', error = ?1, updated_at = ?2, updated_by = 'system' WHERE id = ?3")
         .bind(error, now, taskId),
-      stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][2], now),
+      stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][2], now, SYSTEM_ACTOR),
     ]);
     res.status(502).json({ error: "github_dispatch_failed", status: ghRes.status });
     return;
@@ -719,8 +816,8 @@ app.post("/ideas/manual", async (req, res) => {
   await db()
     .prepare(
       `INSERT INTO ideas (id, created_at, batch_date, name, one_liner, problem, target_audience, core_features,
-         monetization, category, inspiration_sources, tags, scores, status, origin, source_text)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, '[]', ?11, 'null', 'new', 'manual', ?12)`,
+         monetization, category, inspiration_sources, tags, scores, status, origin, source_text, updated_at, updated_by)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, '[]', ?11, 'null', 'new', 'manual', ?12, ?2, ?13)`,
     )
     .bind(
       id,
@@ -735,12 +832,13 @@ app.post("/ideas/manual", async (req, res) => {
       row.category,
       JSON.stringify(row.tags),
       row.source_text,
+      actorOf(res),
     )
     .run();
 
   let dispatchError: string | null = null;
   if (input.mode === "describe" && GH_WORKFLOW_DISPATCH_TOKEN) {
-    const job = await queueIdeaJob(GH_WORKFLOW_DISPATCH_TOKEN, "evaluate-idea.yml", id);
+    const job = await queueIdeaJob(GH_WORKFLOW_DISPATCH_TOKEN, "evaluate-idea.yml", id, actorOf(res));
     if (!job.ok) dispatchError = `Claude işi tetiklenemedi (GitHub HTTP ${job.status}); detay sayfasından tekrar deneyebilirsin.`;
   }
 
@@ -785,7 +883,7 @@ app.patch("/admin/ideas/:id/evaluation", requireWorkflowSecret, async (req, res)
         now,
         idea.id,
       ),
-    stampActivity(idea.id, "evaluated", now),
+    stampActivity(idea.id, "evaluated", now, SYSTEM_ACTOR),
   ];
   if (completing && fields) {
     statements.push(
@@ -859,6 +957,7 @@ app.post("/ideas/:id/dev-report", async (req, res) => {
   const round = replaceLatest ? latest.round : Math.max(latest?.round ?? 0, lastTest?.round ?? 0) + 1;
 
   const now = new Date().toISOString();
+  const actor = actorOf(res);
   const body = parsed.data;
   const values = [
     body.roadmap_source,
@@ -873,21 +972,22 @@ app.post("/ideas/:id/dev-report", async (req, res) => {
     ? db()
         .prepare(
           `UPDATE dev_reports SET roadmap_source = ?1, roadmap_items = ?2, missing_features = ?3, extra_features = ?4,
-             notes = ?5, updated_at = ?6 WHERE id = ?7`,
+             notes = ?5, updated_at = ?6, updated_by = ?7 WHERE id = ?8`,
         )
-        .bind(...values, now, reportId)
+        .bind(...values, now, actor, reportId)
     : db()
         .prepare(
           `INSERT INTO dev_reports (id, idea_id, round, created_at, updated_at, roadmap_source, roadmap_items,
-             missing_features, extra_features, notes)
-           VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6, ?7, ?8, ?9)`,
+             missing_features, extra_features, notes, updated_by)
+           VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
         )
-        .bind(reportId, idea.id, round, now, ...values);
+        .bind(reportId, idea.id, round, now, ...values, actor);
 
   await db().batch([
     write,
     db().prepare("UPDATE ideas SET status = 'awaiting_test' WHERE id = ?1").bind(idea.id),
-    stampActivity(idea.id, "status_changed", now),
+    touchIdea(idea.id, now, actor),
+    stampActivity(idea.id, "status_changed", now, actor),
   ]);
 
   const report = await db().prepare("SELECT * FROM dev_reports WHERE id = ?1").bind(reportId).first<DevReportRow>();
@@ -926,17 +1026,19 @@ app.post("/ideas/:id/test-rounds", async (req, res) => {
     .bind(req.params.id)
     .first<{ round: number | null }>();
   const now = new Date().toISOString();
+  const actor = actorOf(res);
   const roundId = crypto.randomUUID();
 
   await db().batch([
     db()
       .prepare(
-        `INSERT INTO test_rounds (id, idea_id, round, status, created_at, updated_at, plan)
-         VALUES (?1, ?2, ?3, 'running', ?4, ?4, ?5)`,
+        `INSERT INTO test_rounds (id, idea_id, round, status, created_at, updated_at, plan, updated_by)
+         VALUES (?1, ?2, ?3, 'running', ?4, ?4, ?5, ?6)`,
       )
-      .bind(roundId, req.params.id, report?.round ?? 1, now, JSON.stringify(parsed.data)),
+      .bind(roundId, req.params.id, report?.round ?? 1, now, JSON.stringify(parsed.data), actor),
     db().prepare("UPDATE ideas SET status = 'testing' WHERE id = ?1").bind(req.params.id),
-    stampActivity(req.params.id, "status_changed", now),
+    touchIdea(req.params.id, now, actor),
+    stampActivity(req.params.id, "status_changed", now, actor),
   ]);
 
   const row = await db().prepare("SELECT * FROM test_rounds WHERE id = ?1").bind(roundId).first<TestRoundRow>();
@@ -963,21 +1065,25 @@ app.post("/test-rounds/:id/result", async (req, res) => {
 
   const { result, decision, rework_reason: reworkReason } = parsed.data;
   const now = new Date().toISOString();
+  const actor = actorOf(res);
   await db().batch([
     db()
       .prepare(
-        `UPDATE test_rounds SET status = ?1, result = ?2, rework_reason = ?3, finished_at = ?4, updated_at = ?4
-         WHERE id = ?5`,
+        `UPDATE test_rounds SET status = ?1, result = ?2, rework_reason = ?3, finished_at = ?4, updated_at = ?4,
+           updated_by = ?5
+         WHERE id = ?6`,
       )
       .bind(
         decision,
         JSON.stringify(result),
         decision === "rework" && reworkReason ? JSON.stringify(reworkReason) : null,
         now,
+        actor,
         round.id,
       ),
     db().prepare("UPDATE ideas SET status = ?1 WHERE id = ?2").bind(decision, round.idea_id),
-    stampActivity(round.idea_id, "status_changed", now),
+    touchIdea(round.idea_id, now, actor),
+    stampActivity(round.idea_id, "status_changed", now, actor),
   ]);
 
   const row = await db().prepare("SELECT * FROM test_rounds WHERE id = ?1").bind(round.id).first<TestRoundRow>();
@@ -992,12 +1098,16 @@ app.post("/test-rounds/:id/cancel", async (req, res) => {
     return;
   }
   const now = new Date().toISOString();
+  const actor = actorOf(res);
   await db().batch([
     db()
-      .prepare("UPDATE test_rounds SET status = 'cancelled', finished_at = ?1, updated_at = ?1 WHERE id = ?2")
-      .bind(now, round.id),
+      .prepare(
+        "UPDATE test_rounds SET status = 'cancelled', finished_at = ?1, updated_at = ?1, updated_by = ?2 WHERE id = ?3",
+      )
+      .bind(now, actor, round.id),
     db().prepare("UPDATE ideas SET status = 'awaiting_test' WHERE id = ?1").bind(round.idea_id),
-    stampActivity(round.idea_id, "status_changed", now),
+    touchIdea(round.idea_id, now, actor),
+    stampActivity(round.idea_id, "status_changed", now, actor),
   ]);
   res.json({ ok: true });
 });
@@ -1046,7 +1156,7 @@ app.post("/tasks/:id/sync", async (req, res) => {
   }
 
   try {
-    await syncRepo(db(), GH_WORKFLOW_DISPATCH_TOKEN, task.id, task.repo_url);
+    await syncRepo(db(), GH_WORKFLOW_DISPATCH_TOKEN, task.id, task.repo_url, actorOf(res));
   } catch (err) {
     if (err instanceof RepoSyncError) {
       res.status(502).json({ error: "sync_failed", message: err.message });
@@ -1087,10 +1197,10 @@ app.post("/admin/tasks/documents", requireWorkflowSecret, async (req, res) => {
         .bind(task.id, kind, documents[kind], now),
     ),
     db()
-      .prepare("UPDATE tasks SET status = 'ready', error = NULL, updated_at = ?1 WHERE id = ?2")
+      .prepare("UPDATE tasks SET status = 'ready', error = NULL, updated_at = ?1, updated_by = 'system' WHERE id = ?2")
       .bind(now, task.id),
     // job_id'siz (elle) çalıştırılsa da rozet güncellensin.
-    stampActivity(ideaId, "planned", now),
+    stampActivity(ideaId, "planned", now, SYSTEM_ACTOR),
   ]);
 
   res.status(201).json({ ok: true });
@@ -1118,8 +1228,10 @@ app.patch("/tasks/:id/documents/:kind", async (req, res) => {
 
   const now = new Date().toISOString();
   const result = await db()
-    .prepare("UPDATE task_documents SET content = ?1, user_edited_at = ?2 WHERE task_id = ?3 AND kind = ?4")
-    .bind(parsed.data.content, now, task.id, kind)
+    .prepare(
+      "UPDATE task_documents SET content = ?1, user_edited_at = ?2, edited_by = ?3 WHERE task_id = ?4 AND kind = ?5",
+    )
+    .bind(parsed.data.content, now, actorOf(res), task.id, kind)
     .run();
   if (result.meta.changes === 0) {
     res.status(404).json({ error: "document_not_found" });
@@ -1163,18 +1275,20 @@ app.post("/tasks/:id/build", async (req, res) => {
   const idea = await db().prepare("SELECT status FROM ideas WHERE id = ?1").bind(task.idea_id).first<{ status: string }>();
 
   const now = new Date().toISOString();
+  const actor = actorOf(res);
   const jobId = crypto.randomUUID();
   const workflow = "build-skeleton.yml";
 
   await db().batch([
     db()
-      .prepare("UPDATE tasks SET status = 'queued', error = NULL, updated_at = ?1 WHERE id = ?2")
-      .bind(now, task.id),
+      .prepare("UPDATE tasks SET status = 'queued', error = NULL, updated_at = ?1, updated_by = ?2 WHERE id = ?3")
+      .bind(now, actor, task.id),
     db().prepare("UPDATE ideas SET status = 'in_development' WHERE id = ?1").bind(task.idea_id),
+    touchIdea(task.idea_id, now, actor),
     db()
       .prepare("INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at) VALUES (?1, ?2, ?3, 'queued', ?4)")
       .bind(jobId, workflow, task.idea_id, now),
-    stampActivity(task.idea_id, WORKFLOW_ACTIVITY[workflow][0], now),
+    stampActivity(task.idea_id, WORKFLOW_ACTIVITY[workflow][0], now, actor),
   ]);
 
   const ghRes = await dispatchWorkflow(GH_WORKFLOW_DISPATCH_TOKEN, workflow, { idea_id: task.idea_id, job_id: jobId });
@@ -1186,12 +1300,12 @@ app.post("/tasks/:id/build", async (req, res) => {
         .prepare("UPDATE workflow_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3")
         .bind(now, error, jobId),
       db()
-        .prepare("UPDATE tasks SET status = ?1, error = ?2, updated_at = ?3 WHERE id = ?4")
+        .prepare("UPDATE tasks SET status = ?1, error = ?2, updated_at = ?3, updated_by = 'system' WHERE id = ?4")
         .bind(task.status, error, now, task.id),
       db()
         .prepare("UPDATE ideas SET status = ?1 WHERE id = ?2")
         .bind(idea?.status ?? "awaiting_development", task.idea_id),
-      stampActivity(task.idea_id, WORKFLOW_ACTIVITY[workflow][2], now),
+      stampActivity(task.idea_id, WORKFLOW_ACTIVITY[workflow][2], now, SYSTEM_ACTOR),
     ]);
     res.status(502).json({ error: "github_dispatch_failed", status: ghRes.status });
     return;
@@ -1221,13 +1335,14 @@ app.patch("/admin/tasks/build", requireWorkflowSecret, async (req, res) => {
     db()
       .prepare(
         `UPDATE tasks SET repo_url = COALESCE(?1, repo_url), issue_url = COALESCE(?2, issue_url),
-           status = COALESCE(?3, status), error = CASE WHEN ?3 IS NULL THEN error ELSE NULL END, updated_at = ?4
+           status = COALESCE(?3, status), error = CASE WHEN ?3 IS NULL THEN error ELSE NULL END, updated_at = ?4,
+           updated_by = 'system'
          WHERE id = ?5`,
       )
       .bind(repoUrl ?? null, issueUrl ?? null, status ?? null, now, task.id),
   ];
   // job_id'siz (elle) çalıştırılsa da rozet güncellensin.
-  if (status === "done") statements.push(stampActivity(ideaId, "skeleton_built", now));
+  if (status === "done") statements.push(stampActivity(ideaId, "skeleton_built", now, SYSTEM_ACTOR));
   await db().batch(statements);
 
   res.json({ ok: true });
@@ -1302,7 +1417,7 @@ app.patch("/admin/ideas/:id/reevaluate", requireWorkflowSecret, async (req, res)
   await db()
     .prepare(
       `UPDATE ideas SET scores = ?1, tags = ?2, last_reevaluated_at = ?3, last_reevaluation_summary = ?4,
-         last_activity_at = ?3, last_activity_kind = 'reevaluated'
+         last_activity_at = ?3, last_activity_kind = 'reevaluated', last_activity_by = 'system'
        WHERE id = ?5`,
     )
     .bind(JSON.stringify(parsed.data.scores), tags, now, summary, req.params.id)
@@ -1317,6 +1432,7 @@ app.patch("/admin/ideas/:id/reevaluate", requireWorkflowSecret, async (req, res)
       last_reevaluation_summary: summary,
       last_activity_at: now,
       last_activity_kind: "reevaluated",
+      last_activity_by: SYSTEM_ACTOR,
     }),
   });
 });
@@ -1351,7 +1467,7 @@ app.post("/admin/competitors", requireWorkflowSecret, async (req, res) => {
         .bind(crypto.randomUUID(), idea_id, c.app_name, c.url, c.similarity, c.note, now),
     ),
     // job_id'siz (örn. GitHub arayüzünden elle) çalıştırılsa da rozet güncellensin.
-    stampActivity(idea_id, "competitors_found", now),
+    stampActivity(idea_id, "competitors_found", now, SYSTEM_ACTOR),
   ];
   await db().batch(statements);
 

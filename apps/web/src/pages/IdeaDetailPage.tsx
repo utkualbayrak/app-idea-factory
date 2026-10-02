@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { ActivityBadge } from "@/components/ActivityBadge";
 import { IdeaStatusBadge } from "@/components/IdeaStatusBadge";
+import { UpdatedBy } from "@/components/UpdatedBy";
 import { isActivityUnread } from "@/lib/activity";
 import { ScoreSlider } from "@/components/ScoreSlider";
 import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
@@ -235,6 +236,7 @@ export function IdeaDetailPage() {
         </div>
         <p className="mt-1 text-muted-foreground">{idea.one_liner}</p>
       </div>
+      <UpdatedBy by={idea.updated_by} at={idea.updated_at} className="-mt-3" />
 
       {idea.status === "rework" && <ReworkBanner rounds={testRounds} />}
 

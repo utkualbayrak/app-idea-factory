@@ -30,6 +30,7 @@ export interface RepoSyncRow {
   commits: string;
   changes: string;
   pending_count: number;
+  synced_by: string | null;
 }
 
 export interface RepoFileRow {
@@ -51,6 +52,7 @@ export function serializeRepoSync(row: RepoSyncRow) {
     commits: JSON.parse(row.commits) as RepoCommit[],
     changes: JSON.parse(row.changes) as RepoChange[],
     pending_count: row.pending_count,
+    synced_by: row.synced_by,
   };
 }
 
@@ -105,7 +107,7 @@ async function githubJson<T>(token: string, path: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-export async function syncRepo(db: D1Database, token: string, taskId: string, repoUrl: string) {
+export async function syncRepo(db: D1Database, token: string, taskId: string, repoUrl: string, actor: string | null) {
   const parsed = parseRepoUrl(repoUrl);
   if (!parsed) throw new RepoSyncError(`Repo adresi anlaşılamadı: ${repoUrl}`);
   const base = `/repos/${parsed.owner}/${parsed.repo}`;
@@ -187,8 +189,9 @@ export async function syncRepo(db: D1Database, token: string, taskId: string, re
   statements.push(
     db
       .prepare(
-        `INSERT INTO repo_syncs (id, task_id, synced_at, head_sha, previous_head_sha, commits, changes, pending_count)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+        `INSERT INTO repo_syncs (id, task_id, synced_at, head_sha, previous_head_sha, commits, changes, pending_count,
+           synced_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
       )
       .bind(
         crypto.randomUUID(),
@@ -199,6 +202,7 @@ export async function syncRepo(db: D1Database, token: string, taskId: string, re
         JSON.stringify(commits),
         JSON.stringify(changes.sort((a, b) => a.path.localeCompare(b.path))),
         pendingCount,
+        actor,
       ),
   );
 

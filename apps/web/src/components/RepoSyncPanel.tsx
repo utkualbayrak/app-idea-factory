@@ -6,6 +6,7 @@ import { DiffView } from "@/components/DiffView";
 import { Markdown } from "@/components/Markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useUserNames } from "@/lib/user-names";
 
 const CHANGE_LABELS: Record<RepoChange["change"], string> = {
   added: "Yeni",
@@ -31,6 +32,7 @@ export function RepoSyncPanel({
   repo: RepoState | null;
   onSynced: (repo: RepoState) => void;
 }) {
+  const { displayName } = useUserNames();
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sync = repo?.last_sync ?? null;
@@ -62,7 +64,7 @@ export function RepoSyncPanel({
           <p className="text-sm font-medium">Repo senkronu</p>
           <p className="text-xs text-muted-foreground">
             {sync
-              ? `Son senkron: ${formatDateTime(sync.synced_at)}${sync.head_sha ? ` · ${sync.head_sha.slice(0, 7)}` : ""}`
+              ? `Son senkron: ${formatDateTime(sync.synced_at)}${sync.synced_by ? ` (${displayName(sync.synced_by)})` : ""}${sync.head_sha ? ` · ${sync.head_sha.slice(0, 7)}` : ""}`
               : "Henüz senkronlanmadı. Repodaki son commit'ler ve md dosyaları buraya çekilir."}
           </p>
         </div>

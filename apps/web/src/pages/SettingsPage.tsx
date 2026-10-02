@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchSettings, patchSettings, type SourceSettingKey } from "@/lib/api";
 import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
+import { UserNamesCard } from "@/components/UserNamesCard";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -35,7 +36,7 @@ export function SettingsPage() {
     }
   }
 
-  const header = <PageHeader title="Ayarlar" description="Trend kaynakları ve günlük fikir üretimi." />;
+  const header = <PageHeader title="Ayarlar" description="Trend kaynakları, günlük fikir üretimi ve kullanıcılar." />;
 
   if (error)
     return (
@@ -96,6 +97,8 @@ export function SettingsPage() {
           />
         </CardContent>
       </Card>
+
+      <UserNamesCard />
     </div>
   );
 }

@@ -1,2 +1,4 @@
 WORKFLOW_API_SHARED_SECRET=local-dev-secret
 WEB_ORIGIN=http://localhost:5173
+# Local dev: Access JWT olmadığı için "en son kim güncelledi" bu e-postayla damgalanır.
+DEV_ACTOR_EMAIL=you@example.com

@@ -25,7 +25,7 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Ana repo görünürlüğü | Herkese açık (public). GitHub Actions dakikaları sınırsız; kod ve workflow logları herkese görünür. |
 | İskelet repoları | Özel (private) |
 | Dil | TypeScript (frontend, API ve betikler) |
-| Arayüz koruması | Cloudflare Access (Zero Trust ücretsiz plan), yalnızca sahibin e-postası |
+| Arayüz koruması | Cloudflare Access (Zero Trust ücretsiz plan). Başta yalnızca sahibin e-postasıydı; 2026-10-02 itibarıyla Access politikasındaki birden fazla e-postaya açık (bkz. "En son kim güncelledi"). |
 | Fikir üretim saati | Her gün 06:00 Türkiye saati (03:00 UTC, cron `0 3 * * *`) |
 | Geliştirme kapsamı | Üretilen fikirlerin hiçbiri otomatik geliştirilmez. Repo ve iskelet yalnızca kullanıcının "Geliştir" dediği fikirler için oluşturulur. |
 | Geliştir tetikleme | ~~Görev formu gönderilince iskelet üretimi onay beklemeden otomatik başlar.~~ Faz 3'te değişti: önce planlama belgeleri üretilir, iskelet kullanıcı "Geliştirmeye başla" deyince kurulur (bkz. "Geliştir akışı"). Claude Code yalnızca iskeleti kurar; iskeletten sonra geliştirmeye kendiliğinden devam etmez. |
@@ -55,6 +55,7 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Test turu iptali (2026-10-02) | Yarıda kalan test turu iptal edilebilir: tur `cancelled` olarak kalır, fikir `awaiting_test`'e döner. |
 | Manuel fikir girişi (2026-10-02) | İki yol: (a) tüm alanları formla girmek, puanlar boş kalır, sonra "Claude ile değerlendir"; (b) serbest, ayrıntılı bir açıklama yazmak, Claude bunu fikir şemasına uyarlar, alanları doldurur ve puanlar. Kaynak `ideas.origin` (`cron`/`manual`) ile ayrılır. Gereken prompt'u Claude taslak olarak yazar, kullanıcı inceler. |
 | Hedef platform (2026-10-02) | Fikir başına tek repo. Görev formuna hedef (iOS, Android ya da ikisi) eklenir; native seçenekler hedefi kendisi belirler, Expo/Flutter'da seçilebilir. |
+| En son kim güncelledi (2026-10-02) | Uygulama birden fazla e-postayla kullanılıyor. Kayıtlarda yalnızca "en son kim, ne zaman güncelledi" tutulur, değişiklik geçmişi/audit log yok. Kimlik Access JWT'sinden doğrulanarak alınır (başlığa körü körüne güvenilmez), workflow yazımları "Otomasyon" görünür. Kişiler arayüzde Ayarlar > Kullanıcılar'da girilen adla, ad yoksa e-postanın @ öncesiyle görünür. Maliyet: 0 (yeni sütunlar aynı satır yazımında). Aktivite rozetinin "görüldü" bilgisi hâlâ fikir başına tek, kullanıcı başına değil. |
 | Gesture ipuçları (2026-10-02) | `plan-idea.md`'deki `screens.md`'ye uygunsa "etkileşim / gesture notları" bölümü eklenir (zorunlu değil). Prompt metni kullanıcıya onaylatılır. |
 
 ## Bu kararların mimariye etkisi
@@ -236,7 +237,7 @@ Puanlar 0.00-10.00 arası, yalnızca 0.25'in katları (bkz. "Kesinleşen kararla
 
 ## Güvenlik
 
-- Arayüz ve API Cloudflare Access arkasında olmalı; yalnızca sahibin e-postası giriş yapabilir.
+- Arayüz ve API Cloudflare Access arkasında olmalı; yalnızca Access politikasındaki e-postalar giriş yapabilir.
 - GitHub Actions'ın API'ye yaptığı çağrılar Access'i Cloudflare Access service token ile geçer; ayrıca uygulama seviyesinde paylaşılan anahtar kontrolü yapılır.
 - Ana repo açık olduğu için:
   - Hiçbir gizli bilgi, API adresi dışındaki iç yapılandırma veya kişisel veri repoya yazılmaz.

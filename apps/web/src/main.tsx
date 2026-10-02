@@ -5,14 +5,17 @@ import "./index.css";
 import App from "./App.tsx";
 import { ThemeProvider } from "@/components/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { UserNamesProvider } from "@/lib/user-names";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider>
       <TooltipProvider>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
+        <UserNamesProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </UserNamesProvider>
       </TooltipProvider>
     </ThemeProvider>
   </StrictMode>,

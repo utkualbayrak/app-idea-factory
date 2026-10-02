@@ -12,6 +12,7 @@ import {
   type ActivityIdea,
 } from "@/lib/activity";
 import { cn } from "@/lib/utils";
+import { useUserNames } from "@/lib/user-names";
 import type { IdeaStatus } from "@/lib/api";
 import { COMMIT_DATE_STATUSES } from "@/lib/idea-colors";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ export function ActivityBadge({
 }) {
   // Render başına sabit "şimdi" (lazy init — render sırasında Date.now() çağırmamak için).
   const [now] = useState(() => Date.now());
+  const { displayName } = useUserNames();
   const { last_activity_at: at, last_activity_kind: kind } = idea;
   if (!at || !kind) return null;
   // Üzerinde çalışılan fikirde "İskelet hazır" görüldükten sonra bayat bilgi:
@@ -83,6 +85,7 @@ export function ActivityBadge({
       </TooltipTrigger>
       <TooltipContent>
         {formatDateTime(at)}
+        {idea.last_activity_by && ` · ${displayName(idea.last_activity_by)}`}
         {stuck && " — 1 saattir sonuç gelmedi, Çalışma geçmişine bak"}
         {unread && " — henüz görülmedi"}
       </TooltipContent>

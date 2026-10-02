@@ -129,7 +129,7 @@ npx wrangler d1 migrations apply app-idea-factory-db --remote
 
 | Dosya | Ne değişecek |
 |---|---|
-| `apps/api/wrangler.jsonc` | `database_id`; `routes` altındaki özel alan adı (ya da `routes`'u silip `"workers_dev": true` ekle); `WEB_ORIGIN` (web uygulamanın adres(ler)i, virgülle ayrılmış) |
+| `apps/api/wrangler.jsonc` | `database_id`; `routes` altındaki özel alan adı (ya da `routes`'u silip `"workers_dev": true` ekle); `WEB_ORIGIN` (web uygulamanın adres(ler)i, virgülle ayrılmış); `ACCESS_TEAM_DOMAIN` (`<takım>.cloudflareaccess.com`) ve `ACCESS_AUDS` (web ve API Access uygulamalarının AUD tag'leri, virgülle ayrılmış — "en son kim güncelledi" için Access JWT'sini doğrulamakta kullanılır) |
 | `apps/web/wrangler.jsonc` | Farklı bir Worker adı istiyorsan `name`; `services[0].service` API Worker'ın `name`'iyle aynı olmalı |
 | `apps/api/src/app.ts` | `GITHUB_REPO` → `<sen>/app-idea-factory` (workflow tetiklemek için) |
 | `scripts/lib/api-client.ts` | Varsayılan `BASE_URL` → kendi API adresin (ya da workflow'larda `API_BASE_URL` env değişkeni ver) |

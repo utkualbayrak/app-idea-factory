@@ -11,7 +11,12 @@
     }
   ],
   "vars": {
-    "WEB_ORIGIN": "https://ideas.utkualbayrak.dev,https://app-idea-factory.utkualbayrakrak.workers.dev"
+    "WEB_ORIGIN": "https://ideas.utkualbayrak.dev,https://app-idea-factory.utkualbayrakrak.workers.dev",
+    // "En son kim güncelledi" için Access JWT doğrulaması (src/identity.ts).
+    // AUD'lar: web uygulaması (/api proxy'si) ve API uygulaması (doğrudan) —
+    // Zero Trust > Access > Applications > uygulama > Overview > "Application Audience (AUD) Tag".
+    "ACCESS_TEAM_DOMAIN": "utkualbayrakrak.cloudflareaccess.com",
+    "ACCESS_AUDS": "d9c389f7905dc7c1b773161375b94fd3b9baa0cf381ab40783d67b3de613816d,b56c603b20019a8a7324aa15bb909cc2d46c55e0f8e2129e40d0eaf51c9cfa7f"
   },
   "d1_databases": [
     {

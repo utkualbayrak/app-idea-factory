@@ -38,6 +38,11 @@ export interface IdeaRow {
   source_text: string | null;
   /** 0013 trigger'ı yazar; o tarihten sonra eklenip durumu hiç değişmemiş fikirde null. */
   status_changed_at: string | null;
+  /** 0014: yalnızca kullanıcı değişiklikleri; eski satırlarda null. */
+  updated_at: string | null;
+  updated_by: string | null;
+  /** Aktiviteyi kim tetikledi (e-posta ya da 'system'). */
+  last_activity_by: string | null;
 }
 
 export interface Idea
@@ -58,6 +63,7 @@ export function serializeIdea(row: IdeaRow): Idea {
     last_activity_at: toUtcIso(row.last_activity_at),
     activity_seen_at: toUtcIso(row.activity_seen_at),
     status_changed_at: toUtcIso(row.status_changed_at),
+    updated_at: toUtcIso(row.updated_at),
     core_features: JSON.parse(row.core_features),
     inspiration_sources: JSON.parse(row.inspiration_sources),
     tags: JSON.parse(row.tags),
@@ -143,6 +149,7 @@ export interface TaskRow {
   project_item_id: string | null;
   workflow_run_id: string | null;
   error: string | null;
+  updated_by: string | null;
 }
 
 export interface Task extends Omit<TaskRow, "params"> {
@@ -170,6 +177,7 @@ export interface TaskDocumentRow {
   content: string;
   generated_at: string;
   user_edited_at: string | null;
+  edited_by: string | null;
 }
 
 export function serializeTaskDocument(row: TaskDocumentRow): TaskDocumentRow {

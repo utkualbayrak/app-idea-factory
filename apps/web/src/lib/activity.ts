@@ -53,7 +53,8 @@ export const FAILED_KINDS: ActivityKind[] = [
   "evaluate_failed",
 ];
 
-export type ActivityIdea = Pick<Idea, "last_activity_at" | "last_activity_kind" | "activity_seen_at">;
+export type ActivityIdea = Pick<Idea, "last_activity_at" | "last_activity_kind" | "activity_seen_at"> &
+  Partial<Pick<Idea, "last_activity_by">>;
 
 // Okunmamış = arka plan işinin sonucu (başarılı/başarısız) geldi, kullanıcı
 // o andan beri detay sayfasını açmadı, ve 7 günden eski değil. Kullanıcının

@@ -19,6 +19,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useUserNames } from "@/lib/user-names";
 
 // Fikir detayında test süreci: başlat / sonuç gir / iptal ve geçmiş turlar.
 export function TestCard({
@@ -113,6 +114,7 @@ export function TestCard({
 
 function RoundBlock({ round }: { round: TestRound }) {
   const { plan, result } = round;
+  const { displayName } = useUserNames();
   const plannedEnd = addDaysIso(plan.start_date, plan.duration_days - 1);
   const elapsed = Math.min(plan.duration_days, Math.max(0, daysBetweenIso(plan.start_date, todayIso()) + 1));
 
@@ -125,6 +127,7 @@ function RoundBlock({ round }: { round: TestRound }) {
         </div>
         <span className="text-xs text-muted-foreground">
           {round.finished_at ? `Kapandı ${formatDateTime(round.finished_at)}` : `Açıldı ${formatDateTime(round.created_at)}`}
+          {round.updated_by && ` · ${displayName(round.updated_by)}`}
         </span>
       </div>
 

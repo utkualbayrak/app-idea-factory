@@ -56,6 +56,11 @@ export interface Idea {
   source_text: string | null;
   /** Son durum değişikliği; null ise durum oluşturulduğundan beri aynı (created_at'e bak). */
   status_changed_at: string | null;
+  /** Son kullanıcı değişikliği (e-posta); Claude'un sonuçları burada değil. */
+  updated_at: string | null;
+  updated_by: string | null;
+  /** Son aktiviteyi kim tetikledi: e-posta ya da "system". */
+  last_activity_by: string | null;
 }
 
 // apps/api/src/schema.ts ACTIVITY_KINDS ile aynı.
@@ -137,6 +142,29 @@ export function fetchSettings(): Promise<{ settings: Record<SourceSettingKey, bo
 
 export function patchSettings(key: SourceSettingKey, value: boolean): Promise<{ ok: true }> {
   return request("/admin/settings", { method: "PATCH", body: JSON.stringify({ key, value }) });
+}
+
+// Ayarlar > Kullanıcılar: Access e-postası → görünen ad. display_name null:
+// kayıtlarda geçen ama henüz adlandırılmamış e-posta.
+export interface UserName {
+  email: string;
+  display_name: string | null;
+  updated_at: string | null;
+}
+
+export function fetchUserNames(): Promise<{ users: UserName[]; me: string | null }> {
+  return request("/admin/user-names");
+}
+
+export function putUserName(email: string, displayName: string): Promise<{ user: UserName }> {
+  return request(`/admin/user-names/${encodeURIComponent(email)}`, {
+    method: "PUT",
+    body: JSON.stringify({ display_name: displayName }),
+  });
+}
+
+export function deleteUserName(email: string): Promise<{ ok: true }> {
+  return request(`/admin/user-names/${encodeURIComponent(email)}`, { method: "DELETE" });
 }
 
 export type DispatchableWorkflow =
@@ -241,6 +269,7 @@ export interface Task {
   repo_url: string | null;
   issue_url: string | null;
   error: string | null;
+  updated_by: string | null;
 }
 
 export type DocumentKind = "prd" | "screens" | "tech_plan" | "roadmap";
@@ -251,6 +280,7 @@ export interface TaskDocument {
   content: string;
   generated_at: string;
   user_edited_at: string | null;
+  edited_by: string | null;
 }
 
 // Faz 3 sonrası tur, Grup 2: iskelet reposuyla senkron.
@@ -274,6 +304,7 @@ export interface RepoSync {
   commits: RepoCommit[];
   changes: RepoChange[];
   pending_count: number;
+  synced_by: string | null;
 }
 
 export interface RepoFile {
@@ -340,6 +371,7 @@ export interface DevReport extends DevReportInput {
   round: number;
   created_at: string;
   updated_at: string;
+  updated_by: string | null;
 }
 
 export function fetchDevReports(ideaId: string): Promise<{ reports: DevReport[] }> {
@@ -400,6 +432,7 @@ export interface TestRound {
   plan: TestPlan;
   result: TestResult | null;
   rework_reason: ReworkReason | null;
+  updated_by: string | null;
 }
 
 export function fetchTestRounds(ideaId: string): Promise<{ rounds: TestRound[] }> {

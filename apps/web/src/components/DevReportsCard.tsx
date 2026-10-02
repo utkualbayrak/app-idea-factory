@@ -3,6 +3,7 @@ import type { DevReport } from "@/lib/api";
 import { groupByPhase } from "@/lib/roadmap";
 import { formatDateTime } from "@/lib/format-date";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useUserNames } from "@/lib/user-names";
 
 // Fikir detayında geliştirme raporları ("Geliştirildi" formu), en yeni tur üstte.
 export function DevReportsCard({ reports }: { reports: DevReport[] }) {
@@ -23,6 +24,7 @@ export function DevReportsCard({ reports }: { reports: DevReport[] }) {
 }
 
 function ReportBlock({ report }: { report: DevReport }) {
+  const { displayName } = useUserNames();
   const done = report.roadmap_items.filter((i) => i.done).length;
   const total = report.roadmap_items.length;
 
@@ -30,7 +32,10 @@ function ReportBlock({ report }: { report: DevReport }) {
     <div className="flex min-w-0 flex-col gap-2 rounded-md border p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm font-medium">{report.round}. tur</p>
-        <p className="text-xs text-muted-foreground">{formatDateTime(report.updated_at)}</p>
+        <p className="text-xs text-muted-foreground">
+          {formatDateTime(report.updated_at)}
+          {report.updated_by && ` · ${displayName(report.updated_by)}`}
+        </p>
       </div>
 
       {total > 0 && (

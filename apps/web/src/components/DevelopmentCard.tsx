@@ -39,6 +39,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useUserNames } from "@/lib/user-names";
+import { UpdatedBy } from "@/components/UpdatedBy";
 
 const TASK_STATUS_STYLES: Record<Task["status"], string> = {
   planning: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-200",
@@ -154,6 +156,7 @@ export function DevelopmentCard({
         )}
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-4">
+        <UpdatedBy by={task.updated_by} at={task.updated_at} className="-mt-2" />
         <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]">
           <dt className="text-muted-foreground">Platform</dt>
           <dd>{PLATFORM_LABELS[params.platform]}</dd>
@@ -415,6 +418,7 @@ function DocumentPanel({
   onDraftChange: (value: string | undefined) => void;
   onSave: (content: string) => Promise<void>;
 }) {
+  const { displayName } = useUserNames();
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -449,6 +453,7 @@ function DocumentPanel({
         <p className="text-xs text-muted-foreground">
           Üretildi: {formatDateTime(doc.generated_at)}
           {doc.user_edited_at && ` · Son düzenleme: ${formatDateTime(doc.user_edited_at)}`}
+          {doc.user_edited_at && doc.edited_by && ` (${displayName(doc.edited_by)})`}
           {repoFile && (repoDiffers ? " · Repoda değiştirilmiş" : " · Repodaki sürümle aynı")}
         </p>
         {repoDiffers && !editing && (

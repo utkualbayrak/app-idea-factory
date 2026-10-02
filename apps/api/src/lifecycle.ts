@@ -13,6 +13,7 @@ export interface DevReportRow {
   missing_features: string;
   extra_features: string;
   notes: string;
+  updated_by: string | null;
 }
 
 export function serializeDevReport(row: DevReportRow) {
@@ -27,6 +28,7 @@ export function serializeDevReport(row: DevReportRow) {
     missing_features: JSON.parse(row.missing_features) as string[],
     extra_features: JSON.parse(row.extra_features) as string[],
     notes: JSON.parse(row.notes) as string[],
+    updated_by: row.updated_by,
   };
 }
 
@@ -41,6 +43,7 @@ export interface TestRoundRow {
   plan: string;
   result: string | null;
   rework_reason: string | null;
+  updated_by: string | null;
 }
 
 export function serializeTestRound(row: TestRoundRow) {

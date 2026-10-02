@@ -222,6 +222,12 @@ export const cronRunPatchSchema = z
   .refine((data) => Object.keys(data).length > 0, "En az bir alan gönderilmeli");
 
 export type SettingsPatch = z.infer<typeof settingsPatchSchema>;
+
+// Ayarlar > Kullanıcılar: Access e-postası → arayüzde görünen ad.
+export const userNameEmailSchema = z.email().transform((value) => value.toLowerCase());
+export const userNamePutSchema = z.object({
+  display_name: z.string().trim().min(1).max(40),
+});
 export type CronRunPatch = z.infer<typeof cronRunPatchSchema>;
 
 // Grup 3: GitHub workflow_dispatch tetikleme (cron, yeniden değerlendirme,
