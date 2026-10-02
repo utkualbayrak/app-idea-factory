@@ -3,6 +3,7 @@ import cors from "cors";
 import { z } from "zod";
 import { env } from "cloudflare:workers";
 import { requireWorkflowSecret } from "./auth";
+import { loadRepoState, RepoSyncError, syncRepo } from "./repo-sync";
 import {
   serializeIdea,
   serializeCronRun,
@@ -612,18 +613,51 @@ app.post("/tasks", async (req, res) => {
 app.get("/ideas/:id/task", async (req, res) => {
   const task = await db().prepare("SELECT * FROM tasks WHERE idea_id = ?1").bind(req.params.id).first<TaskRow>();
   if (!task) {
-    res.json({ task: null, documents: [] });
+    res.json({ task: null, documents: [], repo: null });
     return;
   }
 
-  const { results } = await db()
-    .prepare("SELECT * FROM task_documents WHERE task_id = ?1")
-    .bind(task.id)
-    .all<TaskDocumentRow>();
+  const [{ results }, repo] = await Promise.all([
+    db().prepare("SELECT * FROM task_documents WHERE task_id = ?1").bind(task.id).all<TaskDocumentRow>(),
+    loadRepoState(db(), task.id),
+  ]);
   const order = (kind: string) => DOCUMENT_KINDS.indexOf(kind as (typeof DOCUMENT_KINDS)[number]);
   const documents = results.sort((a, b) => order(a.kind) - order(b.kind)).map(serializeTaskDocument);
 
-  res.json({ task: serializeTask(task), documents });
+  res.json({ task: serializeTask(task), documents, repo });
+});
+
+// Faz 3 sonrası tur, Grup 2: iskelet reposundan son commit'leri ve md
+// dosyalarını çeker (bkz. repo-sync.ts). Workflow yok, Claude yok — Worker
+// doğrudan GitHub API'ye gider, aynı PAT (repo scope'u private repoyu okur).
+app.post("/tasks/:id/sync", async (req, res) => {
+  const task = await db().prepare("SELECT * FROM tasks WHERE id = ?1").bind(req.params.id).first<TaskRow>();
+  if (!task) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (!task.repo_url) {
+    res.status(409).json({ error: "no_repo", message: "Bu görevin henüz bir reposu yok." });
+    return;
+  }
+
+  const { GH_WORKFLOW_DISPATCH_TOKEN } = env as unknown as Env;
+  if (!GH_WORKFLOW_DISPATCH_TOKEN) {
+    res.status(500).json({ error: "missing_token", message: "GH_WORKFLOW_DISPATCH_TOKEN Worker secret'ı yok." });
+    return;
+  }
+
+  try {
+    await syncRepo(db(), GH_WORKFLOW_DISPATCH_TOKEN, task.id, task.repo_url);
+  } catch (err) {
+    if (err instanceof RepoSyncError) {
+      res.status(502).json({ error: "sync_failed", message: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  res.json({ repo: await loadRepoState(db(), task.id) });
 });
 
 // plan-idea.yml'ın ürettiği 4 belgeyi yazar (her üretim öncekilerin yerine

@@ -7,6 +7,8 @@ import {
   startBuild,
   type DocumentKind,
   type IdeaStatus,
+  type RepoFile,
+  type RepoState,
   type Task,
   type TaskDocument,
   type WorkflowRun,
@@ -15,6 +17,7 @@ import {
   AUTH_LABELS,
   BACKEND_LABELS,
   DOCUMENT_LABELS,
+  DOCUMENT_REPO_PATHS,
   PLATFORM_LABELS,
   REPLANNABLE_STATUSES,
   STYLE_LABELS,
@@ -23,6 +26,8 @@ import {
 } from "@/lib/task-labels";
 import { formatDateTime } from "@/lib/format-date";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { DiffView } from "@/components/DiffView";
+import { RepoSyncPanel } from "@/components/RepoSyncPanel";
 import { LastRunLine } from "@/components/LastRunLine";
 import { Markdown } from "@/components/Markdown";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +53,9 @@ interface DevelopmentCardProps {
   documents: TaskDocument[];
   lastPlanRun: WorkflowRun | undefined;
   lastBuildRun: WorkflowRun | undefined;
+  /** İskelet reposunun son senkronu (yoksa null). */
+  repo: RepoState | null;
+  onRepoSynced: (repo: RepoState) => void;
   /** Görev/fikir/iş listesi sunucudan tazelensin (başlatma, işaretleme sonrası). */
   onChanged: () => void;
 }
@@ -62,6 +70,8 @@ export function DevelopmentCard({
   documents,
   lastPlanRun,
   lastBuildRun,
+  repo,
+  onRepoSynced,
   onChanged,
 }: DevelopmentCardProps) {
   const { params } = task;
@@ -80,6 +90,18 @@ export function DevelopmentCard({
     return saved && saved.user_edited_at && (!doc.user_edited_at || saved.user_edited_at > doc.user_edited_at) ? saved : doc;
   });
   const dirtyKinds = docs.filter((doc) => drafts[doc.kind] != null && drafts[doc.kind] !== doc.content).map((d) => d.kind);
+
+  // Repo senkronu: plan belgelerinin repodaki karşılıkları, docs/ altındaki
+  // diğer md'ler (ek sekme) ve son senkronda değişenler (sekmede nokta).
+  const repoFiles = repo?.files ?? [];
+  const planPaths = new Set(Object.values(DOCUMENT_REPO_PATHS));
+  const extraDocs = repoFiles.filter((f) => f.path.startsWith("docs/") && !planPaths.has(f.path));
+  const changedPaths = new Set(
+    repo?.last_sync?.previous_head_sha
+      ? repo.last_sync.changes.filter((c) => c.change !== "removed").map((c) => c.path)
+      : [],
+  );
+  const repoFileFor = (kind: DocumentKind) => repoFiles.find((f) => f.path === DOCUMENT_REPO_PATHS[kind]);
 
   function setDraft(kind: DocumentKind, value: string | undefined) {
     setDrafts((prev) => ({ ...prev, [kind]: value }));
@@ -174,6 +196,8 @@ export function DevelopmentCard({
           </div>
         )}
 
+        {task.repo_url && <RepoSyncPanel taskId={task.id} repo={repo} onSynced={onRepoSynced} />}
+
         <StatusMessage task={task} />
 
         {docs.length > 0 && (
@@ -187,6 +211,17 @@ export function DevelopmentCard({
                     {dirtyKinds.includes(doc.kind) && (
                       <span className="size-1.5 rounded-full bg-amber-500" aria-label="kaydedilmemiş" />
                     )}
+                    {changedPaths.has(DOCUMENT_REPO_PATHS[doc.kind]) && (
+                      <span className="size-1.5 rounded-full bg-sky-500" aria-label="repoda değişti" />
+                    )}
+                  </TabsTrigger>
+                ))}
+                {extraDocs.map((file) => (
+                  <TabsTrigger key={file.path} value={`repo:${file.path}`}>
+                    {file.path.slice("docs/".length).replace(/\.md$/i, "")}
+                    {changedPaths.has(file.path) && (
+                      <span className="size-1.5 rounded-full bg-sky-500" aria-label="repoda değişti" />
+                    )}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -195,11 +230,17 @@ export function DevelopmentCard({
               <TabsContent key={doc.kind} value={doc.kind} className="min-w-0 rounded-md border p-4">
                 <DocumentPanel
                   doc={doc}
+                  repoFile={repoFileFor(doc.kind)}
                   editable={editable}
                   draft={drafts[doc.kind]}
                   onDraftChange={(value) => setDraft(doc.kind, value)}
                   onSave={(content) => saveDocument(doc.kind, content)}
                 />
+              </TabsContent>
+            ))}
+            {extraDocs.map((file) => (
+              <TabsContent key={file.path} value={`repo:${file.path}`} className="min-w-0 rounded-md border p-4">
+                <RepoDocPanel file={file} />
               </TabsContent>
             ))}
           </Tabs>
@@ -317,14 +358,78 @@ function StatusMessage({ task }: { task: Task }) {
   }
 }
 
+// "Repodaki / Onaylı / Fark" gibi küçük görünüm seçici.
+function ViewToggle<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="flex w-fit gap-1 rounded-lg bg-muted p-1" role="group">
+      {options.map((option) => (
+        <Button
+          key={option.value}
+          size="sm"
+          variant={value === option.value ? "secondary" : "ghost"}
+          className={`h-7 px-2.5 ${value === option.value ? "bg-background shadow-sm" : ""}`}
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+// docs/ altında plan belgeleri dışında kalan, repoda sonradan eklenmiş md.
+function RepoDocPanel({ file }: { file: RepoFile }) {
+  const [view, setView] = useState<"content" | "diff">("content");
+  const hasDiff = file.content != null && file.previous_content != null;
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          Repoda · ilk görüldü {formatDateTime(file.first_seen_at)}
+          {file.changed_at !== file.first_seen_at && ` · son değişiklik ${formatDateTime(file.changed_at)}`}
+        </p>
+        {hasDiff && (
+          <ViewToggle
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "content", label: "İçerik" },
+              { value: "diff", label: "Fark (önceki senkron)" },
+            ]}
+          />
+        )}
+      </div>
+      {file.content == null ? (
+        <p className="text-sm text-muted-foreground">Dosya çok büyük, içeriği çekilmedi — repoda görüntüle.</p>
+      ) : view === "diff" && file.previous_content != null ? (
+        <DiffView oldText={file.previous_content} newText={file.content} />
+      ) : (
+        <Markdown>{file.content}</Markdown>
+      )}
+    </div>
+  );
+}
+
 function DocumentPanel({
   doc,
+  repoFile,
   editable,
   draft,
   onDraftChange,
   onSave,
 }: {
   doc: TaskDocument;
+  repoFile: RepoFile | undefined;
   editable: boolean;
   draft: string | undefined;
   onDraftChange: (value: string | undefined) => void;
@@ -334,6 +439,11 @@ function DocumentPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const editing = draft != null;
+  // Repo senkronlandıysa ve repodaki sürüm onaylıdan farklıysa varsayılan
+  // görünüm repodaki (en güncel) sürüm; onaylı ve fark da seçilebilir.
+  const repoContent = repoFile?.content ?? null;
+  const repoDiffers = repoContent != null && repoContent.trim() !== doc.content.trim();
+  const [view, setView] = useState<"repo" | "approved" | "diff">("repo");
 
   async function handleSave() {
     if (draft == null) return;
@@ -359,7 +469,19 @@ function DocumentPanel({
         <p className="text-xs text-muted-foreground">
           Üretildi: {formatDateTime(doc.generated_at)}
           {doc.user_edited_at && ` · Son düzenleme: ${formatDateTime(doc.user_edited_at)}`}
+          {repoFile && (repoDiffers ? " · Repoda değiştirilmiş" : " · Repodaki sürümle aynı")}
         </p>
+        {repoDiffers && !editing && (
+          <ViewToggle
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "repo", label: "Repodaki" },
+              { value: "approved", label: "Onaylı" },
+              { value: "diff", label: "Fark" },
+            ]}
+          />
+        )}
         {editable && !editing && (
           <Button variant="outline" size="sm" onClick={() => onDraftChange(doc.content)}>
             <Pencil className="size-4" />
@@ -382,8 +504,12 @@ function DocumentPanel({
           className="min-h-96 font-mono text-xs leading-relaxed"
           aria-label="Belge içeriği (Markdown)"
         />
+      ) : editing ? (
+        <Markdown>{draft}</Markdown>
+      ) : repoDiffers && view === "diff" ? (
+        <DiffView oldText={doc.content} newText={repoContent} />
       ) : (
-        <Markdown>{editing ? draft : doc.content}</Markdown>
+        <Markdown>{repoDiffers && view === "repo" ? repoContent : doc.content}</Markdown>
       )}
 
       {editing && (

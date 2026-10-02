@@ -85,7 +85,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (!res.ok) {
-    throw new Error(`API isteği başarısız: ${path} (HTTP ${res.status})`);
+    // API okunur bir sebep döndürdüyse ({ message }) onu da ekle.
+    const body = (await res.json().catch(() => null)) as { message?: unknown } | null;
+    const detail = typeof body?.message === "string" ? ` — ${body.message}` : "";
+    throw new Error(`API isteği başarısız: ${path} (HTTP ${res.status})${detail}`);
   }
 
   return res.json() as Promise<T>;
@@ -229,8 +232,53 @@ export interface TaskDocument {
   user_edited_at: string | null;
 }
 
-export function fetchIdeaTask(ideaId: string): Promise<{ task: Task | null; documents: TaskDocument[] }> {
+// Faz 3 sonrası tur, Grup 2: iskelet reposuyla senkron.
+export interface RepoCommit {
+  sha: string;
+  message: string;
+  author: string | null;
+  date: string | null;
+  url: string;
+}
+
+export interface RepoChange {
+  path: string;
+  change: "added" | "modified" | "removed";
+}
+
+export interface RepoSync {
+  synced_at: string;
+  head_sha: string | null;
+  previous_head_sha: string | null;
+  commits: RepoCommit[];
+  changes: RepoChange[];
+  pending_count: number;
+}
+
+export interface RepoFile {
+  path: string;
+  size: number;
+  /** null: dosya çekilemeyecek kadar büyük. */
+  content: string | null;
+  /** Bir önceki senkrondaki içerik (dosya o senkronda değiştiyse). */
+  previous_content: string | null;
+  first_seen_at: string;
+  changed_at: string;
+}
+
+export interface RepoState {
+  last_sync: RepoSync | null;
+  files: RepoFile[];
+}
+
+export function fetchIdeaTask(
+  ideaId: string,
+): Promise<{ task: Task | null; documents: TaskDocument[]; repo: RepoState | null }> {
   return request(`/ideas/${ideaId}/task`);
+}
+
+export function syncTaskRepo(taskId: string): Promise<{ repo: RepoState }> {
+  return request(`/tasks/${taskId}/sync`, { method: "POST" });
 }
 
 // Formu kaydeder, fikri "Geliştirme bekliyor"a alır ve belge üretimini tetikler.

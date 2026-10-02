@@ -37,7 +37,7 @@ App Idea Factory is a personal, fully automated idea pipeline that runs on free 
 | **Ideas** | One sortable, filterable table (search, category, status, score minimums, date range), 20 per page, compare up to 4 |
 | **Idea detail** | Full idea, score breakdown with Claude's reasoning, your 0–10 rating and note, competitors, re-evaluation, Markdown export |
 | **Develop** | Task form for an idea: platform, backend, auth, MVP features, design, notes |
-| **Developed** | Ideas in the development flow: awaiting your review of the planning docs, skeleton in progress or built, and ideas sent back from testing (rework). The detail page shows the docs (editable until you start), repo/issue links and retry |
+| **Developed** | Ideas in the development flow: awaiting your review of the planning docs, skeleton in progress or built, and ideas sent back from testing (rework). The detail page shows the docs (editable until you start), repo/issue links, retry, and a repo sync that pulls recent commits and changed Markdown files |
 | **Test** | Developed ideas waiting for or under testing |
 | **Ready to ship** | Ideas whose test was approved |
 | **Compare** | 2–4 ideas side by side, rate while comparing |

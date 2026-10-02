@@ -44,6 +44,16 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   failed: "İskelet üretimi başarısız",
 };
 
+// build-skeleton.yml onaylı belgeleri iskelet reposunda bu yollara yazar
+// (scripts/lib/task-schema.ts PLAN_DOCUMENT_FILES). Repo senkronunda bu
+// dosyalar ilgili belge sekmesine, docs/ altındaki diğerleri ek sekmelere düşer.
+export const DOCUMENT_REPO_PATHS: Record<DocumentKind, string> = {
+  prd: "docs/prd.md",
+  screens: "docs/screens.md",
+  tech_plan: "docs/tech-plan.md",
+  roadmap: "docs/roadmap.md",
+};
+
 export const DOCUMENT_LABELS: Record<DocumentKind, string> = {
   prd: "Ürün belgesi",
   screens: "Ekranlar ve akışlar",

@@ -11,6 +11,7 @@ import {
   type Idea,
   type Competitor,
   type IdeaWorkflow,
+  type RepoState,
   type Task,
   type TaskDocument,
   type WorkflowRun,
@@ -70,6 +71,7 @@ export function IdeaDetailPage() {
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
   const [task, setTask] = useState<Task | null>(null);
   const [documents, setDocuments] = useState<TaskDocument[]>([]);
+  const [repo, setRepo] = useState<RepoState | null>(null);
 
   const loadRuns = useCallback(() => {
     if (!id) return;
@@ -84,6 +86,7 @@ export function IdeaDetailPage() {
       .then((res) => {
         setTask(res.task);
         setDocuments(res.documents);
+        setRepo(res.repo);
       })
       .catch(() => {});
   }, [id]);
@@ -246,6 +249,8 @@ export function IdeaDetailPage() {
           documents={documents}
           lastPlanRun={lastRun("plan-idea.yml")}
           lastBuildRun={lastRun("build-skeleton.yml")}
+          repo={repo}
+          onRepoSynced={setRepo}
           onChanged={handleTriggered}
         />
       )}
