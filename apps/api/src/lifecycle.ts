@@ -29,3 +29,28 @@ export function serializeDevReport(row: DevReportRow) {
     notes: JSON.parse(row.notes) as string[],
   };
 }
+
+export interface TestRoundRow {
+  id: string;
+  idea_id: string;
+  round: number;
+  status: "running" | "approved" | "rework" | "cancelled";
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+  plan: string;
+  result: string | null;
+  rework_reason: string | null;
+}
+
+export function serializeTestRound(row: TestRoundRow) {
+  return {
+    ...row,
+    created_at: toUtcIso(row.created_at),
+    updated_at: toUtcIso(row.updated_at),
+    finished_at: toUtcIso(row.finished_at),
+    plan: JSON.parse(row.plan) as unknown,
+    result: row.result ? (JSON.parse(row.result) as unknown) : null,
+    rework_reason: row.rework_reason ? (JSON.parse(row.rework_reason) as unknown) : null,
+  };
+}

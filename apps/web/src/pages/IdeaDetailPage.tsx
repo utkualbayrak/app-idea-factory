@@ -7,11 +7,13 @@ import {
   fetchIdeaTask,
   fetchCompetitors,
   fetchDevReports,
+  fetchTestRounds,
   fetchWorkflowRuns,
   patchIdea,
   type Idea,
   type Competitor,
   type DevReport,
+  type TestRound,
   type IdeaWorkflow,
   type RepoState,
   type Task,
@@ -28,6 +30,7 @@ import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
 import { LastRunLine } from "@/components/LastRunLine";
 import { DevelopmentCard } from "@/components/DevelopmentCard";
 import { DevReportsCard } from "@/components/DevReportsCard";
+import { ReworkBanner, TestCard } from "@/components/TestCard";
 import { TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
 import { PageMessage } from "@/components/PageHeader";
 import { formatDateTime } from "@/lib/format-date";
@@ -76,6 +79,7 @@ export function IdeaDetailPage() {
   const [documents, setDocuments] = useState<TaskDocument[]>([]);
   const [repo, setRepo] = useState<RepoState | null>(null);
   const [devReports, setDevReports] = useState<DevReport[]>([]);
+  const [testRounds, setTestRounds] = useState<TestRound[]>([]);
 
   const loadRuns = useCallback(() => {
     if (!id) return;
@@ -95,6 +99,9 @@ export function IdeaDetailPage() {
       .catch(() => {});
     fetchDevReports(id)
       .then((res) => setDevReports(res.reports))
+      .catch(() => {});
+    fetchTestRounds(id)
+      .then((res) => setTestRounds(res.rounds))
       .catch(() => {});
   }, [id]);
 
@@ -215,6 +222,8 @@ export function IdeaDetailPage() {
         <p className="mt-1 text-muted-foreground">{idea.one_liner}</p>
       </div>
 
+      {idea.status === "rework" && <ReworkBanner rounds={testRounds} />}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Claude puan dökümü</CardTitle>
@@ -261,6 +270,8 @@ export function IdeaDetailPage() {
           onChanged={handleTriggered}
         />
       )}
+
+      {id && <TestCard ideaId={id} ideaStatus={idea.status} rounds={testRounds} onChanged={handleTriggered} />}
 
       <DevReportsCard reports={devReports} />
 

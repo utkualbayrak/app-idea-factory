@@ -38,7 +38,7 @@ App Idea Factory, tamamen ücretsiz planlar üzerinde çalışan kişisel ve oto
 | **Fikir detayı** | Fikrin tamamı, Claude'un gerekçeleriyle puan dökümü, 0–10 puanın ve notun, rakipler, yeniden değerlendirme, Markdown dışa aktarma |
 | **Geliştir** | Fikir için görev formu: platform, backend, auth, MVP özellikleri, tasarım, notlar |
 | **Geliştirilenler** | Geliştirme akışındaki fikirler: planlama belgeleri onayını bekleyenler, iskeleti kurulanlar ya da kurulmuş olanlar, testten revizyona dönenler. Detay sayfasında belgeler (başlatana kadar düzenlenebilir), repo/issue linkleri, tekrar dene ve son commit'leri ve değişen Markdown dosyalarını çeken repo senkronu |
-| **Test** | Geliştirilmiş, test bekleyen ya da testi süren fikirler |
+| **Test** | Geliştirilmiş, test bekleyen ya da testi süren fikirler. Test planı (kişi, gün, platform, kanal, senaryolar, başarı kriterleri) bir tur başlatır; sonuç formu senaryo sonuçlarını, bulguları ve kararı kaydeder: onay ya da sebebiyle geliştirmeye geri gönderme |
 | **Dağıtıma hazır** | Testi onaylanmış fikirler |
 | **Karşılaştırma** | 2–4 fikir yan yana, karşılaştırırken puan verme |
 | **Çalışma geçmişi** | Günlük üretim çalışmaları (toplanan her trend öğesiyle) ve fikir bazlı işler; süre ve log linkleriyle |

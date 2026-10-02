@@ -48,3 +48,20 @@ export function formatDuration(startIso: string, endIso: string): string {
   const rest = minutes % 60;
   return rest ? `${hours} sa ${rest} dk` : `${hours} sa`;
 }
+
+// Bugünün tarihi (Türkiye saatiyle) "YYYY-MM-DD" olarak.
+export function todayIso(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(new Date());
+}
+
+// "YYYY-MM-DD" tarihine gün ekler (saat dilimi kaymasız, UTC üzerinden).
+export function addDaysIso(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+// İki "YYYY-MM-DD" arasındaki gün farkı.
+export function daysBetweenIso(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}

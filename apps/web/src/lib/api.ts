@@ -329,3 +329,76 @@ export function fetchDevReports(ideaId: string): Promise<{ reports: DevReport[] 
 export function submitDevReport(ideaId: string, report: DevReportInput): Promise<{ report: DevReport }> {
   return request(`/ideas/${ideaId}/dev-report`, { method: "POST", body: JSON.stringify(report) });
 }
+
+// Faz 3 sonrası tur, Grup 4: test turları.
+export type TestPlatform = "ios" | "android";
+export type TestChannel = "testflight" | "play_internal" | "expo_go" | "direct_install" | "other";
+export type ScenarioResult = "passed" | "partial" | "failed" | "skipped";
+export type FindingSeverity = "critical" | "major" | "minor";
+export type FindingKind = "bug" | "ux" | "feature_request" | "performance" | "other";
+export type FindingPlatform = "ios" | "android" | "both";
+
+export interface TestPlan {
+  tester_count: number;
+  duration_days: number;
+  start_date: string;
+  platforms: TestPlatform[];
+  channel: TestChannel;
+  scenarios: string[];
+  success_criteria: string[];
+}
+
+export interface TestFinding {
+  severity: FindingSeverity;
+  kind: FindingKind;
+  platform: FindingPlatform;
+  text: string;
+}
+
+export interface TestResult {
+  actual_tester_count: number;
+  actual_days: number;
+  scenario_results: { scenario: string; result: ScenarioResult }[];
+  findings: TestFinding[];
+  satisfaction: number | null;
+}
+
+export interface ReworkReason {
+  summary: string;
+  finding_indexes: number[];
+}
+
+export interface TestRound {
+  id: string;
+  idea_id: string;
+  round: number;
+  status: "running" | "approved" | "rework" | "cancelled";
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+  plan: TestPlan;
+  result: TestResult | null;
+  rework_reason: ReworkReason | null;
+}
+
+export function fetchTestRounds(ideaId: string): Promise<{ rounds: TestRound[] }> {
+  return request(`/ideas/${ideaId}/test-rounds`);
+}
+
+// Fikri "Test ediliyor"a alır.
+export function startTestRound(ideaId: string, plan: TestPlan): Promise<{ round: TestRound }> {
+  return request(`/ideas/${ideaId}/test-rounds`, { method: "POST", body: JSON.stringify(plan) });
+}
+
+// Onay → "Dağıtıma hazır", geri gönderme → "Revizyonda".
+export function submitTestResult(
+  roundId: string,
+  body: { result: TestResult; decision: "approved" | "rework"; rework_reason?: ReworkReason },
+): Promise<{ round: TestRound }> {
+  return request(`/test-rounds/${roundId}/result`, { method: "POST", body: JSON.stringify(body) });
+}
+
+// Turu iptal eder; fikir "Test bekliyor"a döner.
+export function cancelTestRound(roundId: string): Promise<{ ok: true }> {
+  return request(`/test-rounds/${roundId}/cancel`, { method: "POST" });
+}

@@ -28,6 +28,7 @@ import { formatDateTime } from "@/lib/format-date";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { DiffView } from "@/components/DiffView";
 import { RepoSyncPanel } from "@/components/RepoSyncPanel";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { LastRunLine } from "@/components/LastRunLine";
 import { Markdown } from "@/components/Markdown";
 import { Badge } from "@/components/ui/badge";
@@ -356,34 +357,6 @@ function StatusMessage({ task }: { task: Task }) {
   }
 }
 
-// "Repodaki / Onaylı / Fark" gibi küçük görünüm seçici.
-function ViewToggle<T extends string>({
-  value,
-  options,
-  onChange,
-}: {
-  value: T;
-  options: { value: T; label: string }[];
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="flex w-fit gap-1 rounded-lg bg-muted p-1" role="group">
-      {options.map((option) => (
-        <Button
-          key={option.value}
-          size="sm"
-          variant={value === option.value ? "secondary" : "ghost"}
-          className={`h-7 px-2.5 ${value === option.value ? "bg-background shadow-sm" : ""}`}
-          aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-        </Button>
-      ))}
-    </div>
-  );
-}
-
 // docs/ altında plan belgeleri dışında kalan, repoda sonradan eklenmiş md.
 function RepoDocPanel({ file }: { file: RepoFile }) {
   const [view, setView] = useState<"content" | "diff">("content");
@@ -397,7 +370,7 @@ function RepoDocPanel({ file }: { file: RepoFile }) {
           {file.changed_at !== file.first_seen_at && ` · son değişiklik ${formatDateTime(file.changed_at)}`}
         </p>
         {hasDiff && (
-          <ViewToggle
+          <SegmentedControl
             value={view}
             onChange={setView}
             options={[
@@ -470,7 +443,7 @@ function DocumentPanel({
           {repoFile && (repoDiffers ? " · Repoda değiştirilmiş" : " · Repodaki sürümle aynı")}
         </p>
         {repoDiffers && !editing && (
-          <ViewToggle
+          <SegmentedControl
             value={view}
             onChange={setView}
             options={[

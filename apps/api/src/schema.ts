@@ -88,6 +88,60 @@ export const devReportSubmitSchema = z.object({
   notes: z.array(shortLine).max(30),
 });
 
+// Faz 3 sonrası tur, Grup 4: test turları.
+export const TEST_PLATFORMS = ["ios", "android"] as const;
+export const TEST_CHANNELS = ["testflight", "play_internal", "expo_go", "direct_install", "other"] as const;
+export const SCENARIO_RESULTS = ["passed", "partial", "failed", "skipped"] as const;
+export const FINDING_SEVERITIES = ["critical", "major", "minor"] as const;
+export const FINDING_KINDS = ["bug", "ux", "feature_request", "performance", "other"] as const;
+export const FINDING_PLATFORMS = ["ios", "android", "both"] as const;
+
+export const testPlanSchema = z.object({
+  tester_count: z.number().int().min(1).max(1000),
+  duration_days: z.number().int().min(1).max(365),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD olmalı"),
+  platforms: z.array(z.enum(TEST_PLATFORMS)).min(1).max(2),
+  channel: z.enum(TEST_CHANNELS),
+  scenarios: z.array(shortLine).min(1).max(30),
+  success_criteria: z.array(shortLine).max(20),
+});
+
+export const testFindingSchema = z.object({
+  severity: z.enum(FINDING_SEVERITIES),
+  kind: z.enum(FINDING_KINDS),
+  platform: z.enum(FINDING_PLATFORMS),
+  text: shortLine,
+});
+
+export const testResultSchema = z.object({
+  actual_tester_count: z.number().int().min(0).max(1000),
+  actual_days: z.number().int().min(0).max(365),
+  scenario_results: z.array(z.object({ scenario: shortLine, result: z.enum(SCENARIO_RESULTS) })).max(30),
+  findings: z.array(testFindingSchema).max(100),
+  satisfaction: scoreValue.nullable(),
+});
+
+export const testResultSubmitSchema = z
+  .object({
+    result: testResultSchema,
+    decision: z.enum(["approved", "rework"]),
+    rework_reason: z
+      .object({
+        summary: shortLine,
+        // result.findings içindeki indeksler: geliştirmede ele alınacak bulgular.
+        finding_indexes: z.array(z.number().int().min(0)).max(100),
+      })
+      .optional(),
+  })
+  .refine((d) => d.decision !== "rework" || d.rework_reason != null, {
+    message: "Geri göndermede sebep zorunlu",
+    path: ["rework_reason"],
+  })
+  .refine((d) => (d.rework_reason?.finding_indexes ?? []).every((i) => i < d.result.findings.length), {
+    message: "Geçersiz bulgu indeksi",
+    path: ["rework_reason", "finding_indexes"],
+  });
+
 export const ideaPatchSchema = z
   .object({
     user_rating: scoreValue.nullable().optional(),

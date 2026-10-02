@@ -5,6 +5,7 @@ import {
   fetchDevReports,
   fetchIdea,
   fetchIdeaTask,
+  fetchTestRounds,
   submitDevReport,
   syncTaskRepo,
   type DevReport,
@@ -13,6 +14,7 @@ import {
   type RoadmapItem,
   type Task,
   type TaskDocument,
+  type TestRound,
 } from "@/lib/api";
 import { DOCUMENT_REPO_PATHS } from "@/lib/task-labels";
 import { groupByPhase, parseRoadmap } from "@/lib/roadmap";
@@ -20,6 +22,7 @@ import { formatDateTime } from "@/lib/format-date";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { RowListInput } from "@/components/RowListInput";
+import { ReworkBanner } from "@/components/TestCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -50,6 +53,7 @@ export function DevReportPage() {
   const [documents, setDocuments] = useState<TaskDocument[]>([]);
   const [repo, setRepo] = useState<RepoState | null>(null);
   const [latest, setLatest] = useState<DevReport | null>(null);
+  const [testRounds, setTestRounds] = useState<TestRound[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -64,8 +68,9 @@ export function DevReportPage() {
 
   useEffect(() => {
     if (!id) return;
-    Promise.all([fetchIdea(id), fetchIdeaTask(id), fetchDevReports(id)])
-      .then(([ideaRes, taskRes, reportsRes]) => {
+    Promise.all([fetchIdea(id), fetchIdeaTask(id), fetchDevReports(id), fetchTestRounds(id)])
+      .then(([ideaRes, taskRes, reportsRes, roundsRes]) => {
+        setTestRounds(roundsRes.rounds);
         setIdea(ideaRes.idea);
         setTask(taskRes.task);
         setDocuments(taskRes.documents);
@@ -165,7 +170,8 @@ export function DevReportPage() {
   }
 
   const isUpdate = idea.status === "in_development" && latest != null;
-  const round = isUpdate ? latest.round : (latest?.round ?? 0) + 1;
+  const lastTestRound = Math.max(0, ...testRounds.filter((r) => r.status !== "cancelled").map((r) => r.round));
+  const round = isUpdate ? latest.round : Math.max(latest?.round ?? 0, lastTestRound) + 1;
   const lastSync = repo?.last_sync ?? null;
 
   return (
@@ -180,6 +186,8 @@ export function DevReportPage() {
           </>
         }
       />
+
+      {idea.status === "rework" && <ReworkBanner rounds={testRounds} />}
 
       <Card>
         <CardHeader className="gap-2">

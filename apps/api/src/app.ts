@@ -4,7 +4,7 @@ import { z } from "zod";
 import { env } from "cloudflare:workers";
 import { requireWorkflowSecret } from "./auth";
 import { loadRepoState, RepoSyncError, syncRepo } from "./repo-sync";
-import { serializeDevReport, type DevReportRow } from "./lifecycle";
+import { serializeDevReport, serializeTestRound, type DevReportRow, type TestRoundRow } from "./lifecycle";
 import {
   serializeIdea,
   serializeCronRun,
@@ -24,6 +24,8 @@ import {
   ideaBatchRequestSchema,
   ideaPatchSchema,
   devReportSubmitSchema,
+  testPlanSchema,
+  testResultSubmitSchema,
   USER_STATUS_TRANSITIONS,
   type IdeaStatus,
   settingsPatchSchema,
@@ -639,7 +641,8 @@ app.get("/ideas/:id/dev-reports", async (req, res) => {
 });
 
 // Formu kaydeder ve fikri 'awaiting_test' yapar. Tur numarası:
-// - rework'ten (testten dönmüş) gönderim → yeni tur.
+// - rework'ten (testten dönmüş) gönderim → yeni tur (son rapor ve son test
+//   turunun büyüğü + 1).
 // - in_development'tan gönderim → hiç rapor yoksa 1. tur; varsa ("Test
 //   bekliyor"dan geri alınmış) son raporun üzerine yazılır.
 app.post("/ideas/:id/dev-report", async (req, res) => {
@@ -669,7 +672,13 @@ app.post("/ideas/:id/dev-report", async (req, res) => {
     .bind(idea.id)
     .first<DevReportRow>();
   const replaceLatest = idea.status === "in_development" && latest != null;
-  const round = replaceLatest ? latest.round : (latest?.round ?? 0) + 1;
+  // Yeni tur, test edilmiş son turdan sonra gelir (raporu olmadan teste giden
+  // eski kayıtlarda test turu rapordan ileride olabilir).
+  const lastTest = await db()
+    .prepare("SELECT MAX(round) AS round FROM test_rounds WHERE idea_id = ?1 AND status != 'cancelled'")
+    .bind(idea.id)
+    .first<{ round: number | null }>();
+  const round = replaceLatest ? latest.round : Math.max(latest?.round ?? 0, lastTest?.round ?? 0) + 1;
 
   const now = new Date().toISOString();
   const body = parsed.data;
@@ -705,6 +714,114 @@ app.post("/ideas/:id/dev-report", async (req, res) => {
 
   const report = await db().prepare("SELECT * FROM dev_reports WHERE id = ?1").bind(reportId).first<DevReportRow>();
   res.json({ report: report ? serializeDevReport(report) : null });
+});
+
+// Faz 3 sonrası tur, Grup 4: test turları.
+app.get("/ideas/:id/test-rounds", async (req, res) => {
+  const { results } = await db()
+    .prepare("SELECT * FROM test_rounds WHERE idea_id = ?1 ORDER BY created_at DESC")
+    .bind(req.params.id)
+    .all<TestRoundRow>();
+  res.json({ rounds: results.map(serializeTestRound) });
+});
+
+// "Testi başlat": test planıyla yeni tur açar, fikir 'testing' olur. Tur
+// numarası test edilen geliştirme raporunun turu (rapor yoksa 1).
+app.post("/ideas/:id/test-rounds", async (req, res) => {
+  const parsed = testPlanSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+  const idea = await db().prepare("SELECT status FROM ideas WHERE id = ?1").bind(req.params.id).first<{ status: string }>();
+  if (!idea) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (idea.status !== "awaiting_test") {
+    res.status(409).json({ error: "invalid_status", message: "Fikir test bekliyor durumunda değil." });
+    return;
+  }
+
+  const report = await db()
+    .prepare("SELECT MAX(round) AS round FROM dev_reports WHERE idea_id = ?1")
+    .bind(req.params.id)
+    .first<{ round: number | null }>();
+  const now = new Date().toISOString();
+  const roundId = crypto.randomUUID();
+
+  await db().batch([
+    db()
+      .prepare(
+        `INSERT INTO test_rounds (id, idea_id, round, status, created_at, updated_at, plan)
+         VALUES (?1, ?2, ?3, 'running', ?4, ?4, ?5)`,
+      )
+      .bind(roundId, req.params.id, report?.round ?? 1, now, JSON.stringify(parsed.data)),
+    db().prepare("UPDATE ideas SET status = 'testing' WHERE id = ?1").bind(req.params.id),
+    stampActivity(req.params.id, "status_changed", now),
+  ]);
+
+  const row = await db().prepare("SELECT * FROM test_rounds WHERE id = ?1").bind(roundId).first<TestRoundRow>();
+  res.json({ round: row ? serializeTestRound(row) : null });
+});
+
+async function loadRunningRound(id: string) {
+  return db().prepare("SELECT * FROM test_rounds WHERE id = ?1 AND status = 'running'").bind(id).first<TestRoundRow>();
+}
+
+// Sonuç formu: turu kapatır. Onay → fikir 'approved' (Dağıtıma hazır),
+// geri gönderme → 'rework' (sebep zorunlu, Geliştirilenler'e döner).
+app.post("/test-rounds/:id/result", async (req, res) => {
+  const parsed = testResultSubmitSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+  const round = await loadRunningRound(req.params.id);
+  if (!round) {
+    res.status(409).json({ error: "round_not_running", message: "Bu test turu açık değil." });
+    return;
+  }
+
+  const { result, decision, rework_reason: reworkReason } = parsed.data;
+  const now = new Date().toISOString();
+  await db().batch([
+    db()
+      .prepare(
+        `UPDATE test_rounds SET status = ?1, result = ?2, rework_reason = ?3, finished_at = ?4, updated_at = ?4
+         WHERE id = ?5`,
+      )
+      .bind(
+        decision,
+        JSON.stringify(result),
+        decision === "rework" && reworkReason ? JSON.stringify(reworkReason) : null,
+        now,
+        round.id,
+      ),
+    db().prepare("UPDATE ideas SET status = ?1 WHERE id = ?2").bind(decision, round.idea_id),
+    stampActivity(round.idea_id, "status_changed", now),
+  ]);
+
+  const row = await db().prepare("SELECT * FROM test_rounds WHERE id = ?1").bind(round.id).first<TestRoundRow>();
+  res.json({ round: row ? serializeTestRound(row) : null });
+});
+
+// Yarıda kalan turu iptal eder; fikir tekrar "Test bekliyor".
+app.post("/test-rounds/:id/cancel", async (req, res) => {
+  const round = await loadRunningRound(req.params.id);
+  if (!round) {
+    res.status(409).json({ error: "round_not_running", message: "Bu test turu açık değil." });
+    return;
+  }
+  const now = new Date().toISOString();
+  await db().batch([
+    db()
+      .prepare("UPDATE test_rounds SET status = 'cancelled', finished_at = ?1, updated_at = ?1 WHERE id = ?2")
+      .bind(now, round.id),
+    db().prepare("UPDATE ideas SET status = 'awaiting_test' WHERE id = ?1").bind(round.idea_id),
+    stampActivity(round.idea_id, "status_changed", now),
+  ]);
+  res.json({ ok: true });
 });
 
 // Faz 3 sonrası tur, Grup 2: iskelet reposundan son commit'leri ve md
