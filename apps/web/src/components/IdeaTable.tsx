@@ -153,7 +153,10 @@ function buildColumns(selection?: SelectionProps): ColumnDef<Idea>[] {
       header: "Fikir",
       cell: ({ row }) => (
         <div className="min-w-0">
-          <div className="truncate font-medium">{row.original.name}</div>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-medium">{row.original.name}</span>
+            {row.original.origin === "merge" && <MergedMark />}
+          </div>
           <OneLinerCell text={row.original.one_liner} />
         </div>
       ),
@@ -364,6 +367,7 @@ export function IdeaTable({
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="truncate font-medium">{idea.name}</span>
+                    {idea.origin === "merge" && <MergedMark />}
                     <CategoryBadge category={idea.category} />
                   </div>
                   <div className="flex min-w-0 items-center gap-2">
@@ -445,5 +449,14 @@ export function IdeaTable({
         </div>
       </div>
     </div>
+  );
+}
+
+// Havuz bakımının birleştirdiği fikir (birden çok fikirden oluştu).
+function MergedMark() {
+  return (
+    <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
+      Birleşik
+    </Badge>
   );
 }

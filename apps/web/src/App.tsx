@@ -1,5 +1,6 @@
+import { useEffect, useState } from "react";
 import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { FlaskConical, Hammer, History, Lightbulb, LayoutDashboard, LogOut, Rocket, Settings, SquareKanban } from "lucide-react";
+import { Combine, FlaskConical, Hammer, History, Lightbulb, LayoutDashboard, LogOut, Rocket, Settings, SquareKanban } from "lucide-react";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { IdeaListPage } from "@/pages/IdeaListPage";
 import { IdeaDetailPage } from "@/pages/IdeaDetailPage";
@@ -13,6 +14,8 @@ import { DevelopedPage, ReadyPage, TestingPage } from "@/pages/StatusListPage";
 import { ComparePage } from "@/pages/ComparePage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { CronRunsPage } from "@/pages/CronRunsPage";
+import { ProposalsPage } from "@/pages/ProposalsPage";
+import { fetchProposals } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Sidebar,
@@ -23,6 +26,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -37,12 +41,26 @@ const NAV_ITEMS = [
   { to: "/developed", label: "Geliştirilenler", icon: Hammer },
   { to: "/testing", label: "Test", icon: FlaskConical },
   { to: "/ready", label: "Dağıtıma hazır", icon: Rocket },
+  { to: "/proposals", label: "Öneriler", icon: Combine },
   { to: "/cron-runs", label: "Çalışma geçmişi", icon: History },
   { to: "/settings", label: "Ayarlar", icon: Settings },
 ];
 
+// Sidebar'daki "Öneriler" rozeti: onay bekleyen öneri sayısı. Her sayfa
+// geçişinde tazelenir (öneriyi onaylayıp başka sayfaya geçince düşsün).
+function usePendingProposalCount(pathname: string) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    fetchProposals("pending")
+      .then((res) => setCount(res.proposals.length))
+      .catch(() => {});
+  }, [pathname]);
+  return count;
+}
+
 function App() {
   const location = useLocation();
+  const pendingProposals = usePendingProposalCount(location.pathname);
 
   return (
     <SidebarProvider>
@@ -65,6 +83,9 @@ function App() {
                         <span>{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
+                    {item.to === "/proposals" && pendingProposals > 0 && (
+                      <SidebarMenuBadge>{pendingProposals}</SidebarMenuBadge>
+                    )}
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
@@ -106,6 +127,7 @@ function App() {
             <Route path="/testing" element={<TestingPage />} />
             <Route path="/ready" element={<ReadyPage />} />
             <Route path="/compare" element={<ComparePage />} />
+            <Route path="/proposals" element={<ProposalsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/cron-runs" element={<CronRunsPage />} />
           </Routes>

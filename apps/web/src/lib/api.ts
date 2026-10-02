@@ -64,6 +64,12 @@ export interface Idea {
   updated_by: string | null;
   /** Son aktiviteyi kim tetikledi: e-posta ya da "system". */
   last_activity_by: string | null;
+  /** Havuz bakımı: birleşik fikir ya da özellik önerisinin hedefi. */
+  merged_into_id: string | null;
+  /** Art arda kaç bakım koşusunda bakım puanı 7.00'ın altında kaldı. */
+  stale_runs: number;
+  archived_at: string | null;
+  deleted_at: string | null;
 }
 
 // apps/api/src/schema.ts ACTIVITY_KINDS ile aynı.
@@ -130,6 +136,8 @@ export type SourceSettingKey =
   | "source_producthunt_enabled"
   | "source_hackernews_enabled";
 
+export type CronRunKind = "daily" | "merge";
+
 export interface CronRun {
   id: string;
   started_at: string;
@@ -137,13 +145,27 @@ export interface CronRun {
   status: "running" | "success" | "failed";
   source_breakdown: Record<string, number> | null;
   error: string | null;
+  kind: CronRunKind;
+  /** Havuz bakımı sayıları: merges_applied, merges_pending, features, skipped, archived, purged. */
+  summary: Record<string, number> | null;
 }
 
-export function fetchSettings(): Promise<{ settings: Record<SourceSettingKey, boolean> }> {
+// Havuz bakımı ayarları (gün).
+export interface MaintenanceSettings {
+  merge_interval_days: number;
+  purge_after_days: number;
+}
+
+export function fetchSettings(): Promise<{
+  settings: Record<SourceSettingKey, boolean>;
+  maintenance: MaintenanceSettings;
+}> {
   return request("/admin/settings");
 }
 
-export function patchSettings(key: SourceSettingKey, value: boolean): Promise<{ ok: true }> {
+export function patchSettings(key: SourceSettingKey, value: boolean): Promise<{ ok: true }>;
+export function patchSettings(key: keyof MaintenanceSettings, value: number): Promise<{ ok: true }>;
+export function patchSettings(key: string, value: boolean | number): Promise<{ ok: true }> {
   return request("/admin/settings", { method: "PATCH", body: JSON.stringify({ key, value }) });
 }
 
@@ -174,14 +196,15 @@ export type DispatchableWorkflow =
   | "daily-ideas.yml"
   | "reevaluate-idea.yml"
   | "find-competitors.yml"
-  | "evaluate-idea.yml";
+  | "evaluate-idea.yml"
+  | "merge-ideas.yml";
 
 export function triggerWorkflow(workflow: DispatchableWorkflow, inputs?: Record<string, string>): Promise<{ ok: true }> {
   return request("/admin/trigger-workflow", { method: "POST", body: JSON.stringify({ workflow, inputs }) });
 }
 
-export function fetchCronRuns(limit = 30): Promise<{ runs: CronRun[] }> {
-  return request(`/admin/cron-runs?limit=${limit}`);
+export function fetchCronRuns(limit = 30, kind: CronRunKind = "daily"): Promise<{ runs: CronRun[] }> {
+  return request(`/admin/cron-runs?limit=${limit}&kind=${kind}`);
 }
 
 export interface TrendSnapshot {
@@ -495,4 +518,90 @@ export function fetchLastCommit(ideaId: string): Promise<{ commit: RepoCommit | 
   );
   lastCommitInFlight.set(ideaId, promise);
   return promise;
+}
+
+// Havuz bakımı önerileri (merge-ideas.yml).
+export type ProposalStatus = "pending" | "applied" | "rejected" | "undone";
+
+export interface MergeProposalPayload {
+  name: string;
+  one_liner: string;
+  problem: string;
+  target_audience: string;
+  core_features: string[];
+  monetization: string;
+  category: string;
+  inspiration_sources: string[];
+  tags: string[];
+  scores: IdeaScores;
+}
+
+export interface FeatureProposalPayload {
+  title: string;
+  description: string;
+}
+
+interface ProposalBase {
+  id: string;
+  run_id: string | null;
+  status: ProposalStatus;
+  auto_applied: boolean;
+  source_ids: string[];
+  source_prev_statuses: Record<string, IdeaStatus> | null;
+  /** feature: geliştirmedeki fikir; merge: uygulanınca oluşan birleşik fikir. */
+  target_idea_id: string | null;
+  reason: string;
+  /** Uygulanamadıysa (ör. ad çakışması) sebebi. */
+  error: string | null;
+  issue_url: string | null;
+  created_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+}
+
+export type Proposal =
+  | (ProposalBase & { kind: "merge"; payload: MergeProposalPayload })
+  | (ProposalBase & { kind: "feature"; payload: FeatureProposalPayload });
+
+/** Öneri kartlarında gösterilen kısa fikir özeti. */
+export interface IdeaSummary {
+  id: string;
+  name: string;
+  one_liner: string;
+  category: string;
+  status: IdeaStatus;
+  user_rating: number | null;
+  user_note: string | null;
+  overall: number | null;
+  merged_into_id: string | null;
+}
+
+export interface ProposalsResponse {
+  proposals: Proposal[];
+  ideas: Record<string, IdeaSummary>;
+}
+
+export function fetchProposals(status?: ProposalStatus): Promise<ProposalsResponse> {
+  return request(status ? `/proposals?status=${status}` : "/proposals");
+}
+
+export function fetchIdeaProposals(ideaId: string): Promise<ProposalsResponse & { merged_from: IdeaSummary[] }> {
+  return request(`/ideas/${ideaId}/proposals`);
+}
+
+export function applyProposal(id: string): Promise<{ ok: true; idea_id: string }> {
+  return request(`/proposals/${id}/apply`, { method: "POST" });
+}
+
+export function rejectProposal(id: string): Promise<{ ok: true }> {
+  return request(`/proposals/${id}/reject`, { method: "POST" });
+}
+
+export function undoProposal(id: string): Promise<{ ok: true }> {
+  return request(`/proposals/${id}/undo`, { method: "POST" });
+}
+
+// Özellik önerisini kabul eder; repo varsa issue_url dolu döner.
+export function acceptProposal(id: string): Promise<{ ok: true; issue_url: string | null }> {
+  return request(`/proposals/${id}/accept`, { method: "POST" });
 }

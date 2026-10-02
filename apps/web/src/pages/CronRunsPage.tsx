@@ -5,6 +5,7 @@ import {
   fetchTrendSnapshots,
   fetchWorkflowRuns,
   type CronRun,
+  type CronRunKind,
   type TrendSnapshot,
   type WorkflowRun,
 } from "@/lib/api";
@@ -85,7 +86,7 @@ function SummaryStrip({ statuses }: { statuses: RunStatus[] }) {
   );
 }
 
-const TABS = ["daily", "jobs"] as const;
+const TABS = ["daily", "jobs", "maintenance"] as const;
 type TabValue = (typeof TABS)[number];
 
 // "Çalışma geçmişi": günlük fikir üretimi (cron_runs) + fikir bazlı arka plan
@@ -100,15 +101,19 @@ export function CronRunsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Çalışma geçmişi"
-        description="Günlük fikir üretimi ve fikir bazlı arka plan işleri, en yenisi en üstte."
+        description="Günlük fikir üretimi, fikir bazlı arka plan işleri ve havuz bakımı, en yenisi en üstte."
       />
       <Tabs value={tab} onValueChange={(v) => setSearchParams(v === "daily" ? {} : { tab: v }, { replace: true })}>
         <TabsList>
           <TabsTrigger value="daily">Günlük fikir üretimi</TabsTrigger>
           <TabsTrigger value="jobs">Fikir işleri</TabsTrigger>
+          <TabsTrigger value="maintenance">Havuz bakımı</TabsTrigger>
         </TabsList>
         <TabsContent value="daily" className="mt-4">
-          <DailyRunsTab />
+          <DailyRunsTab kind="daily" />
+        </TabsContent>
+        <TabsContent value="maintenance" className="mt-4">
+          <DailyRunsTab kind="merge" />
         </TabsContent>
         <TabsContent value="jobs" className="mt-4">
           <IdeaJobsTab />
@@ -194,17 +199,28 @@ function IdeaJobsTab() {
   );
 }
 
-function DailyRunsTab() {
+// Havuz bakımı koşusunun özetindeki sayılar (submit-proposals.ts).
+const SUMMARY_LABELS: Record<string, string> = {
+  merges_applied: "Otomatik birleştirme",
+  merges_pending: "Onay bekleyen birleştirme",
+  features: "Özellik önerisi",
+  skipped: "Atlanan öneri",
+  archived: "Arşivlenen",
+  purged: "Kalıcı silinen",
+};
+
+// Günlük fikir üretimi ve havuz bakımı aynı cron_runs kaydını kullanır.
+function DailyRunsTab({ kind }: { kind: CronRunKind }) {
   const [runs, setRuns] = useState<CronRun[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const [snapshotsByRun, setSnapshotsByRun] = useState<Record<string, TrendSnapshot[]>>({});
 
   useEffect(() => {
-    fetchCronRuns()
+    fetchCronRuns(30, kind)
       .then((res) => setRuns(res.runs))
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
-  }, []);
+  }, [kind]);
 
   function toggleExpand(runId: string) {
     const next = expandedRunId === runId ? null : runId;
@@ -223,7 +239,13 @@ function DailyRunsTab() {
     <div className="flex flex-col gap-4">
       <SummaryStrip statuses={runs.map((r) => r.status)} />
 
-      {runs.length === 0 && <PageMessage>Henüz kayıtlı bir çalışma yok.</PageMessage>}
+      {runs.length === 0 && (
+        <PageMessage>
+          {kind === "merge"
+            ? "Henüz havuz bakımı çalışmadı. Ayarlar'dan elle başlatabilirsin."
+            : "Henüz kayıtlı bir çalışma yok."}
+        </PageMessage>
+      )}
 
       <div className="flex flex-col gap-3">
         {runs.map((run) => {
@@ -254,6 +276,21 @@ function DailyRunsTab() {
                     <Button variant="ghost" size="sm" className="h-6 px-2" onClick={() => toggleExpand(run.id)}>
                       {expanded ? "Kaynak detaylarını gizle" : "Kaynak detaylarını gör"}
                     </Button>
+                  </div>
+                )}
+
+                {run.summary && (
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    {Object.entries(run.summary).map(([key, count]) => (
+                      <span key={key}>
+                        {SUMMARY_LABELS[key] ?? key}: <span className="font-medium text-foreground">{count}</span>
+                      </span>
+                    ))}
+                    {(run.summary.merges_pending > 0 || run.summary.features > 0) && (
+                      <Link to="/proposals" className="text-primary underline underline-offset-4">
+                        Önerilere git
+                      </Link>
+                    )}
                   </div>
                 )}
 

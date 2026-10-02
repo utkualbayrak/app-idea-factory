@@ -473,8 +473,28 @@ Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wi
   4. `submit-proposals.ts` writes `output/run-summary.json`
   5. `finish-cron-run.ts`, which now sends that file as `summary`
 
-  **The schedule is commented out until the user approves the prompt draft**; manual dispatch works. It's in `DISPATCHABLE_WORKFLOWS`.
-- `prompts/merge-ideas.md` was drafted by Claude for the user to review (same ownership rule). It references `daily-ideas.md`'s "3." and "4." sections.
+  The user approved the prompt on 2026-10-03 and the schedule (`0 4 * * *`) is now on. It's in `DISPATCHABLE_WORKFLOWS`.
+- `prompts/merge-ideas.md` was drafted by Claude and approved by the user (same ownership rule). It references `daily-ideas.md`'s "3." and "4." sections.
+
+## Pool maintenance — Grup 2 (2026-10-03): UI + Settings job runner
+
+- **`/proposals`** (`ProposalsPage.tsx`, sidebar "Öneriler" with a pending-count `SidebarMenuBadge` refreshed on every route change): tabs Bekleyen / Uygulanan / Reddedilen (`?tab=`), plus a "Havuz bakımını şimdi çalıştır" button. Cards are in `components/ProposalCards.tsx`:
+  - `MergeProposalCard` shows the sources, the proposed merged idea, the reason, and apply/reject or undo.
+  - `FeatureProposalCard` shows accept/reject, then the issue link or "iskelet kurulunca".
+  - `IdeaSummaryTile` is reused on the detail page.
+- **Detail page:**
+  - "Birleşik" badge (also in `IdeaTable` as `MergedMark`).
+  - `PoolBanners`: "birleştirildi / özellik olarak aktarıldı" for `merged` ideas, and a pending-proposal notice for pool ideas.
+  - `MergedFromCard` (sources with notes and ratings, undo) and `FeatureSuggestionsCard` (dev ideas), both fed by `GET /ideas/:id/proposals`.
+  - Hold and delete buttons are disabled outside the pool.
+- **Settings:**
+  - "Havuz bakımı" card with an interval select.
+  - **`ManualJobsCard` ("İşleri elle çalıştır")**: every workflow except deploy can be run from here.
+    - General jobs: daily ideas, pool maintenance (`force`).
+    - Per-idea jobs, via an idea picker: evaluate, reevaluate, find competitors, re-plan (`POST /tasks` with the task's current params), build/retry skeleton (`POST /tasks/:id/build`), and repo sync.
+    - Each job is disabled with a written reason when its preconditions aren't met, and shows its last run.
+- **Çalışma geçmişi** has a third tab "Havuz bakımı" (`?tab=maintenance`, `cron_runs.kind=merge`, summary counts via `SUMMARY_LABELS`).
+- **Dashboard** has a "Bekleyen öneri" tile; the grid is now `md:grid-cols-6`.
 
 ## What this project is
 

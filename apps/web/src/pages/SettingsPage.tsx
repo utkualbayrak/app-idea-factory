@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import { fetchSettings, patchSettings, type SourceSettingKey } from "@/lib/api";
-import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
+import { Link } from "react-router-dom";
+import { fetchSettings, patchSettings, type MaintenanceSettings, type SourceSettingKey } from "@/lib/api";
+import { ManualJobsCard } from "@/components/ManualJobsCard";
 import { UserNamesCard } from "@/components/UserNamesCard";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const INTERVAL_OPTIONS = [1, 2, 3, 5, 7, 14];
 
 const SOURCE_LABELS: Record<SourceSettingKey, string> = {
   source_reddit_enabled: "Reddit",
@@ -16,16 +20,32 @@ const SOURCE_LABELS: Record<SourceSettingKey, string> = {
 
 export function SettingsPage() {
   const [settings, setSettings] = useState<Record<SourceSettingKey, boolean> | null>(null);
+  const [maintenance, setMaintenance] = useState<MaintenanceSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSettings()
-      .then((res) => setSettings(res.settings))
+      .then((res) => {
+        setSettings(res.settings);
+        setMaintenance(res.maintenance);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)));
   }, []);
 
+  async function handleMaintenanceChange(key: keyof MaintenanceSettings, value: number) {
+    if (!maintenance) return;
+    const previous = maintenance[key];
+    setMaintenance({ ...maintenance, [key]: value });
+    try {
+      await patchSettings(key, value);
+    } catch (err) {
+      setMaintenance((prev) => (prev ? { ...prev, [key]: previous } : prev));
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function handleToggle(key: SourceSettingKey, checked: boolean) {
-    if (!settings) return;
+    if (!settings || !maintenance) return;
     setSettings({ ...settings, [key]: checked });
     try {
       await patchSettings(key, checked);
@@ -36,7 +56,7 @@ export function SettingsPage() {
     }
   }
 
-  const header = <PageHeader title="Ayarlar" description="Trend kaynakları, günlük fikir üretimi ve kullanıcılar." />;
+  const header = <PageHeader title="Ayarlar" description="Trend kaynakları, havuz bakımı, işleri elle çalıştırma ve kullanıcılar." />;
 
   if (error)
     return (
@@ -45,7 +65,7 @@ export function SettingsPage() {
         <PageMessage tone="error">Ayarlar yüklenemedi: {error}</PageMessage>
       </div>
     );
-  if (!settings)
+  if (!settings || !maintenance)
     return (
       <div className="flex flex-col gap-6">
         {header}
@@ -82,21 +102,44 @@ export function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Manuel tetikleme</CardTitle>
+          <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Havuz bakımı</CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Günlük cron'u zamanlanmış saati beklemeden şimdi çalıştırır (aktif kaynak ayarlarıyla).
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Claude Fikirler listesindeki benzer fikirleri birleştirmeyi, geliştirmedeki fikirlere yakın olanları özellik
+            önerisi yapmayı önerir. Hiç dokunmadığın fikirlerin birleştirmesi otomatik uygulanır (geri alınabilir); puan
+            ya da not verdiğin veya askıya aldığın bir fikir varsa{" "}
+            <Link to="/proposals" className="text-primary underline underline-offset-4">
+              Öneriler
+            </Link>
+            'de onayını bekler.
           </p>
-          <WorkflowTriggerButton
-            label="Cron'u şimdi tetikle"
-            loadingLabel="Tetikleniyor…"
-            successMessage="Tetiklendi — birkaç dakika içinde Cron Geçmişi'nde görünecek."
-            workflow="daily-ideas.yml"
-            variant="default"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Label htmlFor="merge-interval" className="font-normal">
+              Bakım aralığı
+            </Label>
+            <Select
+              value={String(maintenance.merge_interval_days)}
+              onValueChange={(v) => handleMaintenanceChange("merge_interval_days", Number(v))}
+            >
+              <SelectTrigger id="merge-interval" className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[...new Set([...INTERVAL_OPTIONS, maintenance.merge_interval_days])]
+                  .sort((a, b) => a - b)
+                  .map((days) => (
+                    <SelectItem key={days} value={String(days)}>
+                      {days === 1 ? "Her gün" : `${days} günde bir`}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
+
+      <ManualJobsCard />
 
       <UserNamesCard />
     </div>

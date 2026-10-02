@@ -4,6 +4,7 @@ import {
   fetchIdeas,
   fetchCronRuns,
   fetchWorkflowRuns,
+  fetchProposals,
   type Idea,
   type CronRun,
   type WorkflowRun,
@@ -59,6 +60,7 @@ export function DashboardPage() {
   const [jobs, setJobs] = useState<WorkflowRun[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<RangeValue>("30");
+  const [pendingProposals, setPendingProposals] = useState<number | null>(null);
 
   useEffect(() => {
     Promise.all([fetchIdeas(), fetchCronRuns(5)])
@@ -71,6 +73,9 @@ export function DashboardPage() {
     fetchWorkflowRuns({ limit: 5 })
       .then((res) => setJobs(res.runs))
       .catch(() => setJobs([]));
+    fetchProposals("pending")
+      .then((res) => setPendingProposals(res.proposals.length))
+      .catch(() => {});
   }, []);
 
   // Anlık durum sayaçları (dönem seçiminden bağımsız).
@@ -164,7 +169,7 @@ export function DashboardPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium tracking-wide text-muted-foreground uppercase">Şu an</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
           <StatTile label="Toplam fikir" value={metrics.total} />
           <StatTile label="Yeni" value={metrics.fresh} to="/ideas" />
           <StatTile label="Askıda" value={metrics.onHold} to="/ideas" />
@@ -175,6 +180,7 @@ export function DashboardPage() {
           <StatTile label="Testte" value={metrics.inTest} to="/testing" />
           <StatTile label="Dağıtıma hazır" value={metrics.ready} to="/ready" />
           <StatTile label="Son cron" value={latestRun ? RUN_STATUS_LABELS[latestRun.status] : "—"} to="/cron-runs" />
+          <StatTile label="Bekleyen öneri" value={pendingProposals ?? "—"} to="/proposals" />
         </div>
       </section>
 

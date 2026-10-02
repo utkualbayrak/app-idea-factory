@@ -7,10 +7,9 @@ name: Pool Maintenance
 # Her gün çalışır ama bakım yalnızca Ayarlar'daki aralık (varsayılan 3 gün)
 # dolduysa yapılır; "*/3" gün ifadesi ay sonunda kaydığı için kullanılmadı.
 on:
-  # Prompt (prompts/merge-ideas.md) kullanıcı onayından sonra açılacak.
-  # schedule:
-  #   # 07:00 Türkiye saati, günlük fikir üretiminden (06:00) sonra.
-  #   - cron: "0 4 * * *"
+  schedule:
+    # 07:00 Türkiye saati, günlük fikir üretiminden (06:00) sonra.
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       force:

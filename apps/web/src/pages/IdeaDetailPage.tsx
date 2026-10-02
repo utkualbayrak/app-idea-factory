@@ -9,7 +9,12 @@ import {
   fetchDevReports,
   fetchTestRounds,
   fetchWorkflowRuns,
+  fetchIdeaProposals,
+  undoProposal,
   patchIdea,
+  type IdeaSummary,
+  type Proposal,
+  type ProposalsResponse,
   type Idea,
   type Competitor,
   type DevReport,
@@ -34,10 +39,11 @@ import { DevelopmentCard } from "@/components/DevelopmentCard";
 import { DevReportsCard } from "@/components/DevReportsCard";
 import { ReworkBanner, TestCard } from "@/components/TestCard";
 import { TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
+import { FeatureProposalCard, IdeaSummaryTile } from "@/components/ProposalCards";
 import { PageMessage } from "@/components/PageHeader";
 import { formatDateTime } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
-import { categoryColorClasses, ideaSection } from "@/lib/idea-colors";
+import { categoryColorClasses, ideaSection, isInIdeaPool } from "@/lib/idea-colors";
 import { ideaToMarkdown } from "@/lib/export-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,6 +88,15 @@ export function IdeaDetailPage() {
   const [repo, setRepo] = useState<RepoState | null>(null);
   const [devReports, setDevReports] = useState<DevReport[]>([]);
   const [testRounds, setTestRounds] = useState<TestRound[]>([]);
+  const [poolInfo, setPoolInfo] = useState<PoolInfo | null>(null);
+
+  // Havuz bakımı: bu fikrin kaynağı/hedefi olduğu öneriler.
+  const loadProposals = useCallback(() => {
+    if (!id) return;
+    fetchIdeaProposals(id)
+      .then(setPoolInfo)
+      .catch(() => {});
+  }, [id]);
 
   const loadRuns = useCallback(() => {
     if (!id) return;
@@ -126,7 +141,8 @@ export function IdeaDetailPage() {
       .catch(() => setCompetitors([]));
     loadRuns();
     loadTask();
-  }, [id, loadRuns, loadTask]);
+    loadProposals();
+  }, [id, loadRuns, loadTask, loadProposals]);
 
   // Belgeler hazırlanırken / iskelet kurulurken sayfa kendini yeniler; iş
   // bitince ya da patlayınca durur.
@@ -152,7 +168,8 @@ export function IdeaDetailPage() {
       .catch(() => {});
     loadRuns();
     loadTask();
-  }, [id, loadRuns, loadTask]);
+    loadProposals();
+  }, [id, loadRuns, loadTask, loadProposals]);
 
   // Kanban'daki "Detay" butonu /ideas/:id#gelistirme ya da #test ile gelir:
   // ilgili kart (veri geldikten sonra) görünür olunca bir kez oraya kaydır.
@@ -232,6 +249,7 @@ export function IdeaDetailPage() {
           <Badge className={categoryColorClasses(idea.category)}>{idea.category}</Badge>
           <IdeaStatusBadge idea={idea} />
           {idea.origin === "manual" && <Badge variant="outline">Elle girildi</Badge>}
+          {idea.origin === "merge" && <Badge variant="outline">Birleşik</Badge>}
           <ActivityBadge idea={idea} />
         </div>
         <p className="mt-1 text-muted-foreground">{idea.one_liner}</p>
@@ -239,6 +257,8 @@ export function IdeaDetailPage() {
       <UpdatedBy by={idea.updated_by} at={idea.updated_at} className="-mt-3" />
 
       {idea.status === "rework" && <ReworkBanner rounds={testRounds} />}
+
+      {id && poolInfo && <PoolBanners ideaId={id} idea={idea} info={poolInfo} />}
 
       {idea.source_text && idea.scores == null && (
         <Card className="min-w-0">
@@ -309,6 +329,10 @@ export function IdeaDetailPage() {
         </CardContent>
       </Card>
 
+      {id && poolInfo && idea.origin === "merge" && (
+        <MergedFromCard ideaId={id} info={poolInfo} onChanged={handleTriggered} />
+      )}
+
       {task && id && (
         <DevelopmentCard
           ideaId={id}
@@ -322,6 +346,8 @@ export function IdeaDetailPage() {
           onChanged={handleTriggered}
         />
       )}
+
+      {id && poolInfo && <FeatureSuggestionsCard ideaId={id} info={poolInfo} onChanged={handleTriggered} />}
 
       {id && <TestCard ideaId={id} ideaStatus={idea.status} rounds={testRounds} onChanged={handleTriggered} />}
 
@@ -512,7 +538,7 @@ export function IdeaDetailPage() {
             confirmLabel="Askıya al"
             variant="outline"
             className="border-amber-400 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-950"
-            disabled={idea.status === "deleted"}
+            disabled={!isInIdeaPool(idea.status)}
             onConfirm={() => handleSetHold("on_hold")}
           />
         )}
@@ -523,7 +549,7 @@ export function IdeaDetailPage() {
           confirmLabel="Sil"
           variant="destructive"
           confirmVariant="destructive"
-          disabled={idea.status === "deleted"}
+          disabled={!isInIdeaPool(idea.status)}
           onConfirm={handleDelete}
         />
         {!task && (idea.status === "new" || idea.status === "on_hold") &&
@@ -584,5 +610,125 @@ function ScoreBar({
       </div>
       <span className="text-right text-muted-foreground">{value.toFixed(2)}/10</span>
     </div>
+  );
+}
+
+type PoolInfo = ProposalsResponse & { merged_from: IdeaSummary[] };
+
+// Birleştirilmiş fikirde nereye gittiği; havuzdaki fikirde bekleyen öneri uyarısı.
+function PoolBanners({ ideaId, idea, info }: { ideaId: string; idea: Idea; info: PoolInfo }) {
+  if (idea.status === "merged" && idea.merged_into_id) {
+    const target = info.ideas[idea.merged_into_id];
+    const asFeature = info.proposals.some(
+      (p) => p.kind === "feature" && p.status === "applied" && p.source_ids.includes(ideaId),
+    );
+    return (
+      <div className="rounded-md border border-sky-300 bg-sky-50 px-3 py-2 text-sm dark:border-sky-900 dark:bg-sky-950">
+        Bu fikir{" "}
+        <Link to={`/ideas/${idea.merged_into_id}`} className="font-medium text-primary underline underline-offset-4">
+          {target?.name ?? "başka bir fikir"}
+        </Link>
+        {asFeature ? " fikrine özellik önerisi olarak aktarıldı." : " ile birleştirildi."} Fikirler listesinde artık
+        görünmüyor.
+      </div>
+    );
+  }
+  const pending = info.proposals.some((p) => p.status === "pending" && p.source_ids.includes(ideaId));
+  if (pending && isInIdeaPool(idea.status)) {
+    return (
+      <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm dark:border-amber-900 dark:bg-amber-950">
+        Havuz bakımı bu fikir için bir öneri yaptı (birleştirme ya da özellik önerisi), onayını bekliyor.{" "}
+        <Link to="/proposals" className="font-medium text-primary underline underline-offset-4">
+          Önerilere git
+        </Link>
+      </div>
+    );
+  }
+  return null;
+}
+
+// Birleşik fikirde kaynaklar: notları ve puanlarıyla, gerekçe ve geri alma.
+function MergedFromCard({ ideaId, info, onChanged }: { ideaId: string; info: PoolInfo; onChanged: () => void }) {
+  const [error, setError] = useState<string | null>(null);
+  const proposal = info.proposals.find((p) => p.kind === "merge" && p.status === "applied" && p.target_idea_id === ideaId);
+  if (!proposal) return null;
+  const sources = info.merged_from.filter((s) => proposal.source_ids.includes(s.id));
+  const merged = info.ideas[ideaId];
+  const canUndo = merged != null && isInIdeaPool(merged.status);
+  const proposalId = proposal.id;
+
+  async function handleUndo() {
+    setError(null);
+    try {
+      await undoProposal(proposalId);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Birleştirilen fikirler</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          {proposal.auto_applied ? "Havuz bakımı otomatik birleştirdi" : "Onayla birleştirildi"}
+          {proposal.decided_at && ` · ${formatDateTime(proposal.decided_at)}`}
+        </p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-sm break-words text-muted-foreground">
+          <span className="font-medium text-foreground">Neden:</span> {proposal.reason}
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {sources.map((source) => (
+            <IdeaSummaryTile key={source.id} idea={source} />
+          ))}
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {canUndo && (
+          <ConfirmButton
+            label="Birleştirmeyi geri al"
+            title="Birleştirmeyi geri al?"
+            description="Bu birleşik fikir silinir, kaynak fikirler önceki durumlarıyla Fikirler listesine döner."
+            confirmLabel="Geri al"
+            className="w-fit"
+            onConfirm={handleUndo}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Geliştirmedeki fikre havuz bakımının önerdiği özellikler.
+function FeatureSuggestionsCard({ ideaId, info, onChanged }: { ideaId: string; info: PoolInfo; onChanged: () => void }) {
+  const features = info.proposals.filter(
+    (p): p is Extract<Proposal, { kind: "feature" }> => p.kind === "feature" && p.target_idea_id === ideaId,
+  );
+  if (features.length === 0) return null;
+  const pending = features.filter((p) => p.status === "pending").length;
+
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Özellik önerileri</CardTitle>
+        <p className="text-xs text-muted-foreground">
+          Havuzdaki benzer fikirlerden bu uygulamaya eklenebilecek özellikler.
+          {pending > 0 && ` ${pending} öneri onay bekliyor.`}
+        </p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {features.map((proposal) => (
+          <FeatureProposalCard
+            key={proposal.id}
+            proposal={proposal}
+            ideas={info.ideas}
+            onChanged={onChanged}
+            showTarget={false}
+          />
+        ))}
+      </CardContent>
+    </Card>
   );
 }
