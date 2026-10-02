@@ -54,6 +54,8 @@ export interface Idea {
   origin: "cron" | "manual";
   /** "Açıklama yaz, Claude doldursun" yolunda kullanıcının yazdığı metin. */
   source_text: string | null;
+  /** Son durum değişikliği; null ise durum oluşturulduğundan beri aynı (created_at'e bak). */
+  status_changed_at: string | null;
 }
 
 // apps/api/src/schema.ts ACTIVITY_KINDS ile aynı.

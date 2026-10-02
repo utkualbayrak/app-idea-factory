@@ -45,9 +45,17 @@ function roadmapFrom(
 
 // "Geliştirildi" formu: yol haritasında neler bitti, eksik kalan ve fazladan
 // eklenen özellikler, kısa notlar. Gönderilince fikir "Test bekliyor"a geçer.
-export function DevReportPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+export interface DevReportFormProps {
+  ideaId: string;
+  /** Gönderim başarılı olunca. */
+  onDone: () => void;
+  onCancel: () => void;
+  /** Kanban penceresinde: geri linki gösterilmez. */
+  inDialog?: boolean;
+}
+
+export function DevReportForm({ ideaId, onDone, onCancel, inDialog = false }: DevReportFormProps) {
+  const id = ideaId;
   const [idea, setIdea] = useState<Idea | null>(null);
   const [task, setTask] = useState<Task | null>(null);
   const [documents, setDocuments] = useState<TaskDocument[]>([]);
@@ -137,7 +145,7 @@ export function DevReportPage() {
         extra_features: extra.map((v) => v.trim()).filter(Boolean),
         notes: notes.map((v) => v.trim()).filter(Boolean),
       });
-      navigate(`/ideas/${id}`);
+      onDone();
     } catch (err) {
       setSubmitError(`Gönderilemedi: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -160,7 +168,7 @@ export function DevReportPage() {
   if (!allowed) {
     return (
       <div className="flex flex-col gap-4">
-        {backLink}
+        {!inDialog && backLink}
         <PageHeader title={`Geliştirildi — ${idea.name}`} />
         <PageMessage>
           Bu form yalnızca iskeleti hazır, geliştirme aşamasındaki (ya da testten dönmüş) bir fikir için açılır.
@@ -176,7 +184,7 @@ export function DevReportPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      {backLink}
+      {!inDialog && backLink}
       <PageHeader
         title={`Geliştirildi — ${idea.name}`}
         description={
@@ -298,10 +306,18 @@ export function DevReportPage() {
           variant="default"
           onConfirm={handleSubmit}
         />
-        <Button type="button" variant="outline" onClick={() => navigate(`/ideas/${id}`)}>
+        <Button type="button" variant="outline" onClick={onCancel}>
           Vazgeç
         </Button>
       </div>
     </div>
   );
+}
+
+export function DevReportPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  if (!id) return null;
+  const back = () => navigate(`/ideas/${id}`);
+  return <DevReportForm ideaId={id} onDone={back} onCancel={back} />;
 }

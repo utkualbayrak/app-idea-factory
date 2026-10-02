@@ -31,9 +31,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 // "Testi başlat" formu: kaç kişi, kaç gün, ne zaman, hangi platform ve
 // kanaldan, neyin deneneceği (senaryolar) ve başarı kriterleri. Gönderilince
 // fikir "Test ediliyor"a geçer.
-export function TestPlanPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+export interface TestPlanFormProps {
+  ideaId: string;
+  /** Gönderim başarılı olunca. */
+  onDone: () => void;
+  onCancel: () => void;
+  /** Kanban penceresinde: geri linki gösterilmez. */
+  inDialog?: boolean;
+}
+
+export function TestPlanForm({ ideaId, onDone, onCancel, inDialog = false }: TestPlanFormProps) {
+  const id = ideaId;
   const [idea, setIdea] = useState<Idea | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -88,7 +96,7 @@ export function TestPlanPage() {
         scenarios: scenarios.map((s) => s.trim()).filter(Boolean),
         success_criteria: criteria.map((s) => s.trim()).filter(Boolean),
       });
-      navigate(`/ideas/${id}`);
+      onDone();
     } catch (err) {
       setSubmitError(`Başlatılamadı: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -110,7 +118,7 @@ export function TestPlanPage() {
   if (idea.status !== "awaiting_test") {
     return (
       <div className="flex flex-col gap-4">
-        {backLink}
+        {!inDialog && backLink}
         <PageHeader title={`Testi başlat — ${idea.name}`} />
         <PageMessage>Test yalnızca "Test bekliyor" durumundaki bir fikir için başlatılabilir.</PageMessage>
       </div>
@@ -119,7 +127,7 @@ export function TestPlanPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      {backLink}
+      {!inDialog && backLink}
       <PageHeader
         title={`Testi başlat — ${idea.name}`}
         description={
@@ -260,10 +268,18 @@ export function TestPlanPage() {
           disabled={!valid}
           onConfirm={handleSubmit}
         />
-        <Button type="button" variant="outline" onClick={() => navigate(`/ideas/${id}`)}>
+        <Button type="button" variant="outline" onClick={onCancel}>
           Vazgeç
         </Button>
       </div>
     </div>
   );
+}
+
+export function TestPlanPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  if (!id) return null;
+  const back = () => navigate(`/ideas/${id}`);
+  return <TestPlanForm ideaId={id} onDone={back} onCancel={back} />;
 }

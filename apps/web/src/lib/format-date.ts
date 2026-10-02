@@ -65,3 +65,15 @@ export function addDaysIso(value: string, days: number): string {
 export function daysBetweenIso(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
+
+// "az önce", "12 dk önce", "3 saat önce", "5 gün önce"; 30 günden eskiyse tarih.
+export function formatRelative(iso: string, now = Date.now()): string {
+  const minutes = Math.floor((now - new Date(iso).getTime()) / 60_000);
+  if (minutes < 1) return "az önce";
+  if (minutes < 60) return `${minutes} dk önce`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} saat önce`;
+  const days = Math.floor(hours / 24);
+  if (days <= 30) return `${days} gün önce`;
+  return formatDate(iso);
+}

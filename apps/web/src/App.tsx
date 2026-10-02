@@ -1,11 +1,12 @@
 import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { FlaskConical, Hammer, History, Lightbulb, LayoutDashboard, LogOut, Rocket, Settings } from "lucide-react";
+import { FlaskConical, Hammer, History, Lightbulb, LayoutDashboard, LogOut, Rocket, Settings, SquareKanban } from "lucide-react";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { IdeaListPage } from "@/pages/IdeaListPage";
 import { IdeaDetailPage } from "@/pages/IdeaDetailPage";
 import { DevelopPage } from "@/pages/DevelopPage";
 import { DevReportPage } from "@/pages/DevReportPage";
 import { NewIdeaPage } from "@/pages/NewIdeaPage";
+import { KanbanPage } from "@/pages/KanbanPage";
 import { TestPlanPage } from "@/pages/TestPlanPage";
 import { TestResultPage } from "@/pages/TestResultPage";
 import { DevelopedPage, ReadyPage, TestingPage } from "@/pages/StatusListPage";
@@ -32,6 +33,7 @@ import {
 const NAV_ITEMS = [
   { to: "/", label: "Gösterge paneli", icon: LayoutDashboard },
   { to: "/ideas", label: "Fikirler", icon: Lightbulb },
+  { to: "/board", label: "Kanban", icon: SquareKanban },
   { to: "/developed", label: "Geliştirilenler", icon: Hammer },
   { to: "/testing", label: "Test", icon: FlaskConical },
   { to: "/ready", label: "Dağıtıma hazır", icon: Rocket },
@@ -99,6 +101,7 @@ function App() {
             <Route path="/ideas/:id/developed" element={<DevReportPage />} />
             <Route path="/ideas/:id/test/start" element={<TestPlanPage />} />
             <Route path="/ideas/:id/test/result" element={<TestResultPage />} />
+            <Route path="/board" element={<KanbanPage />} />
             <Route path="/developed" element={<DevelopedPage />} />
             <Route path="/testing" element={<TestingPage />} />
             <Route path="/ready" element={<ReadyPage />} />

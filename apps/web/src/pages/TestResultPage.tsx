@@ -39,9 +39,19 @@ const SCENARIO_OPTIONS = (Object.keys(SCENARIO_RESULT_LABELS) as ScenarioResult[
 
 // Test sonuç formu: kaç kişiyle kaç gün denendi, senaryolar, bulgular,
 // memnuniyet ve karar (onay → Dağıtıma hazır, geri gönder → Revizyonda).
-export function TestResultPage() {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+export interface TestResultFormProps {
+  ideaId: string;
+  /** Gönderim başarılı olunca. */
+  onDone: () => void;
+  onCancel: () => void;
+  /** Kanban penceresinde: geri linki gösterilmez. */
+  inDialog?: boolean;
+  /** Kanban'dan sürüklenince seçili gelen karar. */
+  initialDecision?: "approved" | "rework";
+}
+
+export function TestResultForm({ ideaId, onDone, onCancel, inDialog = false, initialDecision }: TestResultFormProps) {
+  const id = ideaId;
   const [idea, setIdea] = useState<Idea | null>(null);
   const [round, setRound] = useState<TestRound | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -52,7 +62,7 @@ export function TestResultPage() {
   const [scenarioResults, setScenarioResults] = useState<(ScenarioResult | null)[]>([]);
   const [findings, setFindings] = useState<TestFinding[]>([]);
   const [satisfaction, setSatisfaction] = useState<number | null>(null);
-  const [decision, setDecision] = useState<"approved" | "rework" | null>(null);
+  const [decision, setDecision] = useState<"approved" | "rework" | null>(initialDecision ?? null);
   const [reworkSummary, setReworkSummary] = useState("");
   const [reworkFindings, setReworkFindings] = useState<Set<number>>(new Set());
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -118,7 +128,7 @@ export function TestResultPage() {
         decision,
         rework_reason: decision === "rework" ? { summary: reworkSummary.trim(), finding_indexes: indexes } : undefined,
       });
-      navigate(`/ideas/${id}`);
+      onDone();
     } catch (err) {
       setSubmitError(`Gönderilemedi: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -139,7 +149,7 @@ export function TestResultPage() {
   if (!round) {
     return (
       <div className="flex flex-col gap-4">
-        {backLink}
+        {!inDialog && backLink}
         <PageHeader title={`Test sonuçları — ${idea.name}`} />
         <PageMessage>Bu fikrin açık bir test turu yok.</PageMessage>
       </div>
@@ -151,7 +161,7 @@ export function TestResultPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      {backLink}
+      {!inDialog && backLink}
       <PageHeader
         title={`Test sonuçları — ${idea.name}`}
         description={`${round.round}. tur · ${formatBatchDate(plan.start_date)} başladı · plan: ${plan.tester_count} kişi × ${plan.duration_days} gün · ${TEST_CHANNEL_LABELS[plan.channel]}`}
@@ -332,10 +342,18 @@ export function TestResultPage() {
           disabled={!valid}
           onConfirm={handleSubmit}
         />
-        <Button type="button" variant="outline" onClick={() => navigate(`/ideas/${id}`)}>
+        <Button type="button" variant="outline" onClick={onCancel}>
           Vazgeç
         </Button>
       </div>
     </div>
   );
+}
+
+export function TestResultPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  if (!id) return null;
+  const back = () => navigate(`/ideas/${id}`);
+  return <TestResultForm ideaId={id} onDone={back} onCancel={back} />;
 }

@@ -36,6 +36,8 @@ export interface IdeaRow {
   status: string;
   origin: "cron" | "manual";
   source_text: string | null;
+  /** 0013 trigger'ı yazar; o tarihten sonra eklenip durumu hiç değişmemiş fikirde null. */
+  status_changed_at: string | null;
 }
 
 export interface Idea
@@ -55,6 +57,7 @@ export function serializeIdea(row: IdeaRow): Idea {
     last_reevaluated_at: toUtcIso(row.last_reevaluated_at),
     last_activity_at: toUtcIso(row.last_activity_at),
     activity_seen_at: toUtcIso(row.activity_seen_at),
+    status_changed_at: toUtcIso(row.status_changed_at),
     core_features: JSON.parse(row.core_features),
     inspiration_sources: JSON.parse(row.inspiration_sources),
     tags: JSON.parse(row.tags),

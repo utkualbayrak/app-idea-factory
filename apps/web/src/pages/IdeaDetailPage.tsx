@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Clipboard, ClipboardCheck, GitCompare, Hammer, Search, Sparkles } from "lucide-react";
 import {
   fetchIdea,
@@ -152,6 +152,18 @@ export function IdeaDetailPage() {
     loadRuns();
     loadTask();
   }, [id, loadRuns, loadTask]);
+
+  // Kanban'daki "Detay" butonu /ideas/:id#gelistirme ya da #test ile gelir:
+  // ilgili kart (veri geldikten sonra) görünür olunca bir kez oraya kaydır.
+  const { hash } = useLocation();
+  const scrolledFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!hash || scrolledFor.current === hash) return;
+    const target = document.getElementById(hash.slice(1));
+    if (!target) return;
+    scrolledFor.current = hash;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [hash, idea, task, testRounds]);
 
   const lastRun = (workflow: IdeaWorkflow) => runs.find((run) => run.workflow === workflow);
 

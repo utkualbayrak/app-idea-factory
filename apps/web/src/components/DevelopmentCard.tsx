@@ -144,7 +144,7 @@ export function DevelopmentCard({
   }
 
   return (
-    <Card className="min-w-0">
+    <Card id="gelistirme" className="min-w-0 scroll-mt-44">
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Geliştirme</CardTitle>
         {task.status === "done" && COMMIT_DATE_STATUSES.includes(ideaStatus) ? (
