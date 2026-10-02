@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const INTERVAL_OPTIONS = [1, 2, 3, 5, 7, 14];
+const PURGE_OPTIONS = [30, 60, 90, 180, 365];
 
 const SOURCE_LABELS: Record<SourceSettingKey, string> = {
   source_reddit_enabled: "Reddit",
@@ -114,6 +115,15 @@ export function SettingsPage() {
             </Link>
             'de onayını bekler.
           </p>
+          <p className="text-sm text-muted-foreground">
+            Bakım puanı (kendi puanın varsa %40 Claude + %60 senin puanın, yoksa Claude puanı) art arda 3 bakımda 7.00'ın
+            altında kalan yeni fikirler{" "}
+            <Link to="/ideas/archive" className="text-primary underline underline-offset-4">
+              arşivlenir
+            </Link>
+            ; askıdakiler arşivlenmez. Arşivlenen ve sildiğin fikirler aşağıdaki süre sonunda kalıcı silinir, adları
+            tekrar kullanılmaz.
+          </p>
           <div className="flex flex-wrap items-center gap-2">
             <Label htmlFor="merge-interval" className="font-normal">
               Bakım aralığı
@@ -131,6 +141,28 @@ export function SettingsPage() {
                   .map((days) => (
                     <SelectItem key={days} value={String(days)}>
                       {days === 1 ? "Her gün" : `${days} günde bir`}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Label htmlFor="purge-days" className="font-normal">
+              Kalıcı silme
+            </Label>
+            <Select
+              value={String(maintenance.purge_after_days)}
+              onValueChange={(v) => handleMaintenanceChange("purge_after_days", Number(v))}
+            >
+              <SelectTrigger id="purge-days" className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[...new Set([...PURGE_OPTIONS, maintenance.purge_after_days])]
+                  .sort((a, b) => a - b)
+                  .map((days) => (
+                    <SelectItem key={days} value={String(days)}>
+                      {days} gün sonra
                     </SelectItem>
                   ))}
               </SelectContent>

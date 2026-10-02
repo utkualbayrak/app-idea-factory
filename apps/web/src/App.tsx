@@ -15,6 +15,7 @@ import { ComparePage } from "@/pages/ComparePage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { CronRunsPage } from "@/pages/CronRunsPage";
 import { ProposalsPage } from "@/pages/ProposalsPage";
+import { ArchivePage } from "@/pages/ArchivePage";
 import { fetchProposals } from "@/lib/api";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
@@ -118,6 +119,7 @@ function App() {
             <Route path="/ideas" element={<IdeaListPage />} />
             <Route path="/ideas/:id" element={<IdeaDetailPage />} />
             <Route path="/ideas/new" element={<NewIdeaPage />} />
+            <Route path="/ideas/archive" element={<ArchivePage />} />
             <Route path="/ideas/:id/develop" element={<DevelopPage />} />
             <Route path="/ideas/:id/developed" element={<DevReportPage />} />
             <Route path="/ideas/:id/test/start" element={<TestPlanPage />} />

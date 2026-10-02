@@ -77,3 +77,8 @@ export function formatRelative(iso: string, now = Date.now()): string {
   if (days <= 30) return `${days} gün önce`;
   return formatDate(iso);
 }
+
+// Arşivlenmiş fikrin kalıcı silineceği gün: arşivlenme + Ayarlar'daki süre.
+export function formatPurgeDate(archivedAt: string, purgeDays: number): string {
+  return formatDate(new Date(new Date(archivedAt).getTime() + purgeDays * 86_400_000).toISOString());
+}

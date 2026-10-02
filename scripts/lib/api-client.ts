@@ -241,3 +241,12 @@ export async function submitProposals(body: {
     body: JSON.stringify(body),
   });
 }
+
+// Bakım sonu: süresi dolanları kalıcı siler, düşük puanlıları sayar ve arşivler.
+export async function finalizeMaintenance(runId?: string): Promise<{ purged: number; archived: number; approaching: number }> {
+  return fetchJson(`${BASE_URL}/admin/maintenance/finalize`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ run_id: runId }),
+  });
+}

@@ -17,6 +17,7 @@ import { categoryColorClasses, isInIdeaPool } from "@/lib/idea-colors";
 import { combinedScore } from "@/lib/scoring";
 import { formatBatchDate } from "@/lib/format-date";
 import { ActivityBadge } from "@/components/ActivityBadge";
+import { StaleBadge } from "@/components/StaleBadge";
 import { IdeaStatusBadge } from "@/components/IdeaStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -211,6 +212,7 @@ function buildColumns(selection?: SelectionProps): ColumnDef<Idea>[] {
         <div className="flex min-w-0 flex-col items-start gap-1">
           <IdeaStatusBadge idea={row.original} />
           <ActivityBadge idea={row.original} />
+          <StaleBadge idea={row.original} />
         </div>
       ),
     },
@@ -376,6 +378,7 @@ export function IdeaTable({
                     </span>
                     {!isInIdeaPool(idea.status) && <IdeaStatusBadge idea={idea} />}
                     <ActivityBadge idea={idea} />
+                    <StaleBadge idea={idea} />
                   </div>
                 </div>
                 <div className="shrink-0">

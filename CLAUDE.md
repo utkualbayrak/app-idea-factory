@@ -514,6 +514,21 @@ Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wi
   - `WorkflowTriggerButton` shows "zaten çalışıyor" on 409 and only blames the token on 500.
   - `RunError` moved to `components/RunError.tsx`.
 
+## Pool maintenance — Grup 2b (2026-10-03): archive and purge
+
+- **`POST /admin/maintenance/finalize`** (workflow-only, `finalize-maintenance.ts`) is the last step of `merge-ideas.yml`, after `submit-proposals`. It merges `archived`/`purged` into `run-summary.json`. In order:
+  1. **Purge.** Deletes `archived` ideas past `archived_at + purge_after_days`, and `deleted` ideas past `deleted_at` (falling back to `status_changed_at`, then `created_at`). Ideas that some other idea's `merged_into_id` points to are never purged. FK children are deleted first (`task_documents`, `tasks`, `workflow_runs`, `idea_competitors`, `idea_seen`), at most 100 per run, and the normalized name goes into `retired_names`.
+  2. **Stale counting** on `new` ideas. `maintenanceScore()` in `schema.ts` (mirrored in web `lib/scoring.ts`) below `ARCHIVE_SCORE_THRESHOLD` (7) → `stale_runs + 1`, otherwise 0. Skipped: `on_hold`, unscored ideas, ideas in a pending proposal, and ideas created after the run's `started_at` (new merged ideas).
+  3. **Archive** at `ARCHIVE_AFTER_RUNS` (3). Status becomes `archived`; the text fields, `user_note` and `source_text` are emptied; the score reasons become `""` via `json_set`, so the numbers and the shape stay valid; competitors and workflow runs are deleted.
+- **`POST /ideas/:id/restore`** (user): status `archived` → `new`, `stale_runs` 0, and the summary (name, one_liner, category, tags) is written to `source_text` with `scores = 'null'`. It then queues `evaluate-idea.yml`, whose "completing" mode refills the fields and keeps the name.
+  - On the detail page the evaluate button now also shows for any unscored, non-archived idea, not only manual ones, so a restore whose dispatch failed can be retried.
+- **Web:**
+  - `/ideas/archive` (`ArchivePage.tsx`, linked from the Fikirler header): search, purge date (`formatPurgeDate`), "Geri getir". `ideaSection("archived")` points back to it.
+  - `components/StaleBadge.tsx` shows "Arşive yaklaşıyor · n/3" in the table (desktop and mobile) and the detail header.
+  - `ArchivedBanner` on the detail page.
+  - Settings has a "Kalıcı silme" select (30/60/90/180/365 days) plus a rule explanation.
+  - Dashboard has an "Arşive yaklaşan" tile (12 tiles, 6 columns).
+
 ## What this project is
 
 A personal automation platform that:

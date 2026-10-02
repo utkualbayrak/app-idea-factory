@@ -41,6 +41,10 @@ import {
   CRON_RUN_STALE_MS,
   IDEA_JOB_STALE_MS,
   proposalsSubmitSchema,
+  maintenanceFinalizeSchema,
+  maintenanceScore,
+  ARCHIVE_SCORE_THRESHOLD,
+  ARCHIVE_AFTER_RUNS,
   MAINTENANCE_SETTING_DEFAULTS,
   POOL_STATUSES,
   DEV_FLOW_STATUSES,
@@ -2203,6 +2207,174 @@ app.post("/proposals/:id/accept", async (req, res) => {
       .bind(issueUrl, JSON.stringify({ [source.id]: source.status }), now, actor, row.id),
   ]);
   res.json({ ok: true, issue_url: issueUrl });
+});
+
+// Bakım koşusunun sonu (submit-proposals'tan sonra):
+// 1. Süresi dolan arşivlenmiş ve silinmiş fikirler kalıcı silinir; normalize
+//    adları retired_names'e yazılır (isim tekrarı kontrolü sürsün).
+// 2. Havuzdaki 'new' fikirlerin bakım puanı sayılır: 7.00'ın altındaysa
+//    stale_runs +1, değilse 0. Askıdakiler, puanlanmamışlar, bekleyen bir
+//    öneridekiler ve bu koşuda oluşan birleşik fikirler sayılmaz.
+// 3. stale_runs 3'e ulaşan fikir arşivlenir: yalnızca ad, özet, kategori,
+//    etiket ve puan sayıları kalır; rakipler ve iş geçmişi silinir.
+const MAX_PURGE_PER_RUN = 100;
+
+app.post("/admin/maintenance/finalize", requireWorkflowSecret, async (req, res) => {
+  const parsed = maintenanceFinalizeSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const { purge_after_days: purgeDays } = await maintenanceSettings();
+  const cutoff = new Date(now.getTime() - purgeDays * 86_400_000).toISOString();
+
+  // 1. Kalıcı silme. Birleştirilmiş fikirlerin hedefi olan fikirler (kaynakları
+  // ona bağlı) silinmez.
+  const { results: purgeRows } = await db()
+    .prepare(
+      `SELECT i.id, i.name, i.status, i.archived_at, i.deleted_at, i.status_changed_at, i.created_at
+       FROM ideas i
+       WHERE i.status IN ('archived', 'deleted')
+         AND NOT EXISTS (SELECT 1 FROM ideas m WHERE m.merged_into_id = i.id)`,
+    )
+    .all<{
+      id: string;
+      name: string;
+      status: string;
+      archived_at: string | null;
+      deleted_at: string | null;
+      status_changed_at: string | null;
+      created_at: string;
+    }>();
+  const toPurge = purgeRows
+    .filter((row) => {
+      const since =
+        row.status === "archived" ? row.archived_at : (row.deleted_at ?? row.status_changed_at ?? row.created_at);
+      return since != null && (toUtcIso(since) ?? since) <= cutoff;
+    })
+    .slice(0, MAX_PURGE_PER_RUN);
+  if (toPurge.length > 0) {
+    const statements: D1PreparedStatement[] = [];
+    for (const row of toPurge) {
+      const retired = normalizeName(row.name);
+      if (retired) {
+        statements.push(
+          db().prepare("INSERT OR IGNORE INTO retired_names (name, retired_at) VALUES (?1, ?2)").bind(retired, nowIso),
+        );
+      }
+      statements.push(
+        db().prepare("DELETE FROM task_documents WHERE task_id IN (SELECT id FROM tasks WHERE idea_id = ?1)").bind(row.id),
+        db().prepare("DELETE FROM tasks WHERE idea_id = ?1").bind(row.id),
+        db().prepare("DELETE FROM workflow_runs WHERE idea_id = ?1").bind(row.id),
+        db().prepare("DELETE FROM idea_competitors WHERE idea_id = ?1").bind(row.id),
+        db().prepare("DELETE FROM idea_seen WHERE idea_id = ?1").bind(row.id),
+        db().prepare("DELETE FROM ideas WHERE id = ?1").bind(row.id),
+      );
+    }
+    await db().batch(statements);
+  }
+
+  // 2. Sayaç. Bu koşuda oluşan fikirler (birleşik fikirler) koşunun başladığı
+  // andan sonra yaratıldığı için dışarıda kalır.
+  const run = parsed.data.run_id
+    ? await db().prepare("SELECT started_at FROM cron_runs WHERE id = ?1").bind(parsed.data.run_id).first<{ started_at: string }>()
+    : null;
+  const runStart = run ? (toUtcIso(run.started_at) ?? nowIso) : nowIso;
+  const pending = await pendingProposalIdeaIds();
+  const { results: pool } = await db()
+    .prepare("SELECT id, scores, user_rating, stale_runs, created_at FROM ideas WHERE status = 'new'")
+    .all<{ id: string; scores: string; user_rating: number | null; stale_runs: number; created_at: string }>();
+
+  const counted: { id: string; staleRuns: number }[] = [];
+  for (const row of pool) {
+    if (pending.has(row.id) || (toUtcIso(row.created_at) ?? row.created_at) >= runStart) continue;
+    const scores = JSON.parse(row.scores) as { overall?: number } | null;
+    if (scores?.overall == null) continue;
+    const low = maintenanceScore(scores.overall, row.user_rating) < ARCHIVE_SCORE_THRESHOLD;
+    counted.push({ id: row.id, staleRuns: low ? row.stale_runs + 1 : 0 });
+  }
+
+  // 3. Arşivleme. Puan gerekçeleri boşaltılır, sayılar kalır.
+  const statements: D1PreparedStatement[] = [];
+  let archived = 0;
+  for (const { id, staleRuns } of counted) {
+    if (staleRuns < ARCHIVE_AFTER_RUNS) {
+      statements.push(db().prepare("UPDATE ideas SET stale_runs = ?1 WHERE id = ?2").bind(staleRuns, id));
+      continue;
+    }
+    archived++;
+    statements.push(
+      db()
+        .prepare(
+          `UPDATE ideas SET status = 'archived', archived_at = ?1, stale_runs = ?2,
+             problem = '', target_audience = '', core_features = '[]', monetization = '',
+             inspiration_sources = '[]', user_note = NULL, source_text = NULL,
+             scores = CASE WHEN json_valid(scores) AND json_type(scores) = 'object' THEN json_set(scores,
+               '$.market_reason', '', '$.feasibility_solo_dev_reason', '',
+               '$.originality_reason', '', '$.overall_reason', '') ELSE scores END
+           WHERE id = ?3`,
+        )
+        .bind(nowIso, staleRuns, id),
+      db().prepare("DELETE FROM idea_competitors WHERE idea_id = ?1").bind(id),
+      db().prepare("DELETE FROM workflow_runs WHERE idea_id = ?1").bind(id),
+    );
+  }
+  if (statements.length > 0) await db().batch(statements);
+
+  res.json({
+    purged: toPurge.length,
+    archived,
+    approaching: counted.filter((c) => c.staleRuns > 0 && c.staleRuns < ARCHIVE_AFTER_RUNS).length,
+  });
+});
+
+// Arşivden geri getirme: fikir havuza döner ve kalan özetten Claude boşalan
+// alanları yeniden doldurur (evaluate-idea.yml "doldurma modu": source_text
+// dolu ve puan yok). Ad korunur.
+app.post("/ideas/:id/restore", async (req, res) => {
+  const idea = await db().prepare("SELECT * FROM ideas WHERE id = ?1").bind(req.params.id).first<IdeaRow>();
+  if (!idea) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (idea.status !== "archived") {
+    res.status(409).json({ error: "not_archived", message: "Yalnızca arşivlenmiş fikir geri getirilebilir." });
+    return;
+  }
+  const { GH_WORKFLOW_DISPATCH_TOKEN } = env as unknown as Env;
+  if (!GH_WORKFLOW_DISPATCH_TOKEN) {
+    res.status(500).json({ error: "not_configured", message: "GH_WORKFLOW_DISPATCH_TOKEN Worker secret'ı yok." });
+    return;
+  }
+
+  const tags = JSON.parse(idea.tags) as string[];
+  const sourceText = [
+    `${idea.name}: ${idea.one_liner}`,
+    idea.category ? `Kategori: ${idea.category}` : null,
+    tags.length > 0 ? `Etiketler: ${tags.join(", ")}` : null,
+    "(Arşivden geri getirildi; yalnızca bu özet kalmıştı.)",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const now = new Date().toISOString();
+  const actor = actorOf(res);
+  await db().batch([
+    db()
+      .prepare(
+        `UPDATE ideas SET status = 'new', archived_at = NULL, stale_runs = 0, source_text = ?1, scores = 'null'
+         WHERE id = ?2`,
+      )
+      .bind(sourceText, idea.id),
+    touchIdea(idea.id, now, actor),
+  ]);
+
+  const job = await queueIdeaJob(GH_WORKFLOW_DISPATCH_TOKEN, "evaluate-idea.yml", idea.id, actor);
+  res.json({
+    ok: true,
+    dispatch_error: job.ok ? null : `Claude işi tetiklenemedi (GitHub HTTP ${job.status}); detay sayfasından tekrar deneyebilirsin.`,
+  });
 });
 
 export default app;

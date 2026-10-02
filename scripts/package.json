@@ -30,6 +30,7 @@
     "check-merge-due": "tsx check-merge-due.ts",
     "fetch-pool": "tsx fetch-pool.ts",
     "submit-proposals": "tsx submit-proposals.ts",
+    "finalize-maintenance": "tsx finalize-maintenance.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint"
   },

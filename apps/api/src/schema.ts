@@ -524,4 +524,17 @@ export const proposalsSubmitSchema = z.object({
 });
 
 export type ProposalsSubmit = z.infer<typeof proposalsSubmitSchema>;
+
+// Gözden düşen fikirler (2026-10-03): bakım puanı bu sınırın altında art arda
+// ARCHIVE_AFTER_RUNS bakım koşusu kalan 'new' fikir arşivlenir.
+export const ARCHIVE_SCORE_THRESHOLD = 7;
+export const ARCHIVE_AFTER_RUNS = 3;
+
+// Bakım puanı: kullanıcı puanı varsa web'deki combinedScore() ile aynı
+// (%40 Claude + %60 kullanıcı), yoksa Claude'un genel puanı.
+export function maintenanceScore(overall: number, userRating: number | null): number {
+  return userRating == null ? overall : overall * 0.4 + userRating * 0.6;
+}
+
+export const maintenanceFinalizeSchema = z.object({ run_id: z.string().min(1).optional() });
 export type MergedIdea = z.infer<typeof mergedIdeaSchema>;

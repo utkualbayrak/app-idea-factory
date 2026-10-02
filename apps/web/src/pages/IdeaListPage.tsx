@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Archive, Plus } from "lucide-react";
 import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
 import { isInIdeaPool } from "@/lib/idea-colors";
@@ -143,12 +143,20 @@ export function IdeaListPage() {
       title="Fikirler"
       description="Yeni ve askıdaki fikirler. Geliştirilenler ayrı ekranda."
       actions={
-        <Button asChild>
-          <Link to="/ideas/new">
-            <Plus className="size-4" />
-            Fikir ekle
-          </Link>
-        </Button>
+        <>
+          <Button asChild variant="outline">
+            <Link to="/ideas/archive">
+              <Archive className="size-4" />
+              Arşiv
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link to="/ideas/new">
+              <Plus className="size-4" />
+              Fikir ekle
+            </Link>
+          </Button>
+        </>
       }
     />
   );

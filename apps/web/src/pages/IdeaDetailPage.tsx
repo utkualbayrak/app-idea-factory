@@ -10,6 +10,8 @@ import {
   fetchTestRounds,
   fetchWorkflowRuns,
   fetchIdeaProposals,
+  fetchSettings,
+  restoreIdea,
   undoProposal,
   patchIdea,
   type IdeaSummary,
@@ -26,6 +28,7 @@ import {
   type WorkflowRun,
 } from "@/lib/api";
 import { ActivityBadge } from "@/components/ActivityBadge";
+import { StaleBadge } from "@/components/StaleBadge";
 import { IdeaStatusBadge } from "@/components/IdeaStatusBadge";
 import { UpdatedBy } from "@/components/UpdatedBy";
 import { isActivityUnread, isRunActive } from "@/lib/activity";
@@ -41,7 +44,7 @@ import { ReworkBanner, TestCard } from "@/components/TestCard";
 import { TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
 import { FeatureProposalCard, IdeaSummaryTile } from "@/components/ProposalCards";
 import { PageMessage } from "@/components/PageHeader";
-import { formatDateTime } from "@/lib/format-date";
+import { formatDate, formatDateTime, formatPurgeDate } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
 import { categoryColorClasses, ideaSection, isInIdeaPool } from "@/lib/idea-colors";
 import { ideaToMarkdown } from "@/lib/export-markdown";
@@ -270,6 +273,7 @@ export function IdeaDetailPage() {
           {idea.origin === "manual" && <Badge variant="outline">Elle girildi</Badge>}
           {idea.origin === "merge" && <Badge variant="outline">Birleşik</Badge>}
           <ActivityBadge idea={idea} />
+          <StaleBadge idea={idea} />
         </div>
         <p className="mt-1 text-muted-foreground">{idea.one_liner}</p>
       </div>
@@ -278,6 +282,8 @@ export function IdeaDetailPage() {
       {idea.status === "rework" && <ReworkBanner rounds={testRounds} />}
 
       {id && poolInfo && <PoolBanners ideaId={id} idea={idea} info={poolInfo} />}
+
+      {idea.status === "archived" && <ArchivedBanner idea={idea} onRestored={handleTriggered} />}
 
       {idea.source_text && idea.scores == null && (
         <Card className="min-w-0">
@@ -331,7 +337,7 @@ export function IdeaDetailPage() {
                 : "Henüz puanlanmadı. Claude bu fikri günlük fikirlerle aynı ölçütlerle puanlayabilir."}
             </p>
           )}
-          {idea.origin === "manual" && (
+          {(idea.origin === "manual" || (idea.scores == null && idea.status !== "archived")) && (
             <>
               <WorkflowTriggerButton
                 label={idea.scores ? "Claude ile tekrar değerlendir" : idea.source_text ? "Claude ile doldur ve puanla" : "Claude ile değerlendir"}
@@ -751,5 +757,49 @@ function FeatureSuggestionsCard({ ideaId, info, onChanged }: { ideaId: string; i
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+// Arşivlenmiş fikir: yalnızca özet kaldı; geri getirince Claude alanları yeniden yazar.
+function ArchivedBanner({ idea, onRestored }: { idea: Idea; onRestored: () => void }) {
+  const [purgeDays, setPurgeDays] = useState<number | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchSettings()
+      .then((res) => setPurgeDays(res.maintenance.purge_after_days))
+      .catch(() => {});
+  }, []);
+
+  async function handleRestore() {
+    setMessage(null);
+    try {
+      const res = await restoreIdea(idea.id);
+      setMessage(res.dispatch_error ?? "Geri getirildi — Claude birkaç dakika içinde alanları dolduracak.");
+      onRestored();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-amber-900 dark:bg-amber-950">
+      <div>
+        <p>
+          Bu fikir{idea.archived_at && ` ${formatDate(idea.archived_at)} tarihinde`} arşivlendi: bakım puanı art arda 3
+          havuz bakımında 7.00'ın altında kaldı. Yalnızca özeti tutuluyor
+          {idea.archived_at && purgeDays != null && `, ${formatPurgeDate(idea.archived_at, purgeDays)} tarihinde kalıcı silinecek`}.
+        </p>
+        {message && <p className="mt-1 text-muted-foreground">{message}</p>}
+      </div>
+      <ConfirmButton
+        label="Geri getir"
+        title="Fikri geri getir?"
+        description="Fikir Fikirler listesine döner; Claude problem, hedef kitle, özellikler ve gelir modelini özetten yeniden yazar ve puanlar."
+        confirmLabel="Geri getir"
+        className="w-fit shrink-0"
+        onConfirm={handleRestore}
+      />
+    </div>
   );
 }

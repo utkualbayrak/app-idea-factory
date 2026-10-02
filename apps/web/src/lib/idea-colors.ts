@@ -78,6 +78,7 @@ const IDEA_SECTIONS: { statuses: IdeaStatus[]; section: IdeaSection }[] = [
 ];
 
 export function ideaSection(status: IdeaStatus): IdeaSection {
+  if (status === "archived") return { path: "/ideas/archive", label: "Arşiv" };
   return IDEA_SECTIONS.find((s) => s.statuses.includes(status))?.section ?? { path: "/ideas", label: "Fikirler" };
 }
 

@@ -2,8 +2,9 @@ name: Pool Maintenance
 
 # Havuz bakımı: Fikirler listesindeki (new/on_hold) birbirine yakın fikirleri
 # birleştirir, geliştirmedeki fikirlere çok yakın olanları özellik önerisine
-# çevirir. Claude önerir; el değmemiş fikirlerin birleştirmesini API hemen
-# uygular, gerisi Öneriler ekranında onay bekler.
+# çevirir; sonunda gözden düşen fikirleri arşivler ve süresi dolanları siler.
+# Claude önerir; el değmemiş fikirlerin birleştirmesini API hemen uygular,
+# gerisi Öneriler ekranında onay bekler.
 # Her gün çalışır ama bakım yalnızca Ayarlar'daki aralık (varsayılan 3 gün)
 # dolduysa yapılır; "*/3" gün ifadesi ay sonunda kaydığı için kullanılmadı.
 on:
@@ -121,6 +122,16 @@ jobs:
       - name: Submit proposals
         working-directory: scripts
         run: pnpm exec tsx submit-proposals.ts output/proposals.json
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      # Süresi dolan arşivlenmiş/silinmiş fikirleri kalıcı siler, bakım puanı
+      # art arda 3 koşu 7.00'ın altında kalan fikirleri arşivler.
+      - name: Archive stale ideas and purge expired ones
+        working-directory: scripts
+        run: pnpm exec tsx finalize-maintenance.ts output
         env:
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}

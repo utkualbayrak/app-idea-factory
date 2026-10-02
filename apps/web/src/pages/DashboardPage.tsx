@@ -83,6 +83,7 @@ export function DashboardPage() {
     if (!ideas) return null;
     const count = (pred: (i: Idea) => boolean) => ideas.filter(pred).length;
     return {
+      approachingArchive: count((i) => i.status === "new" && i.stale_runs > 0),
       total: ideas.length,
       fresh: count((i) => i.status === "new"),
       onHold: count((i) => i.status === "on_hold"),
@@ -181,6 +182,7 @@ export function DashboardPage() {
           <StatTile label="Dağıtıma hazır" value={metrics.ready} to="/ready" />
           <StatTile label="Son cron" value={latestRun ? RUN_STATUS_LABELS[latestRun.status] : "—"} to="/cron-runs" />
           <StatTile label="Bekleyen öneri" value={pendingProposals ?? "—"} to="/proposals" />
+          <StatTile label="Arşive yaklaşan" value={metrics.approachingArchive} to="/ideas" />
         </div>
       </section>
 

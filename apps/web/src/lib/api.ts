@@ -121,6 +121,16 @@ export function fetchIdeas(): Promise<{ ideas: Idea[] }> {
   return request("/ideas");
 }
 
+// Havuz bakımının arşivlediği fikirler (yalnızca özetleri kaldı).
+export function fetchArchivedIdeas(): Promise<{ ideas: Idea[] }> {
+  return request("/ideas?status=archived");
+}
+
+// Arşivden havuza döndürür; Claude kalan özetten alanları yeniden doldurur.
+export function restoreIdea(id: string): Promise<{ ok: true; dispatch_error: string | null }> {
+  return request(`/ideas/${id}/restore`, { method: "POST" });
+}
+
 export function fetchIdea(id: string): Promise<{ idea: Idea }> {
   return request(`/ideas/${id}`);
 }
