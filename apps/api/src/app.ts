@@ -4,9 +4,10 @@ import { z } from "zod";
 import { env } from "cloudflare:workers";
 import { requireWorkflowSecret } from "./auth";
 import { actorOf, resolveActor, SYSTEM_ACTOR } from "./identity";
-import { fetchLastCommit, loadRepoState, RepoSyncError, syncRepo } from "./repo-sync";
+import { fetchLastCommit, loadRepoState, parseRepoUrl, RepoSyncError, syncRepo } from "./repo-sync";
 import { serializeDevReport, serializeTestRound, type DevReportRow, type TestRoundRow } from "./lifecycle";
 import {
+  toUtcIso,
   serializeIdea,
   serializeCronRun,
   serializeTrendSnapshot,
@@ -20,6 +21,8 @@ import {
   type CompetitorRow,
   type TrendSnapshotRow,
   type WorkflowRunRow,
+  serializeProposal,
+  type ProposalRow,
 } from "./db";
 import {
   ideaBatchRequestSchema,
@@ -33,6 +36,13 @@ import {
   type IdeaStatus,
   settingsPatchSchema,
   cronRunPatchSchema,
+  cronRunCreateSchema,
+  proposalsSubmitSchema,
+  MAINTENANCE_SETTING_DEFAULTS,
+  POOL_STATUSES,
+  DEV_FLOW_STATUSES,
+  type MaintenanceSettingKey,
+  type MergedIdea,
   triggerWorkflowSchema,
   userNameEmailSchema,
   userNamePutSchema,
@@ -182,11 +192,21 @@ function normalizeName(name: string): string {
     .replace(/s$/, "");
 }
 
-async function nameTaken(name: string, exceptId?: string): Promise<boolean> {
+// exceptIds: kendisi (yeniden adlandırma) ya da birleştirilen kaynaklar (birleşik
+// fikir kaynaklardan birinin adını devralabilir). Kalıcı silinmiş fikirlerin
+// adları retired_names'te (0016) kalır.
+async function nameTaken(name: string, exceptIds: string | readonly string[] = []): Promise<boolean> {
   const target = normalizeName(name);
   if (!target) return false;
-  const { results } = await db().prepare("SELECT id, name FROM ideas").all<{ id: string; name: string }>();
-  return results.some((row) => row.id !== exceptId && normalizeName(row.name) === target);
+  const except = typeof exceptIds === "string" ? [exceptIds] : exceptIds;
+  const [ideas, retired] = await db().batch<{ id?: string; name: string }>([
+    db().prepare("SELECT id, name FROM ideas"),
+    db().prepare("SELECT name FROM retired_names"),
+  ]);
+  return (
+    ideas.results.some((row) => !except.includes(row.id!) && normalizeName(row.name) === target) ||
+    retired.results.some((row) => row.name === target)
+  );
 }
 
 app.get("/health", async (_req, res) => {
@@ -197,18 +217,22 @@ app.get("/health", async (_req, res) => {
 app.get("/ideas", async (req, res) => {
   // 'deleted' durumu listeden tamamen gizlenir (bkz. docs/PROJE.md "Kesinleşen
   // kararlar"); id üzerinden doğrudan erişim (GET /ideas/:id) hâlâ mümkün.
+  // Havuz bakımı (0016): birleştirilmiş ve arşivlenmiş fikirler de gizli;
+  // arşiv ?status=archived ile ayrıca listelenir.
   const batchDate = typeof req.query.batch_date === "string" ? req.query.batch_date : undefined;
+  const hidden = "status NOT IN ('deleted', 'merged', 'archived')";
 
-  const { results } = batchDate
-    ? await db()
-        .prepare(
-          "SELECT * FROM ideas WHERE batch_date = ?1 AND status != 'deleted' ORDER BY created_at DESC",
-        )
-        .bind(batchDate)
-        .all<IdeaRow>()
-    : await db()
-        .prepare("SELECT * FROM ideas WHERE status != 'deleted' ORDER BY created_at DESC")
-        .all<IdeaRow>();
+  const { results } =
+    req.query.status === "archived"
+      ? await db()
+          .prepare("SELECT * FROM ideas WHERE status = 'archived' ORDER BY archived_at DESC")
+          .all<IdeaRow>()
+      : batchDate
+        ? await db()
+            .prepare(`SELECT * FROM ideas WHERE batch_date = ?1 AND ${hidden} ORDER BY created_at DESC`)
+            .bind(batchDate)
+            .all<IdeaRow>()
+        : await db().prepare(`SELECT * FROM ideas WHERE ${hidden} ORDER BY created_at DESC`).all<IdeaRow>();
 
   res.json({ ideas: (await withSeen(results, actorOf(res))).map(serializeIdea) });
 });
@@ -345,6 +369,8 @@ app.patch("/ideas/:id", async (req, res) => {
   const updatedAt = activityKind ? now : existing.updated_at;
   const updatedBy = activityKind ? actor : existing.updated_by;
   const activitySeenAt = markSeen ? now : existing.activity_seen_at;
+  // Kalıcı silme süresi silindiği andan başlar (bkz. havuz bakımı).
+  const deletedAt = next.status === "deleted" && existing.status !== "deleted" ? now : existing.deleted_at;
 
   if (markSeen && seenBy) {
     await db()
@@ -360,7 +386,7 @@ app.patch("/ideas/:id", async (req, res) => {
     .prepare(
       `UPDATE ideas SET user_rating = ?1, user_note = ?2, user_note_updated_at = ?3, status = ?4,
          last_activity_at = ?5, last_activity_kind = ?6, last_activity_by = ?7, activity_seen_at = ?8,
-         updated_at = ?9, updated_by = ?10
+         updated_at = ?9, updated_by = ?10, deleted_at = ?12
        WHERE id = ?11`,
     )
     .bind(
@@ -375,6 +401,7 @@ app.patch("/ideas/:id", async (req, res) => {
       updatedAt,
       updatedBy,
       req.params.id,
+      deletedAt,
     )
     .run();
 
@@ -388,6 +415,7 @@ app.patch("/ideas/:id", async (req, res) => {
       activity_seen_at: activitySeenAt,
       updated_at: updatedAt,
       updated_by: updatedBy,
+      deleted_at: deletedAt,
     } as IdeaRow),
   });
 });
@@ -404,7 +432,7 @@ app.get("/admin/settings", async (_req, res) => {
 
   // DB'de hiç satırı olmayan bir kaynak varsayılan olarak etkin kabul edilir.
   const settings = Object.fromEntries(SOURCE_SETTING_KEYS.map((key) => [key, stored.get(key) ?? true]));
-  res.json({ settings });
+  res.json({ settings, maintenance: await maintenanceSettings() });
 });
 
 app.patch("/admin/settings", async (req, res) => {
@@ -1393,20 +1421,27 @@ app.get("/admin/cron-runs", async (req, res) => {
   const limit = Number(req.query.limit ?? 30);
   const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 30;
 
+  // Varsayılan: günlük üretim koşuları (mevcut ekranlar); havuz bakımı ?kind=merge.
+  const kind = req.query.kind === "merge" ? "merge" : "daily";
   const { results } = await db()
-    .prepare("SELECT * FROM cron_runs ORDER BY started_at DESC LIMIT ?1")
-    .bind(safeLimit)
+    .prepare("SELECT * FROM cron_runs WHERE kind = ?2 ORDER BY started_at DESC LIMIT ?1")
+    .bind(safeLimit, kind)
     .all<CronRunRow>();
 
   res.json({ runs: results.map(serializeCronRun) });
 });
 
-app.post("/admin/cron-runs", requireWorkflowSecret, async (_req, res) => {
+app.post("/admin/cron-runs", requireWorkflowSecret, async (req, res) => {
+  const parsed = cronRunCreateSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
   const id = crypto.randomUUID();
   // started_at açıkça ISO yazılıyor (DB default'u Z'siz format üretir, bkz. toUtcIso).
   await db()
-    .prepare("INSERT INTO cron_runs (id, started_at) VALUES (?1, ?2)")
-    .bind(id, new Date().toISOString())
+    .prepare("INSERT INTO cron_runs (id, started_at, kind) VALUES (?1, ?2, ?3)")
+    .bind(id, new Date().toISOString(), parsed.data.kind ?? "daily")
     .run();
   res.status(201).json({ id });
 });
@@ -1421,7 +1456,8 @@ app.patch("/admin/cron-runs/:id", requireWorkflowSecret, async (req, res) => {
   const now = new Date().toISOString();
   await db()
     .prepare(
-      `UPDATE cron_runs SET status = ?1, finished_at = ?2, source_breakdown = ?3, error = ?4 WHERE id = ?5`,
+      `UPDATE cron_runs SET status = ?1, finished_at = ?2, source_breakdown = ?3, error = ?4,
+         summary = COALESCE(?6, summary) WHERE id = ?5`,
     )
     .bind(
       parsed.data.status,
@@ -1429,6 +1465,7 @@ app.patch("/admin/cron-runs/:id", requireWorkflowSecret, async (req, res) => {
       parsed.data.source_breakdown ? JSON.stringify(parsed.data.source_breakdown) : null,
       parsed.data.error ?? null,
       req.params.id,
+      parsed.data.summary ? JSON.stringify(parsed.data.summary) : null,
     )
     .run();
 
@@ -1571,6 +1608,542 @@ app.get("/admin/trend-snapshots", async (req, res) => {
     .all<TrendSnapshotRow>();
 
   res.json({ snapshots: results.map(serializeTrendSnapshot) });
+});
+
+// ---------------------------------------------------------------------------
+// Havuz bakımı (0016, merge-ideas.yml): Fikirler listesindeki yakın fikirleri
+// birleştirme ve geliştirmedeki fikirlere özellik önerme. Claude önerir; el
+// değmemiş fikirlerin birleştirmesi hemen uygulanır (geri alınabilir), diğer
+// her şey Öneriler ekranında onay bekler.
+
+class ProposalError extends Error {}
+
+async function maintenanceSettings(): Promise<Record<MaintenanceSettingKey, number>> {
+  const keys = Object.keys(MAINTENANCE_SETTING_DEFAULTS) as MaintenanceSettingKey[];
+  const { results } = await db()
+    .prepare(`SELECT key, value FROM app_settings WHERE key IN (${keys.map((_, i) => `?${i + 1}`).join(", ")})`)
+    .bind(...keys)
+    .all<{ key: MaintenanceSettingKey; value: string }>();
+  const settings: Record<MaintenanceSettingKey, number> = { ...MAINTENANCE_SETTING_DEFAULTS };
+  for (const row of results) {
+    const value = Number(row.value);
+    if (Number.isFinite(value)) settings[row.key] = value;
+  }
+  return settings;
+}
+
+function todayInIstanbul() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(new Date());
+}
+
+function placeholders(count: number, offset = 0) {
+  return Array.from({ length: count }, (_, i) => `?${i + 1 + offset}`).join(", ");
+}
+
+async function ideasByIds(ids: readonly string[]): Promise<IdeaRow[]> {
+  if (ids.length === 0) return [];
+  const { results } = await db()
+    .prepare(`SELECT * FROM ideas WHERE id IN (${placeholders(ids.length)})`)
+    .bind(...ids)
+    .all<IdeaRow>();
+  return results;
+}
+
+function isPoolStatus(status: string) {
+  return (POOL_STATUSES as readonly string[]).includes(status);
+}
+
+function isDevFlowStatus(status: string) {
+  return (DEV_FLOW_STATUSES as readonly string[]).includes(status);
+}
+
+// Kullanıcı bu fikre hiç dokunmadı mı: puan yok, not yok, askıya alınmamış.
+// Böyle fikirlerin birleştirmesi onay beklemeden uygulanır.
+function untouched(row: IdeaRow) {
+  return row.status === "new" && row.user_rating == null && !row.user_note?.trim();
+}
+
+// Bekleyen bir önerideki fikirler yeni önerilere girmez.
+async function pendingProposalIdeaIds(): Promise<Set<string>> {
+  const { results } = await db()
+    .prepare("SELECT source_ids FROM pool_proposals WHERE status = 'pending'")
+    .all<{ source_ids: string }>();
+  return new Set(results.flatMap((r) => JSON.parse(r.source_ids) as string[]));
+}
+
+// Ekranlar için kısa fikir özeti (öneri kartları, "Birleştirilen fikirler").
+function ideaSummary(row: IdeaRow) {
+  const scores = JSON.parse(row.scores) as { overall?: number } | null;
+  return {
+    id: row.id,
+    name: row.name,
+    one_liner: row.one_liner,
+    category: row.category,
+    status: row.status,
+    user_rating: row.user_rating,
+    user_note: row.user_note,
+    overall: scores?.overall ?? null,
+    merged_into_id: row.merged_into_id,
+  };
+}
+
+async function proposalsResponse(rows: ProposalRow[]) {
+  const proposals = rows.map(serializeProposal);
+  const ids = new Set<string>();
+  for (const p of proposals) {
+    p.source_ids.forEach((id) => ids.add(id));
+    if (p.target_idea_id) ids.add(p.target_idea_id);
+  }
+  const ideas = await ideasByIds([...ids]);
+  return { proposals, ideas: Object.fromEntries(ideas.map((row) => [row.id, ideaSummary(row)])) };
+}
+
+// Birleştirmeyi uygular: yeni fikir eklenir, kaynaklar 'merged' olur ve yeni
+// fikre bağlanır. Kaynaklardan biri artık havuzda değilse ya da ad çakışırsa
+// ProposalError (öneri bekler, kullanıcı karar verir).
+async function applyMerge(proposal: ProposalRow, actor: string | null, auto: boolean) {
+  const sourceIds = JSON.parse(proposal.source_ids) as string[];
+  const idea = JSON.parse(proposal.payload) as MergedIdea;
+  const sources = await ideasByIds(sourceIds);
+  if (sources.length !== sourceIds.length || sources.some((row) => !isPoolStatus(row.status))) {
+    throw new ProposalError("Kaynak fikirlerden biri artık Fikirler listesinde değil.");
+  }
+  if (await nameTaken(idea.name, sourceIds)) {
+    throw new ProposalError(`"${idea.name}" adı başka bir fikirle çakışıyor.`);
+  }
+
+  const newId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const userBy = auto ? null : actor;
+  const statements: D1PreparedStatement[] = [
+    db()
+      .prepare(
+        `INSERT INTO ideas (id, created_at, batch_date, name, one_liner, problem, target_audience, core_features,
+           monetization, category, inspiration_sources, tags, scores, status, origin, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'new', 'merge', ?14, ?15)`,
+      )
+      .bind(
+        newId,
+        now,
+        todayInIstanbul(),
+        idea.name,
+        idea.one_liner,
+        idea.problem,
+        idea.target_audience,
+        JSON.stringify(idea.core_features),
+        idea.monetization,
+        idea.category.toLowerCase(),
+        JSON.stringify(idea.inspiration_sources),
+        JSON.stringify(idea.tags.map((t) => t.toLowerCase())),
+        JSON.stringify(idea.scores),
+        userBy ? now : null,
+        userBy,
+      ),
+    db()
+      .prepare(
+        `UPDATE ideas SET status = 'merged', merged_into_id = ?1 WHERE id IN (${placeholders(sourceIds.length, 1)})`,
+      )
+      .bind(newId, ...sourceIds),
+    db()
+      .prepare(
+        `UPDATE pool_proposals SET status = 'applied', auto_applied = ?1, target_idea_id = ?2, source_prev_statuses = ?3,
+           decided_at = ?4, decided_by = ?5, error = NULL WHERE id = ?6`,
+      )
+      .bind(
+        auto ? 1 : 0,
+        newId,
+        JSON.stringify(Object.fromEntries(sources.map((row) => [row.id, row.status]))),
+        now,
+        auto ? SYSTEM_ACTOR : actor,
+        proposal.id,
+      ),
+  ];
+  if (userBy) statements.push(...sourceIds.map((id) => touchIdea(id, now, userBy)));
+  await db().batch(statements);
+  return newId;
+}
+
+// Kabul edilen özellik önerisi skeleton repoda issue olur.
+async function createFeatureIssue(token: string, repoUrl: string, title: string, body: string) {
+  const repo = parseRepoUrl(repoUrl);
+  if (!repo) throw new ProposalError(`Repo adresi anlaşılamadı: ${repoUrl}`);
+  const res = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.repo}/issues`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "app-idea-factory-worker",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ title, body }),
+  });
+  if (!res.ok) throw new ProposalError(`GitHub issue açılamadı (HTTP ${res.status}).`);
+  return ((await res.json()) as { html_url: string }).html_url;
+}
+
+function featureIssueBody(payload: { title: string; description: string }, reason: string, source: IdeaRow) {
+  return [
+    payload.description,
+    "",
+    `**Neden:** ${reason}`,
+    "",
+    `**Kaynak fikir:** ${source.name} — ${source.one_liner}`,
+    "",
+    "_app-idea-factory havuz bakımı önerisi._",
+  ].join("\n");
+}
+
+app.get("/admin/merge/due", requireWorkflowSecret, async (_req, res) => {
+  const { merge_interval_days: intervalDays } = await maintenanceSettings();
+  const last = await db()
+    .prepare("SELECT started_at FROM cron_runs WHERE kind = 'merge' AND status = 'success' ORDER BY started_at DESC LIMIT 1")
+    .first<{ started_at: string }>();
+  const lastAt = last ? toUtcIso(last.started_at) : null;
+  // Cron her gün aynı saatte çalışır ama başlangıç birkaç dakika kayabilir;
+  // 2 saatlik pay olmasa 3 günlük aralık 4 güne kayardı.
+  const due = !lastAt || Date.now() - Date.parse(lastAt) >= intervalDays * 86_400_000 - 2 * 3_600_000;
+  res.json({ due, last_success_at: lastAt, interval_days: intervalDays });
+});
+
+app.get("/admin/merge/input", requireWorkflowSecret, async (_req, res) => {
+  const statuses = [...POOL_STATUSES, ...DEV_FLOW_STATUSES];
+  const [ideasResult, tasksResult, proposalsResult] = await db().batch([
+    db()
+      .prepare(`SELECT * FROM ideas WHERE status IN (${placeholders(statuses.length)}) ORDER BY created_at`)
+      .bind(...statuses),
+    db().prepare("SELECT idea_id, params FROM tasks"),
+    db().prepare("SELECT * FROM pool_proposals WHERE status != 'undone'"),
+  ]);
+  const ideas = ideasResult.results as IdeaRow[];
+  const tasks = new Map(
+    (tasksResult.results as { idea_id: string; params: string }[]).map((t) => [t.idea_id, JSON.parse(t.params)]),
+  );
+  const proposals = (proposalsResult.results as ProposalRow[]).map(serializeProposal);
+  const pending = new Set(proposals.filter((p) => p.status === "pending").flatMap((p) => p.source_ids));
+
+  res.json({
+    pool: ideas
+      .filter((row) => isPoolStatus(row.status) && !pending.has(row.id))
+      .map((row) => {
+        const scores = JSON.parse(row.scores) as Record<string, unknown> | null;
+        return {
+          id: row.id,
+          batch_date: row.batch_date,
+          status: row.status,
+          name: row.name,
+          one_liner: row.one_liner,
+          problem: row.problem,
+          target_audience: row.target_audience,
+          core_features: JSON.parse(row.core_features),
+          monetization: row.monetization,
+          category: row.category,
+          tags: JSON.parse(row.tags),
+          inspiration_sources: JSON.parse(row.inspiration_sources),
+          overall: (scores?.overall as number | undefined) ?? null,
+          user_rating: row.user_rating,
+          user_note: row.user_note,
+        };
+      }),
+    dev_ideas: ideas
+      .filter((row) => isDevFlowStatus(row.status))
+      .map((row) => ({
+        id: row.id,
+        status: row.status,
+        name: row.name,
+        one_liner: row.one_liner,
+        problem: row.problem,
+        category: row.category,
+        core_features: JSON.parse(row.core_features),
+        mvp_features: (tasks.get(row.id)?.mvp_features as string[] | undefined) ?? [],
+      })),
+    // Tekrar önerilmesin diye: reddedilen birleştirme grupları ve daha önce
+    // önerilmiş (bekleyen, kabul ya da reddedilmiş) özellikler.
+    rejected_merges: proposals.filter((p) => p.kind === "merge" && p.status === "rejected").map((p) => p.source_ids),
+    previous_features: proposals
+      .filter((p) => p.kind === "feature")
+      .map((p) => ({
+        source_id: p.source_ids[0],
+        target_idea_id: p.target_idea_id,
+        title: (p.payload as { title: string }).title,
+        status: p.status,
+      })),
+  });
+});
+
+app.post("/admin/merge/proposals", requireWorkflowSecret, async (req, res) => {
+  const parsed = proposalsSubmitSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+  const { run_id: runId, merges, features } = parsed.data;
+  const referenced = new Set([
+    ...merges.flatMap((m) => m.source_ids),
+    ...features.flatMap((f) => [f.source_id, f.target_idea_id]),
+  ]);
+  const rows = new Map((await ideasByIds([...referenced])).map((row) => [row.id, row]));
+  const pending = await pendingProposalIdeaIds();
+  const used = new Set<string>();
+  const skipped: string[] = [];
+
+  // Geçersiz öneri tüm koşuyu düşürmez, atlanır ve sebebi döner.
+  const sourceProblem = (id: string) => {
+    const row = rows.get(id);
+    if (!row) return `${id} bulunamadı`;
+    if (!isPoolStatus(row.status)) return `${row.name} Fikirler listesinde değil`;
+    if (pending.has(id)) return `${row.name} zaten bekleyen bir öneride`;
+    if (used.has(id)) return `${row.name} birden fazla öneride`;
+    return null;
+  };
+
+  const now = new Date().toISOString();
+  const inserted: { id: string; kind: "merge" | "feature"; autoEligible: boolean }[] = [];
+  const statements: D1PreparedStatement[] = [];
+  const insert = (
+    kind: "merge" | "feature",
+    sourceIds: string[],
+    targetId: string | null,
+    payload: unknown,
+    reason: string,
+  ) => {
+    const id = crypto.randomUUID();
+    statements.push(
+      db()
+        .prepare(
+          `INSERT INTO pool_proposals (id, run_id, kind, status, source_ids, target_idea_id, payload, reason, created_at)
+           VALUES (?1, ?2, ?3, 'pending', ?4, ?5, ?6, ?7, ?8)`,
+        )
+        .bind(id, runId ?? null, kind, JSON.stringify(sourceIds), targetId, JSON.stringify(payload), reason, now),
+    );
+    sourceIds.forEach((s) => used.add(s));
+    inserted.push({ id, kind, autoEligible: kind === "merge" && sourceIds.every((s) => untouched(rows.get(s)!)) });
+  };
+
+  for (const merge of merges) {
+    const ids = [...new Set(merge.source_ids)];
+    const problem = ids.length < 2 ? "birleştirmede en az 2 farklı fikir olmalı" : ids.map(sourceProblem).find(Boolean);
+    if (problem) {
+      skipped.push(`Birleştirme "${merge.idea.name}" atlandı: ${problem}`);
+      continue;
+    }
+    insert("merge", ids, null, merge.idea, merge.reason);
+  }
+  for (const feature of features) {
+    const target = rows.get(feature.target_idea_id);
+    const problem =
+      sourceProblem(feature.source_id) ??
+      (!target || !isDevFlowStatus(target.status) ? "hedef fikir geliştirme akışında değil" : null);
+    if (problem) {
+      skipped.push(`Özellik önerisi "${feature.title}" atlandı: ${problem}`);
+      continue;
+    }
+    insert(
+      "feature",
+      [feature.source_id],
+      feature.target_idea_id,
+      { title: feature.title, description: feature.description },
+      feature.reason,
+    );
+  }
+  if (statements.length > 0) await db().batch(statements);
+
+  // El değmemiş fikirlerin birleştirmesi hemen uygulanır. Uygulanamazsa
+  // (ör. ad çakışması) öneri sebebiyle birlikte onay bekler.
+  let applied = 0;
+  for (const item of inserted.filter((i) => i.autoEligible)) {
+    const proposal = await db().prepare("SELECT * FROM pool_proposals WHERE id = ?1").bind(item.id).first<ProposalRow>();
+    try {
+      await applyMerge(proposal!, SYSTEM_ACTOR, true);
+      applied++;
+    } catch (err) {
+      if (!(err instanceof ProposalError)) throw err;
+      await db().prepare("UPDATE pool_proposals SET error = ?1 WHERE id = ?2").bind(err.message, item.id).run();
+    }
+  }
+
+  const mergeCount = inserted.filter((i) => i.kind === "merge").length;
+  res.status(201).json({
+    merges_applied: applied,
+    merges_pending: mergeCount - applied,
+    features: inserted.length - mergeCount,
+    skipped,
+  });
+});
+
+app.get("/proposals", async (req, res) => {
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const { results } = status
+    ? await db()
+        .prepare("SELECT * FROM pool_proposals WHERE status = ?1 ORDER BY created_at DESC LIMIT 200")
+        .bind(status)
+        .all<ProposalRow>()
+    : await db().prepare("SELECT * FROM pool_proposals ORDER BY created_at DESC LIMIT 200").all<ProposalRow>();
+  res.json(await proposalsResponse(results));
+});
+
+// Detay sayfası: bu fikrin kaynağı/hedefi olduğu öneriler ve (birleşik fikirse)
+// birleştirilen fikirler.
+app.get("/ideas/:id/proposals", async (req, res) => {
+  const id = req.params.id;
+  const [proposalsResult, mergedFromResult] = await db().batch([
+    db()
+      .prepare(
+        `SELECT p.* FROM pool_proposals p
+         WHERE p.target_idea_id = ?1 OR EXISTS (SELECT 1 FROM json_each(p.source_ids) WHERE value = ?1)
+         ORDER BY p.created_at DESC`,
+      )
+      .bind(id),
+    db().prepare("SELECT * FROM ideas WHERE merged_into_id = ?1 ORDER BY created_at").bind(id),
+  ]);
+  res.json({
+    ...(await proposalsResponse(proposalsResult.results as ProposalRow[])),
+    merged_from: (mergedFromResult.results as IdeaRow[]).map(ideaSummary),
+  });
+});
+
+async function loadPendingProposal(id: string, kind: "merge" | "feature") {
+  const row = await db().prepare("SELECT * FROM pool_proposals WHERE id = ?1").bind(id).first<ProposalRow>();
+  if (!row || row.kind !== kind) return { error: 404 as const };
+  if (row.status !== "pending") return { error: 409 as const };
+  return { row };
+}
+
+app.post("/proposals/:id/apply", async (req, res) => {
+  const { row, error } = await loadPendingProposal(req.params.id, "merge");
+  if (!row) {
+    res.status(error).json({ error: error === 404 ? "not_found" : "not_pending" });
+    return;
+  }
+  try {
+    const ideaId = await applyMerge(row, actorOf(res), false);
+    res.json({ ok: true, idea_id: ideaId });
+  } catch (err) {
+    if (!(err instanceof ProposalError)) throw err;
+    await db().prepare("UPDATE pool_proposals SET error = ?1 WHERE id = ?2").bind(err.message, row.id).run();
+    res.status(409).json({ error: "cannot_apply", message: err.message });
+  }
+});
+
+app.post("/proposals/:id/reject", async (req, res) => {
+  const row = await db().prepare("SELECT * FROM pool_proposals WHERE id = ?1").bind(req.params.id).first<ProposalRow>();
+  if (!row) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (row.status !== "pending") {
+    res.status(409).json({ error: "not_pending" });
+    return;
+  }
+  await db()
+    .prepare("UPDATE pool_proposals SET status = 'rejected', decided_at = ?1, decided_by = ?2 WHERE id = ?3")
+    .bind(new Date().toISOString(), actorOf(res), row.id)
+    .run();
+  res.json({ ok: true });
+});
+
+// Uygulanmış birleştirmeyi geri alır: kaynaklar eski durumlarına döner,
+// birleşik fikir silinir. Birleşik fikir geliştirmeye alındıysa geri alınamaz.
+app.post("/proposals/:id/undo", async (req, res) => {
+  const row = await db().prepare("SELECT * FROM pool_proposals WHERE id = ?1").bind(req.params.id).first<ProposalRow>();
+  if (!row || row.kind !== "merge") {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const merged = row.target_idea_id
+    ? await db().prepare("SELECT * FROM ideas WHERE id = ?1").bind(row.target_idea_id).first<IdeaRow>()
+    : null;
+  if (row.status !== "applied" || !merged || !isPoolStatus(merged.status)) {
+    res.status(409).json({
+      error: "cannot_undo",
+      message: "Yalnızca birleşik fikir hâlâ Fikirler listesindeyken geri alınabilir.",
+    });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const actor = actorOf(res);
+  const previous = (row.source_prev_statuses ? JSON.parse(row.source_prev_statuses) : {}) as Record<string, string>;
+  const sourceIds = JSON.parse(row.source_ids) as string[];
+  await db().batch([
+    db()
+      .prepare("UPDATE ideas SET status = 'deleted', deleted_at = ?1, updated_at = ?1, updated_by = ?2 WHERE id = ?3")
+      .bind(now, actor, merged.id),
+    ...sourceIds.map((id) =>
+      db()
+        .prepare(
+          `UPDATE ideas SET status = ?1, merged_into_id = NULL, updated_at = ?2, updated_by = ?3
+           WHERE id = ?4 AND status = 'merged' AND merged_into_id = ?5`,
+        )
+        .bind(previous[id] ?? "new", now, actor, id, merged.id),
+    ),
+    db()
+      .prepare("UPDATE pool_proposals SET status = 'undone', decided_at = ?1, decided_by = ?2 WHERE id = ?3")
+      .bind(now, actor, row.id),
+  ]);
+  res.json({ ok: true });
+});
+
+// Özellik önerisini kabul eder: hedefin skeleton reposu varsa orada issue
+// açılır, kaynak havuz fikri 'merged' olup hedefe bağlanır. Repo henüz yoksa
+// issue iskelet kurulurken açılır (prepare-skeleton-repo.ts).
+app.post("/proposals/:id/accept", async (req, res) => {
+  const { row, error } = await loadPendingProposal(req.params.id, "feature");
+  if (!row) {
+    res.status(error).json({ error: error === 404 ? "not_found" : "not_pending" });
+    return;
+  }
+  const [sourceId] = JSON.parse(row.source_ids) as string[];
+  const [source] = await ideasByIds([sourceId]);
+  const target = row.target_idea_id ? (await ideasByIds([row.target_idea_id]))[0] : undefined;
+  if (!source || !isPoolStatus(source.status) || !target || !isDevFlowStatus(target.status)) {
+    res.status(409).json({
+      error: "cannot_accept",
+      message: "Kaynak fikir artık Fikirler listesinde değil ya da hedef fikir geliştirme akışından çıkmış.",
+    });
+    return;
+  }
+
+  const payload = JSON.parse(row.payload) as { title: string; description: string };
+  const task = await db()
+    .prepare("SELECT repo_url FROM tasks WHERE idea_id = ?1")
+    .bind(target.id)
+    .first<{ repo_url: string | null }>();
+  const { GH_WORKFLOW_DISPATCH_TOKEN } = env as unknown as Env;
+  let issueUrl: string | null = null;
+  if (task?.repo_url) {
+    if (!GH_WORKFLOW_DISPATCH_TOKEN) {
+      res.status(500).json({ error: "not_configured", message: "GH_WORKFLOW_DISPATCH_TOKEN Worker secret'ı yok." });
+      return;
+    }
+    try {
+      issueUrl = await createFeatureIssue(
+        GH_WORKFLOW_DISPATCH_TOKEN,
+        task.repo_url,
+        payload.title,
+        featureIssueBody(payload, row.reason, source),
+      );
+    } catch (err) {
+      if (!(err instanceof ProposalError)) throw err;
+      res.status(502).json({ error: "github_issue_failed", message: err.message });
+      return;
+    }
+  }
+
+  const now = new Date().toISOString();
+  const actor = actorOf(res);
+  await db().batch([
+    db()
+      .prepare("UPDATE ideas SET status = 'merged', merged_into_id = ?1 WHERE id = ?2")
+      .bind(target.id, source.id),
+    touchIdea(source.id, now, actor),
+    db()
+      .prepare(
+        `UPDATE pool_proposals SET status = 'applied', issue_url = ?1, source_prev_statuses = ?2,
+           decided_at = ?3, decided_by = ?4, error = NULL WHERE id = ?5`,
+      )
+      .bind(issueUrl, JSON.stringify({ [source.id]: source.status }), now, actor, row.id),
+  ]);
+  res.json({ ok: true, issue_url: issueUrl });
 });
 
 export default app;

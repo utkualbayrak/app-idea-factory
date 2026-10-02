@@ -34,7 +34,7 @@ export interface IdeaRow {
   last_activity_kind: string | null;
   activity_seen_at: string | null;
   status: string;
-  origin: "cron" | "manual";
+  origin: "cron" | "manual" | "merge";
   source_text: string | null;
   /** 0013 trigger'ı yazar; o tarihten sonra eklenip durumu hiç değişmemiş fikirde null. */
   status_changed_at: string | null;
@@ -43,6 +43,12 @@ export interface IdeaRow {
   updated_by: string | null;
   /** Aktiviteyi kim tetikledi (e-posta ya da 'system'). */
   last_activity_by: string | null;
+  /** 0016, havuz bakımı: birleşik fikir ya da özellik önerisinin hedefi. */
+  merged_into_id: string | null;
+  /** Art arda kaç bakım koşusunda bakım puanı 7.00'ın altında kaldı. */
+  stale_runs: number;
+  archived_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface Idea
@@ -64,6 +70,8 @@ export function serializeIdea(row: IdeaRow): Idea {
     activity_seen_at: toUtcIso(row.activity_seen_at),
     status_changed_at: toUtcIso(row.status_changed_at),
     updated_at: toUtcIso(row.updated_at),
+    archived_at: toUtcIso(row.archived_at),
+    deleted_at: toUtcIso(row.deleted_at),
     core_features: JSON.parse(row.core_features),
     inspiration_sources: JSON.parse(row.inspiration_sources),
     tags: JSON.parse(row.tags),
@@ -78,10 +86,13 @@ export interface CronRunRow {
   status: "running" | "success" | "failed";
   source_breakdown: string | null;
   error: string | null;
+  kind: "daily" | "merge";
+  summary: string | null;
 }
 
-export interface CronRun extends Omit<CronRunRow, "source_breakdown"> {
+export interface CronRun extends Omit<CronRunRow, "source_breakdown" | "summary"> {
   source_breakdown: Record<string, number> | null;
+  summary: Record<string, number> | null;
 }
 
 export function serializeCronRun(row: CronRunRow): CronRun {
@@ -90,6 +101,7 @@ export function serializeCronRun(row: CronRunRow): CronRun {
     started_at: toUtcIso(row.started_at),
     finished_at: toUtcIso(row.finished_at),
     source_breakdown: row.source_breakdown ? JSON.parse(row.source_breakdown) : null,
+    summary: row.summary ? JSON.parse(row.summary) : null,
   };
 }
 
@@ -182,4 +194,43 @@ export interface TaskDocumentRow {
 
 export function serializeTaskDocument(row: TaskDocumentRow): TaskDocumentRow {
   return { ...row, generated_at: toUtcIso(row.generated_at), user_edited_at: toUtcIso(row.user_edited_at) };
+}
+
+// Havuz bakımı önerileri (0016).
+export interface ProposalRow {
+  id: string;
+  run_id: string | null;
+  kind: "merge" | "feature";
+  status: "pending" | "applied" | "rejected" | "undone";
+  auto_applied: number;
+  source_ids: string;
+  source_prev_statuses: string | null;
+  target_idea_id: string | null;
+  payload: string;
+  reason: string;
+  error: string | null;
+  issue_url: string | null;
+  created_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+}
+
+export interface Proposal
+  extends Omit<ProposalRow, "auto_applied" | "source_ids" | "source_prev_statuses" | "payload"> {
+  auto_applied: boolean;
+  source_ids: string[];
+  source_prev_statuses: Record<string, string> | null;
+  payload: unknown;
+}
+
+export function serializeProposal(row: ProposalRow): Proposal {
+  return {
+    ...row,
+    auto_applied: row.auto_applied === 1,
+    source_ids: JSON.parse(row.source_ids),
+    source_prev_statuses: row.source_prev_statuses ? JSON.parse(row.source_prev_statuses) : null,
+    payload: JSON.parse(row.payload),
+    created_at: toUtcIso(row.created_at),
+    decided_at: toUtcIso(row.decided_at),
+  };
 }

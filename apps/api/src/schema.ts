@@ -46,6 +46,9 @@ export const IDEA_STATUSES = [
   "awaiting_test",
   "testing",
   "approved",
+  // Havuz bakımı (0016): başka bir fikre birleştirildi / gözden düştü.
+  "merged",
+  "archived",
 ] as const;
 export type IdeaStatus = (typeof IDEA_STATUSES)[number];
 
@@ -66,7 +69,22 @@ export const USER_STATUS_TRANSITIONS: Record<IdeaStatus, readonly IdeaStatus[]> 
   awaiting_test: ["in_development"],
   testing: [],
   approved: [],
+  // Birleştirmeyi geri alma ve arşivden geri getirme kendi uçlarından geçer.
+  merged: [],
+  archived: [],
 };
+
+// Fikirler listesindeki (havuzdaki) durumlar; havuz bakımı yalnızca bunlara bakar.
+export const POOL_STATUSES: readonly IdeaStatus[] = ["new", "on_hold"];
+// Geliştirme akışındaki durumlar: havuz bakımı bunlara özellik önerebilir.
+export const DEV_FLOW_STATUSES: readonly IdeaStatus[] = [
+  "awaiting_development",
+  "in_development",
+  "rework",
+  "awaiting_test",
+  "testing",
+  "approved",
+];
 
 // Faz 3 sonrası tur, Grup 3: "Geliştirildi" formu. Serbest metin alanı yok —
 // her şey kısa satırlar halinde (kullanıcı isteği: "form şeklinde olsun").
@@ -208,15 +226,25 @@ export const SOURCE_SETTING_KEYS = [
   "source_hackernews_enabled",
 ] as const;
 
-export const settingsPatchSchema = z.object({
-  key: z.enum(SOURCE_SETTING_KEYS),
-  value: z.boolean(),
-});
+// Havuz bakımı ayarları (gün). Satır yoksa varsayılan geçerli.
+export const MAINTENANCE_SETTING_DEFAULTS = {
+  merge_interval_days: 3,
+  purge_after_days: 90,
+} as const;
+export type MaintenanceSettingKey = keyof typeof MAINTENANCE_SETTING_DEFAULTS;
+
+export const settingsPatchSchema = z.union([
+  z.object({ key: z.enum(SOURCE_SETTING_KEYS), value: z.boolean() }),
+  z.object({ key: z.literal("merge_interval_days"), value: z.number().int().min(1).max(30) }),
+  z.object({ key: z.literal("purge_after_days"), value: z.number().int().min(0).max(3650) }),
+]);
 
 export const cronRunPatchSchema = z
   .object({
     status: z.enum(["success", "failed"]),
     source_breakdown: z.record(z.string(), z.number().int().min(0)).optional(),
+    // Havuz bakımı koşusunun sayıları (birleştirme, öneri, arşiv, silme).
+    summary: z.record(z.string(), z.number().int().min(0)).optional(),
     error: z.string().nullable().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, "En az bir alan gönderilmeli");
@@ -230,6 +258,9 @@ export const userNamePutSchema = z.object({
 });
 export type CronRunPatch = z.infer<typeof cronRunPatchSchema>;
 
+export const CRON_RUN_KINDS = ["daily", "merge"] as const;
+export const cronRunCreateSchema = z.object({ kind: z.enum(CRON_RUN_KINDS).optional() });
+
 // Grup 3: GitHub workflow_dispatch tetikleme (cron, yeniden değerlendirme,
 // rakip bulma — hepsi aynı mekanizma).
 export const DISPATCHABLE_WORKFLOWS = [
@@ -237,6 +268,7 @@ export const DISPATCHABLE_WORKFLOWS = [
   "reevaluate-idea.yml",
   "find-competitors.yml",
   "evaluate-idea.yml",
+  "merge-ideas.yml",
 ] as const;
 
 export const triggerWorkflowSchema = z.object({
@@ -440,3 +472,40 @@ export const taskBuildReportSchema = z
     status: z.literal("done").optional(),
   })
   .refine((d) => d.repo_url || d.issue_url || d.status, "En az bir alan gönderilmeli");
+
+// Havuz bakımı (merge-ideas.yml, prompts/merge-ideas.md). scripts/lib/idea-schema.ts
+// proposalsOutputSchema ile aynı olmalı. Birleşik fikir günlük fikir şemasını
+// kullanır; yalnızca ilham kaynakları boş olabilir (elle girilmiş kaynaklar).
+export const mergedIdeaSchema = ideaInputSchema.extend({
+  inspiration_sources: z.array(z.string().min(1)),
+});
+
+export const MAX_MERGES_PER_RUN = 6;
+export const MAX_FEATURES_PER_RUN = 6;
+
+export const proposalsSubmitSchema = z.object({
+  run_id: z.string().min(1).optional(),
+  merges: z
+    .array(
+      z.object({
+        source_ids: z.array(z.string().min(1)).min(2).max(4),
+        reason: z.string().min(1),
+        idea: mergedIdeaSchema,
+      }),
+    )
+    .max(MAX_MERGES_PER_RUN),
+  features: z
+    .array(
+      z.object({
+        source_id: z.string().min(1),
+        target_idea_id: z.string().min(1),
+        title: z.string().trim().min(1).max(120),
+        description: z.string().trim().min(1).max(2000),
+        reason: z.string().min(1),
+      }),
+    )
+    .max(MAX_FEATURES_PER_RUN),
+});
+
+export type ProposalsSubmit = z.infer<typeof proposalsSubmitSchema>;
+export type MergedIdea = z.infer<typeof mergedIdeaSchema>;

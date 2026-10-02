@@ -38,6 +38,8 @@ const STATUS_PALETTE: Record<IdeaStatus, string> = {
   awaiting_test: "bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-200",
   testing: "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200",
   approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
+  merged: "bg-muted text-muted-foreground",
+  archived: "bg-muted text-muted-foreground",
 };
 
 // Tüm ekranlarda ortak durum etiketleri.
@@ -51,6 +53,8 @@ export const STATUS_LABELS: Record<IdeaStatus, string> = {
   awaiting_test: "Test bekliyor",
   testing: "Test ediliyor",
   approved: "Dağıtıma hazır",
+  merged: "Birleştirildi",
+  archived: "Arşivlendi",
 };
 
 // "Geliştir" denmiş fikirler: ana listeden çıkar, Geliştirilenler ekranında
@@ -77,8 +81,10 @@ export function ideaSection(status: IdeaStatus): IdeaSection {
   return IDEA_SECTIONS.find((s) => s.statuses.includes(status))?.section ?? { path: "/ideas", label: "Fikirler" };
 }
 
+// Birleştirilmiş/arşivlenmiş/silinmiş fikirler API listesinde zaten yok;
+// yine de havuz yalnızca new/on_hold.
 export function isInIdeaPool(status: IdeaStatus): boolean {
-  return ideaSection(status).path === "/ideas";
+  return status === "new" || status === "on_hold";
 }
 
 export function statusColorClasses(status: IdeaStatus): string {

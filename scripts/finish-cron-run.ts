@@ -4,6 +4,7 @@ import { finishCronRun } from "./lib/api-client";
 import type { TrendSummary } from "./lib/types";
 
 // Kullanım: tsx finish-cron-run.ts <success|failed> [trends-json-path] [hata mesajı]
+// (havuz bakımında trends yolu boş string verilir; çıktı klasörü 'output'.)
 // $GITHUB_ENV'e start-cron-run.ts'in yazdığı CRON_RUN_ID'yi okur. Workflow'da
 // `if: always()` ile çağrılır ki iş ortada patlasa da geçmişte "failed"
 // olarak görünsün, sessizce kaybolmasın.
@@ -29,12 +30,21 @@ async function main() {
     }
   }
 
+  // Havuz bakımı: submit-proposals.ts sayıları output/run-summary.json'a yazar.
+  const outDir = trendsPath ? path.dirname(trendsPath) : "output";
+  let summary: Record<string, number> | undefined;
+  try {
+    summary = JSON.parse(await readFile(path.join(outDir, "run-summary.json"), "utf-8"));
+  } catch {
+    // günlük üretimde ya da erken hatada yok.
+  }
+
   // validate-ideas.ts gibi adımlar okunabilir bir hata sebebini
   // output/failure-reason.txt'e yazar; varsa log linkinin önüne eklenir
   // (Cron Geçmişi ekranı sondaki URL'yi ayrıca link olarak gösterir).
   let error = errorMessage;
   if (status === "failed") {
-    const reasonPath = path.join(trendsPath ? path.dirname(trendsPath) : "output", "failure-reason.txt");
+    const reasonPath = path.join(outDir, "failure-reason.txt");
     try {
       const reason = (await readFile(reasonPath, "utf-8")).trim();
       if (reason) error = errorMessage ? `${reason} | ${errorMessage}` : reason;
@@ -46,6 +56,7 @@ async function main() {
   await finishCronRun(id, {
     status,
     source_breakdown: sourceBreakdown,
+    summary,
     error,
   });
   console.log(`Cron run ${id} -> ${status}`);

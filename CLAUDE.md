@@ -452,6 +452,30 @@ Access lets several emails in now, so records keep **who last changed them**. Th
   - `mark_seen` from a verified user upserts `idea_seen` and leaves `ideas.activity_seen_at` untouched. That column is now a frozen shared baseline: a person with no row falls back to it, and only unverified (`null`-actor) requests still write it.
   - Any new endpoint that returns ideas to the UI should go through `withSeen()`.
 
+## Pool maintenance — Grup 1 (2026-10-03): backend, workflow, prompt draft
+
+Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wigderson.md` (groups 1, 2 UI, 2b archive, 3 issues). Decisions are the "Havuz bakımı" rows in `docs/PROJE.md`.
+- **Migration `0016`** (ADD COLUMN + new tables only):
+  - `ideas.merged_into_id`, `stale_runs`, `archived_at`, `deleted_at` (the last three are for Grup 2b; `deleted_at` is already stamped by `PATCH /ideas/:id`).
+  - `cron_runs.kind` (`daily`/`merge`) + `summary`.
+  - `pool_proposals` and `retired_names`, both without FK.
+- **New statuses `merged`/`archived`** (`IDEA_STATUSES`; no user transitions). `GET /ideas` hides them like `deleted`, `?status=archived` lists the archive. `POOL_STATUSES`/`DEV_FLOW_STATUSES` in `schema.ts`.
+- `nameTaken(name, exceptIds)` now takes an array and also checks `retired_names`. A merged idea may reuse one of its sources' names.
+- **Workflow endpoints:** `GET /admin/merge/due` (interval from `app_settings.merge_interval_days`, default 3, 2 h slack), `GET /admin/merge/input`, `POST /admin/merge/proposals`. The last one skips invalid proposals with a reason instead of failing, and auto-applies merges whose sources are all untouched (`untouched()`: status `new`, no rating, no note).
+- **User endpoints:** `GET /proposals`, `GET /ideas/:id/proposals` (+ `merged_from`), `POST /proposals/:id/apply|reject|undo|accept`.
+  - Undo only works while the merged idea is still in the pool; it deletes the merged idea and restores the sources' previous statuses.
+  - Accept (feature) opens an issue in the target's skeleton repo when the task has a `repo_url`, then sets the source to `merged` with `merged_into_id` = the dev idea. So a dev idea's `merged_from` also lists accepted feature sources; the UI should tell them apart using the proposals.
+- `GET /admin/cron-runs` defaults to `kind=daily`, so the existing screens are unchanged; `?kind=merge` lists maintenance runs. `/admin/settings` GET also returns `maintenance: {merge_interval_days, purge_after_days}`, and PATCH accepts those keys as integers.
+- **`merge-ideas.yml`** has a `check` job (`check-merge-due.ts`, `force` input) and a `maintain` job:
+  1. `start-cron-run.ts merge`
+  2. `fetch-pool.ts` writes `output/pool.json` with one idea per line, and skips Claude when there's nothing to compare
+  3. Claude runs `prompts/merge-ideas.md` (30 turns)
+  4. `submit-proposals.ts` writes `output/run-summary.json`
+  5. `finish-cron-run.ts`, which now sends that file as `summary`
+
+  **The schedule is commented out until the user approves the prompt draft**; manual dispatch works. It's in `DISPATCHABLE_WORKFLOWS`.
+- `prompts/merge-ideas.md` was drafted by Claude for the user to review (same ownership rule). It references `daily-ideas.md`'s "3." and "4." sections.
+
 ## What this project is
 
 A personal automation platform that:

@@ -14,7 +14,10 @@ export type IdeaStatus =
   | "rework"
   | "awaiting_test"
   | "testing"
-  | "approved";
+  | "approved"
+  // Havuz bakımı: başka bir fikre birleştirildi / gözden düştü (özeti kaldı).
+  | "merged"
+  | "archived";
 
 export interface IdeaScores {
   market: number;
@@ -51,7 +54,7 @@ export interface Idea {
   last_activity_kind: ActivityKind | null;
   activity_seen_at: string | null;
   status: IdeaStatus;
-  origin: "cron" | "manual";
+  origin: "cron" | "manual" | "merge";
   /** "Açıklama yaz, Claude doldursun" yolunda kullanıcının yazdığı metin. */
   source_text: string | null;
   /** Son durum değişikliği; null ise durum oluşturulduğundan beri aynı (created_at'e bak). */

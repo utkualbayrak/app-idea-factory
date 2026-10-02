@@ -1,0 +1,130 @@
+name: Pool Maintenance
+
+# Havuz bakımı: Fikirler listesindeki (new/on_hold) birbirine yakın fikirleri
+# birleştirir, geliştirmedeki fikirlere çok yakın olanları özellik önerisine
+# çevirir. Claude önerir; el değmemiş fikirlerin birleştirmesini API hemen
+# uygular, gerisi Öneriler ekranında onay bekler.
+# Her gün çalışır ama bakım yalnızca Ayarlar'daki aralık (varsayılan 3 gün)
+# dolduysa yapılır; "*/3" gün ifadesi ay sonunda kaydığı için kullanılmadı.
+on:
+  # Prompt (prompts/merge-ideas.md) kullanıcı onayından sonra açılacak.
+  # schedule:
+  #   # 07:00 Türkiye saati, günlük fikir üretiminden (06:00) sonra.
+  #   - cron: "0 4 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Aralık dolmamış olsa da bakımı çalıştır"
+        required: false
+        default: "true"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: merge-ideas
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      due: ${{ steps.due.outputs.due }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check whether maintenance is due
+        id: due
+        working-directory: scripts
+        # Zamanlanmış çalışmada inputs boş gelir.
+        run: pnpm exec tsx check-merge-due.ts "$FORCE"
+        env:
+          FORCE: ${{ inputs.force }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+  maintain:
+    needs: check
+    if: needs.check.outputs.due == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start maintenance run (Çalışma geçmişi için)
+        working-directory: scripts
+        run: pnpm exec tsx start-cron-run.ts merge
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Fetch pool and development ideas
+        id: pool
+        working-directory: scripts
+        run: pnpm exec tsx fetch-pool.ts output
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Propose merges and features with Claude Code
+        if: steps.pool.outputs.skip_claude != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: "Read prompts/merge-ideas.md and follow its instructions exactly. Do not ask for confirmation or clarification — complete the task end to end and write the output file."
+          claude_args: "--max-turns 30 --permission-mode acceptEdits"
+
+      - name: Submit proposals
+        working-directory: scripts
+        run: pnpm exec tsx submit-proposals.ts output/proposals.json
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      # CRON_RUN_ID start-cron-run.ts'ten $GITHUB_ENV ile gelir.
+      - name: Finish maintenance run (başarılı)
+        if: always() && success()
+        working-directory: scripts
+        run: pnpm exec tsx finish-cron-run.ts success
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Finish maintenance run (başarısız)
+        if: always() && (failure() || cancelled())
+        working-directory: scripts
+        run: pnpm exec tsx finish-cron-run.ts failed "" "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

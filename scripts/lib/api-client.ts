@@ -76,17 +76,23 @@ export async function fetchSettings(): Promise<Record<string, boolean>> {
   return body.settings;
 }
 
-export async function startCronRun(): Promise<string> {
+export async function startCronRun(kind: "daily" | "merge" = "daily"): Promise<string> {
   const body = await fetchJson<{ id: string }>(`${BASE_URL}/admin/cron-runs`, {
     method: "POST",
-    headers: authHeaders(),
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ kind }),
   });
   return body.id;
 }
 
 export async function finishCronRun(
   id: string,
-  patch: { status: "success" | "failed"; source_breakdown?: Record<string, number>; error?: string },
+  patch: {
+    status: "success" | "failed";
+    source_breakdown?: Record<string, number>;
+    summary?: Record<string, number>;
+    error?: string;
+  },
 ): Promise<void> {
   await fetchJson(`${BASE_URL}/admin/cron-runs/${id}`, {
     method: "PATCH",
@@ -198,5 +204,31 @@ export async function submitTaskDocuments(ideaId: string, documents: Record<stri
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ idea_id: ideaId, documents }),
+  });
+}
+
+// Havuz bakımı (merge-ideas.yml).
+export async function fetchMergeDue(): Promise<{ due: boolean; last_success_at: string | null; interval_days: number }> {
+  return fetchJson(`${BASE_URL}/admin/merge/due`, { headers: authHeaders() });
+}
+
+export async function fetchMergeInput(): Promise<{
+  pool: unknown[];
+  dev_ideas: unknown[];
+  rejected_merges: string[][];
+  previous_features: unknown[];
+}> {
+  return fetchJson(`${BASE_URL}/admin/merge/input`, { headers: authHeaders() });
+}
+
+export async function submitProposals(body: {
+  run_id?: string;
+  merges: unknown[];
+  features: unknown[];
+}): Promise<{ merges_applied: number; merges_pending: number; features: number; skipped: string[] }> {
+  return fetchJson(`${BASE_URL}/admin/merge/proposals`, {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 }

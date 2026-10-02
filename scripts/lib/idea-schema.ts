@@ -89,3 +89,36 @@ export const competitorsOutputSchema = z.object({
 });
 
 export type Competitor = z.infer<typeof competitorSchema>;
+
+// Havuz bakımı (prompts/merge-ideas.md). apps/api/src/schema.ts'deki
+// proposalsSubmitSchema ile aynı olmalı; status alanı yalnızca burada.
+export const mergedIdeaSchema = ideaInputSchema.extend({
+  inspiration_sources: z.array(z.string().min(1)),
+});
+
+export const proposalsOutputSchema = z.object({
+  status: z.enum(["ok", "input_error"]),
+  error: z.string().optional(),
+  merges: z
+    .array(
+      z.object({
+        source_ids: z.array(z.string().min(1)).min(2).max(4),
+        reason: z.string().min(1),
+        idea: mergedIdeaSchema,
+      }),
+    )
+    .max(6),
+  features: z
+    .array(
+      z.object({
+        source_id: z.string().min(1),
+        target_idea_id: z.string().min(1),
+        title: z.string().trim().min(1).max(120),
+        description: z.string().trim().min(1).max(2000),
+        reason: z.string().min(1),
+      }),
+    )
+    .max(6),
+});
+
+export type ProposalsOutput = z.infer<typeof proposalsOutputSchema>;

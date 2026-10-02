@@ -27,6 +27,9 @@
     "prepare-skeleton-repo": "tsx prepare-skeleton-repo.ts",
     "write-skeleton-files": "tsx write-skeleton-files.ts",
     "finish-skeleton": "tsx finish-skeleton.ts",
+    "check-merge-due": "tsx check-merge-due.ts",
+    "fetch-pool": "tsx fetch-pool.ts",
+    "submit-proposals": "tsx submit-proposals.ts",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint"
   },
