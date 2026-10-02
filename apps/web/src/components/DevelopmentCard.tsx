@@ -107,7 +107,7 @@ export function DevelopmentCard({
     }
   }
 
-  async function handleMarkStatus(status: "developed" | "in_development") {
+  async function handleMarkStatus(status: "awaiting_test" | "in_development") {
     setActionError(null);
     try {
       await patchIdea(ideaId, { status });
@@ -240,20 +240,21 @@ export function DevelopmentCard({
               </Link>
             </Button>
           )}
-          {task.status === "done" && ideaStatus === "in_development" && (
+          {/* Grup 3'te bu buton "Geliştirildi" formuna dönüşecek. */}
+          {task.status === "done" && (ideaStatus === "in_development" || ideaStatus === "rework") && (
             <ConfirmButton
-              label="Geliştirildi olarak işaretle"
-              title="Fikri 'Geliştirildi' olarak işaretle?"
-              description="Yalnızca durum değişir; repo ve görev olduğu gibi kalır. İstediğin zaman geri alabilirsin."
-              confirmLabel="İşaretle"
-              onConfirm={() => handleMarkStatus("developed")}
+              label="Geliştirildi, teste gönder"
+              title="Fikri 'Test bekliyor' durumuna al?"
+              description="Fikir Test ekranına geçer; repo ve görev olduğu gibi kalır. Test başlamadan geri alabilirsin."
+              confirmLabel="Teste gönder"
+              onConfirm={() => handleMarkStatus("awaiting_test")}
             />
           )}
-          {ideaStatus === "developed" && (
+          {ideaStatus === "awaiting_test" && (
             <ConfirmButton
               label="Geliştiriliyor'a geri al"
               title="Fikri tekrar 'Geliştiriliyor' yap?"
-              description="Yalnızca durum değişir."
+              description="Yalnızca durum değişir; fikir Geliştirilenler ekranına döner."
               confirmLabel="Geri al"
               onConfirm={() => handleMarkStatus("in_development")}
             />

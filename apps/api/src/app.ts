@@ -21,6 +21,8 @@ import {
 import {
   ideaBatchRequestSchema,
   ideaPatchSchema,
+  USER_STATUS_TRANSITIONS,
+  type IdeaStatus,
   settingsPatchSchema,
   cronRunPatchSchema,
   triggerWorkflowSchema,
@@ -217,6 +219,15 @@ app.patch("/ideas/:id", async (req, res) => {
 
   if (!existing) {
     res.status(404).json({ error: "not_found" });
+    return;
+  }
+
+  if (
+    parsed.data.status &&
+    parsed.data.status !== existing.status &&
+    !USER_STATUS_TRANSITIONS[existing.status as IdeaStatus]?.includes(parsed.data.status)
+  ) {
+    res.status(409).json({ error: "invalid_status_transition", from: existing.status, to: parsed.data.status });
     return;
   }
 

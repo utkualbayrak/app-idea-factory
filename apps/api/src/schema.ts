@@ -33,11 +33,45 @@ export const ideaBatchRequestSchema = z.object({
   ideas: z.array(ideaInputSchema).min(1),
 });
 
+// Fikir durumları. D1'de CHECK yok (0008), geçerlilik burada tek yerde.
+// Akış: new/on_hold → awaiting_development → in_development → awaiting_test
+// → testing → approved; testten geri gönderilen fikir rework olur.
+export const IDEA_STATUSES = [
+  "new",
+  "on_hold",
+  "deleted",
+  "awaiting_development",
+  "in_development",
+  "rework",
+  "awaiting_test",
+  "testing",
+  "approved",
+] as const;
+export type IdeaStatus = (typeof IDEA_STATUSES)[number];
+
+// PATCH /ideas/:id ile kullanıcının yapabileceği durum geçişleri. Geliştirme
+// akışına giriş/çıkış (awaiting_development, in_development) görev uçlarından
+// geçer; test akışı (testing, approved, rework) Grup 4'te kendi uçlarına
+// taşınacak. Burada olmayan geçiş 409 döner.
+export const USER_STATUS_TRANSITIONS: Record<IdeaStatus, readonly IdeaStatus[]> = {
+  new: ["on_hold", "deleted"],
+  on_hold: ["new", "deleted"],
+  deleted: [],
+  awaiting_development: [],
+  // Grup 3'te "Geliştirildi" formu bu geçişi kendi ucuna alacak.
+  in_development: ["awaiting_test"],
+  rework: ["awaiting_test"],
+  // Test başlamadan geri alma.
+  awaiting_test: ["in_development"],
+  testing: [],
+  approved: [],
+};
+
 export const ideaPatchSchema = z
   .object({
     user_rating: scoreValue.nullable().optional(),
     user_note: z.string().nullable().optional(),
-    status: z.enum(["new", "on_hold", "deleted", "in_development", "developed"]).optional(),
+    status: z.enum(IDEA_STATUSES).optional(),
     // Detay sayfası açılınca gönderilir: son aktiviteyi "görüldü" yapar
     // (fikir listesindeki okunmamış noktası kalkar). Aktivite damgalamaz.
     mark_seen: z.literal(true).optional(),

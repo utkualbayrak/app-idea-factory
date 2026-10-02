@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
-import { isInDevelopmentFlow } from "@/lib/idea-colors";
+import { isInIdeaPool } from "@/lib/idea-colors";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { ListPageLayout, PageHeader, PageMessage } from "@/components/PageHeader";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -97,10 +97,10 @@ export function IdeaListPage() {
 
   const isFiltered = useMemo(() => JSON.stringify(filters) !== JSON.stringify(DEFAULT_FILTERS), [filters]);
 
-  // Geliştirme akışına giren fikirler ana listeden tamamen çıkar,
-  // /developed ekranında görünür.
+  // Geliştirme/test akışına giren fikirler ana listeden tamamen çıkar,
+  // kendi ekranlarında (/developed, /testing, /ready) görünür.
   const activeIdeas = useMemo(
-    () => (ideas ?? []).filter((idea) => !isInDevelopmentFlow(idea.status)),
+    () => (ideas ?? []).filter((idea) => isInIdeaPool(idea.status)),
     [ideas],
   );
 

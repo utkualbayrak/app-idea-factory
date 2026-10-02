@@ -50,6 +50,12 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Görev formu zamanı (Faz 3) | Form belgelerden **önce** doldurulur; belgeler seçilen platform/backend/auth/tasarıma göre yazılır. Belgeler hazırken form tekrar açılıp belgeler yeniden üretilebilir. |
 | İskelet doğrulama (Faz 3) | Yalnızca JS/TS tabanlı platformda (Expo/React Native) install + typecheck/lint çalışır, hatalar Claude'a düzelttirilir. Swift, Kotlin ve Flutter'da toolchain kurulmaz, sadece dosyalar üretilir ve README'de belirtilir. İleride genişletilebilir. |
 | Tekrar dene (Faz 3) | Başarısız iskelet görevi aynı repo, aynı issue ve aynı (onaylı) belgelerle yeniden çalışır. Fikir başına en fazla bir görev ve bir repo. |
+| Geliştirme sonrası durumlar (Faz 3 sonrası tur, 2026-10-02) | Akış: `in_development` → `awaiting_test` (Test bekliyor) → `testing` (Test ediliyor) → `approved` (Onaylandı, "Dağıtıma hazır" listesi). Testten geri gönderilen fikir `rework` (Revizyonda) olur, Geliştirilenler listesine düşer ve detayında dönüş sebebi yazar; tekrar "Geliştirildi" formuyla teste gider. Eski `developed` durumu kaldırıldı, kayıtlar `awaiting_test`'e taşındı. Geliştirme raporları ve test turları tur numarasıyla saklanır. |
+| Durum doğrulaması (2026-10-02) | `ideas.status` üzerindeki SQL CHECK kaldırıldı; geçerli durumlar ve izinli geçişler API'de (zod + geçiş tablosu) tek yerde kontrol edilir. Yeni durum eklemek artık tablo yeniden kurulumu gerektirmez. |
+| Test turu iptali (2026-10-02) | Yarıda kalan test turu iptal edilebilir: tur `cancelled` olarak kalır, fikir `awaiting_test`'e döner. |
+| Manuel fikir girişi (2026-10-02) | İki yol: (a) tüm alanları formla girmek, puanlar boş kalır, sonra "Claude ile değerlendir"; (b) serbest, ayrıntılı bir açıklama yazmak, Claude bunu fikir şemasına uyarlar, alanları doldurur ve puanlar. Kaynak `ideas.origin` (`cron`/`manual`) ile ayrılır. Gereken prompt'u Claude taslak olarak yazar, kullanıcı inceler. |
+| Hedef platform (2026-10-02) | Fikir başına tek repo. Görev formuna hedef (iOS, Android ya da ikisi) eklenir; native seçenekler hedefi kendisi belirler, Expo/Flutter'da seçilebilir. |
+| Gesture ipuçları (2026-10-02) | `plan-idea.md`'deki `screens.md`'ye uygunsa "etkileşim / gesture notları" bölümü eklenir (zorunlu değil). Prompt metni kullanıcıya onaylatılır. |
 
 ## Bu kararların mimariye etkisi
 

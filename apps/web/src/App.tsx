@@ -1,10 +1,10 @@
 import { Link, Route, Routes, useLocation } from "react-router-dom";
-import { Hammer, History, Lightbulb, LayoutDashboard, LogOut, Settings } from "lucide-react";
+import { FlaskConical, Hammer, History, Lightbulb, LayoutDashboard, LogOut, Rocket, Settings } from "lucide-react";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { IdeaListPage } from "@/pages/IdeaListPage";
 import { IdeaDetailPage } from "@/pages/IdeaDetailPage";
 import { DevelopPage } from "@/pages/DevelopPage";
-import { DevelopedPage } from "@/pages/DevelopedPage";
+import { DevelopedPage, ReadyPage, TestingPage } from "@/pages/StatusListPage";
 import { ComparePage } from "@/pages/ComparePage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { CronRunsPage } from "@/pages/CronRunsPage";
@@ -29,6 +29,8 @@ const NAV_ITEMS = [
   { to: "/", label: "Gösterge paneli", icon: LayoutDashboard },
   { to: "/ideas", label: "Fikirler", icon: Lightbulb },
   { to: "/developed", label: "Geliştirilenler", icon: Hammer },
+  { to: "/testing", label: "Test", icon: FlaskConical },
+  { to: "/ready", label: "Dağıtıma hazır", icon: Rocket },
   { to: "/cron-runs", label: "Çalışma geçmişi", icon: History },
   { to: "/settings", label: "Ayarlar", icon: Settings },
 ];
@@ -90,6 +92,8 @@ function App() {
             <Route path="/ideas/:id" element={<IdeaDetailPage />} />
             <Route path="/ideas/:id/develop" element={<DevelopPage />} />
             <Route path="/developed" element={<DevelopedPage />} />
+            <Route path="/testing" element={<TestingPage />} />
+            <Route path="/ready" element={<ReadyPage />} />
             <Route path="/compare" element={<ComparePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/cron-runs" element={<CronRunsPage />} />

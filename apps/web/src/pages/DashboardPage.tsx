@@ -9,7 +9,7 @@ import {
   type WorkflowRun,
 } from "@/lib/api";
 import { combinedScore } from "@/lib/scoring";
-import { isInDevelopmentFlow, statusColorClasses, STATUS_LABELS } from "@/lib/idea-colors";
+import { isInIdeaPool, READY_STATUSES, statusColorClasses, STATUS_LABELS, TEST_STATUSES } from "@/lib/idea-colors";
 import { WORKFLOW_LABELS } from "@/lib/activity";
 import { formatDateTime } from "@/lib/format-date";
 import { Badge } from "@/components/ui/badge";
@@ -83,8 +83,10 @@ export function DashboardPage() {
       onHold: count((i) => i.status === "on_hold"),
       unrated: count((i) => (i.status === "new" || i.status === "on_hold") && i.user_rating == null),
       highScored: count((i) => (combinedScore(i.scores.overall, i.user_rating) ?? i.scores.overall) >= 8),
-      inDevelopment: count((i) => i.status === "in_development"),
-      developed: count((i) => i.status === "developed"),
+      inDevelopment: count((i) => i.status === "awaiting_development" || i.status === "in_development"),
+      rework: count((i) => i.status === "rework"),
+      inTest: count((i) => TEST_STATUSES.includes(i.status)),
+      ready: count((i) => READY_STATUSES.includes(i.status)),
     };
   }, [ideas]);
 
@@ -119,7 +121,7 @@ export function DashboardPage() {
   const recentDevIdeas = useMemo(() => {
     if (!ideas) return [];
     return ideas
-      .filter((i) => isInDevelopmentFlow(i.status))
+      .filter((i) => !isInIdeaPool(i.status))
       .sort((a, b) => b.created_at.localeCompare(a.created_at))
       .slice(0, 5);
   }, [ideas]);
@@ -159,14 +161,16 @@ export function DashboardPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium tracking-wide text-muted-foreground uppercase">Şu an</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
           <StatTile label="Toplam fikir" value={metrics.total} />
           <StatTile label="Yeni" value={metrics.fresh} to="/ideas" />
           <StatTile label="Askıda" value={metrics.onHold} to="/ideas" />
           <StatTile label="Puanlanmamış" value={metrics.unrated} to="/ideas" />
           <StatTile label="8.00+ puanlı" value={metrics.highScored} />
           <StatTile label="Geliştiriliyor" value={metrics.inDevelopment} to="/developed" />
-          <StatTile label="Geliştirildi" value={metrics.developed} to="/developed" />
+          <StatTile label="Revizyonda" value={metrics.rework} to="/developed" />
+          <StatTile label="Testte" value={metrics.inTest} to="/testing" />
+          <StatTile label="Dağıtıma hazır" value={metrics.ready} to="/ready" />
           <StatTile label="Son cron" value={latestRun ? RUN_STATUS_LABELS[latestRun.status] : "—"} to="/cron-runs" />
         </div>
       </section>

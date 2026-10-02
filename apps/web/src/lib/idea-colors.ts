@@ -34,7 +34,10 @@ const STATUS_PALETTE: Record<IdeaStatus, string> = {
   deleted: "bg-muted text-muted-foreground",
   awaiting_development: "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200",
   in_development: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-200",
-  developed: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
+  rework: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200",
+  awaiting_test: "bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-200",
+  testing: "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-200",
+  approved: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
 };
 
 // Tüm ekranlarda ortak durum etiketleri.
@@ -44,14 +47,36 @@ export const STATUS_LABELS: Record<IdeaStatus, string> = {
   deleted: "Silinmiş",
   awaiting_development: "Geliştirme bekliyor",
   in_development: "Geliştiriliyor",
-  developed: "Geliştirildi",
+  rework: "Revizyonda",
+  awaiting_test: "Test bekliyor",
+  testing: "Test ediliyor",
+  approved: "Dağıtıma hazır",
 };
 
-// "Geliştir" denmiş fikirler: ana listeden çıkar, Geliştirilenler ekranında görünür.
-export const DEVELOPMENT_STATUSES: IdeaStatus[] = ["awaiting_development", "in_development", "developed"];
+// "Geliştir" denmiş fikirler: ana listeden çıkar, Geliştirilenler ekranında
+// görünür. Testten geri gönderilenler (rework) de buraya döner.
+export const DEVELOPMENT_STATUSES: IdeaStatus[] = ["awaiting_development", "in_development", "rework"];
+// "Geliştirildi" denmiş, test sürecindeki fikirler: Test ekranı.
+export const TEST_STATUSES: IdeaStatus[] = ["awaiting_test", "testing"];
+// Testi onaylanmış fikirler: Dağıtıma hazır ekranı.
+export const READY_STATUSES: IdeaStatus[] = ["approved"];
 
-export function isInDevelopmentFlow(status: IdeaStatus): boolean {
-  return DEVELOPMENT_STATUSES.includes(status);
+// Fikrin hangi liste ekranında durduğu — detaydaki geri linki ve ana listeden
+// dışlama buna göre. Ana Fikirler listesi yalnızca new/on_hold'u gösterir.
+export type IdeaSection = { path: string; label: string };
+
+const IDEA_SECTIONS: { statuses: IdeaStatus[]; section: IdeaSection }[] = [
+  { statuses: DEVELOPMENT_STATUSES, section: { path: "/developed", label: "Geliştirilenler" } },
+  { statuses: TEST_STATUSES, section: { path: "/testing", label: "Test" } },
+  { statuses: READY_STATUSES, section: { path: "/ready", label: "Dağıtıma hazır" } },
+];
+
+export function ideaSection(status: IdeaStatus): IdeaSection {
+  return IDEA_SECTIONS.find((s) => s.statuses.includes(status))?.section ?? { path: "/ideas", label: "Fikirler" };
+}
+
+export function isInIdeaPool(status: IdeaStatus): boolean {
+  return ideaSection(status).path === "/ideas";
 }
 
 export function statusColorClasses(status: IdeaStatus): string {

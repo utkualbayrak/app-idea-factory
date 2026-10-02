@@ -5,7 +5,16 @@
 // yerel API'ye (http://localhost:8787) bağlanır.
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
-export type IdeaStatus = "new" | "on_hold" | "deleted" | "awaiting_development" | "in_development" | "developed";
+export type IdeaStatus =
+  | "new"
+  | "on_hold"
+  | "deleted"
+  | "awaiting_development"
+  | "in_development"
+  | "rework"
+  | "awaiting_test"
+  | "testing"
+  | "approved";
 
 export interface IdeaScores {
   market: number;

@@ -10,7 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Faz 2 (UI) is done.** `apps/web` is a real app now (not the Vite starter): idea list (grouped by date, sortable, filterable) and idea detail (full fields, user rating, note, on_hold/delete) screens, talking directly to the API cross-origin through CORS. See "Faz 2 — what's live" below.
 
-**Faz 3 (task & skeleton) is code-complete (2026-10-01), pending the user's end-to-end test.** The flow was redesigned with the user before starting: "Geliştir" → task form → Claude writes 4 planning docs → idea goes to `awaiting_development` → user reviews/edits docs → "Geliştirmeye başla" → skeleton repo. Worked in 3 groups (3A data model + form + doc generation, 3B doc editing + start button, 3C `build-skeleton.yml` + retry), same commit/push-per-group process as the 2nd feedback round. Decisions are in `docs/PROJE.md` "Kesinleşen kararlar" (rows dated Faz 3). See "Faz 3A — what's live" below.
+**Faz 3 (task & skeleton) is done.** The flow was redesigned with the user before starting: "Geliştir" → task form → Claude writes 4 planning docs → idea goes to `awaiting_development` → user reviews/edits docs → "Geliştirmeye başla" → skeleton repo. A real Plan Idea + Build Skeleton run succeeded in production on 2026-10-01. Decisions are in `docs/PROJE.md` "Kesinleşen kararlar" (rows dated Faz 3). See "Faz 3A/3B/3C — what's live" below.
+
+**Post-Faz-3 round (2026-10-02, in progress): development → test → ready-to-ship lifecycle.** A third `notes.txt` list (14 items), worked through in 6 groups with the same commit/push-per-group process as the 2nd feedback round. Approved plan: `/Users/utkualbayrak/.claude/plans/post-faz3-lifecycle.md`; decisions are the 2026-10-02 rows in `docs/PROJE.md`. Groups: 1 status model + list screens (done), 2 repo sync, 3 "Geliştirildi" form, 4 test process, 5 manual idea entry, 6 target platform + gesture tips. See "Post-Faz-3 Grup 1 — what's live" below.
 
 **Post-Faz-2 feedback pass is done (2026-09-30):** the user filed a 26-item feedback list (`notes.txt`, gitignored) before starting Faz 3, and asked to work through it first in 4 dependency-ordered groups — see the approved plan for full scope. **All 4 groups (data model/scoring, UI consistency, new screens, background AI features) are done and user-verified in production (2026-10-01)** — see "Grup 1" through "Grup 4 — what's live" below. A second pre-Faz-3 feedback round (`notes.txt` again) comes next, then Faz 3 (task form, `build-skeleton.yml`).
 
@@ -368,6 +370,13 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
 - `prompts/build-skeleton.md` was drafted by Claude for the user to review (same ownership rule as the other prompts). Non-Expo guidance in it: Flutter writes `lib/` + `pubspec.yaml` and leaves platform folders to `flutter create .`; iOS uses an XcodeGen `project.yml` instead of a hand-written `.xcodeproj`; Android skips the binary `gradle-wrapper.jar`.
 - Not yet verified with a real run. The user tests Faz 3 end to end after 3C. Projects board and Slack are Faz 4.
 
+## Post-Faz-3 Grup 1 — what's live (status model, Test / Ready screens)
+
+- **Idea status flow:** `new`/`on_hold` → `awaiting_development` → `in_development` → `awaiting_test` → `testing` → `approved`; a test can send an idea back as `rework`, which returns to Geliştirilenler and goes back to `awaiting_test` through the same "developed" step. `developed` is gone; migration `0008` moved its rows to `awaiting_test`.
+- **`ideas.status` has no SQL CHECK anymore (0008).** Valid statuses are `IDEA_STATUSES` in `apps/api/src/schema.ts`, and user-allowed transitions are `USER_STATUS_TRANSITIONS` there; `PATCH /ideas/:id` returns `409 invalid_status_transition` for anything else. Adding a status no longer needs an `ideas` rebuild. If a rebuild is ever needed for another reason, 0008 shows the current set of FK children to back up (`workflow_runs`, `idea_competitors`, `tasks`, and `task_documents` which hangs off `tasks`).
+- Grup 1's temporary transitions: "Geliştirildi, teste gönder" (`in_development`/`rework` → `awaiting_test`, task must be `done`) and "Geliştiriliyor'a geri al" (`awaiting_test` → `in_development`) in `DevelopmentCard`. Grup 3 replaces the first with the "Geliştirildi" form; Grup 4 adds the test transitions through their own endpoints.
+- **Web:** status groups live in `lib/idea-colors.ts` (`DEVELOPMENT_STATUSES`, `TEST_STATUSES`, `READY_STATUSES`, `ideaSection()` for the detail back link, `isInIdeaPool()` for the main list). `pages/StatusListPage.tsx` is the shared list screen behind `/developed`, `/testing` (Test) and `/ready` (Dağıtıma hazır). The dashboard has 10 tiles (`md:grid-cols-5`): Revizyonda, Testte and Dağıtıma hazır were added, Geliştirildi removed.
+
 ## What this project is
 
 A personal automation platform that:
@@ -474,7 +483,7 @@ Private repo, name derived from the idea's English name (e.g. `mealmate-app`, su
 
 ## Data model (D1, draft)
 
-- **ideas**: id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, each sub-score + its reason text), user_rating (0.00-10.00 step 0.25, nullable), user_note, user_note_updated_at (nullable), last_reevaluated_at (nullable), last_reevaluation_summary (nullable), last_activity_at / last_activity_kind / activity_seen_at (nullable, 2nd round Grup C), status (new / on_hold / deleted / awaiting_development / in_development / developed)
+- **ideas**: id, created_at, batch_date, name, one_liner, problem, target_audience, core_features (json), monetization, category, inspiration_sources (json array), tags (json array), scores (json, each sub-score + its reason text), user_rating (0.00-10.00 step 0.25, nullable), user_note, user_note_updated_at (nullable), last_reevaluated_at (nullable), last_reevaluation_summary (nullable), last_activity_at / last_activity_kind / activity_seen_at (nullable, 2nd round Grup C), status (new / on_hold / deleted / awaiting_development / in_development / rework / awaiting_test / testing / approved — no SQL CHECK since 0008, validated in the API)
 - **tasks** (rebuilt in Faz 3A): id, idea_id (UNIQUE), created_at, updated_at, params (json), status (planning / planning_failed / ready / queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
 - **task_documents** (Faz 3A): task_id, kind (prd / screens / tech_plan / roadmap), content (Markdown), generated_at, user_edited_at
 - **trend_snapshots**: id, fetched_at, source, payload (json), cron_run_id (nullable, added Grup 4 — links a snapshot back to the run that produced it)

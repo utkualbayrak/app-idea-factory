@@ -28,7 +28,7 @@ import { TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
 import { PageMessage } from "@/components/PageHeader";
 import { formatDateTime } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
-import { categoryColorClasses, isInDevelopmentFlow, statusColorClasses, STATUS_LABELS } from "@/lib/idea-colors";
+import { categoryColorClasses, ideaSection, statusColorClasses, STATUS_LABELS } from "@/lib/idea-colors";
 import { ideaToMarkdown } from "@/lib/export-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -190,11 +190,11 @@ export function IdeaDetailPage() {
           ile kisa aciklamasi sabit kalsin" isteği). */}
       <div className="sticky top-14 z-[5] -mx-4 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <Link
-          to={isInDevelopmentFlow(idea.status) ? "/developed" : "/ideas"}
+          to={ideaSection(idea.status).path}
           className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
-          {isInDevelopmentFlow(idea.status) ? "Geliştirilenler" : "Fikirler"}
+          {ideaSection(idea.status).label}
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold">{idea.name}</h1>

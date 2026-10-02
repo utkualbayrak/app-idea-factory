@@ -37,7 +37,9 @@ App Idea Factory, tamamen ücretsiz planlar üzerinde çalışan kişisel ve oto
 | **Fikirler** | Tek, sıralanabilir ve filtrelenebilir tablo (arama, kategori, durum, minimum puanlar, tarih aralığı), sayfa başına 20, 4'e kadar karşılaştırma |
 | **Fikir detayı** | Fikrin tamamı, Claude'un gerekçeleriyle puan dökümü, 0–10 puanın ve notun, rakipler, yeniden değerlendirme, Markdown dışa aktarma |
 | **Geliştir** | Fikir için görev formu: platform, backend, auth, MVP özellikleri, tasarım, notlar |
-| **Geliştirilenler** | Geliştirme akışındaki fikirler: planlama belgeleri onayını bekleyenler, iskeleti kurulanlar, geliştirilenler. Detay sayfasında belgeler (başlatana kadar düzenlenebilir), repo/issue linkleri ve tekrar dene |
+| **Geliştirilenler** | Geliştirme akışındaki fikirler: planlama belgeleri onayını bekleyenler, iskeleti kurulanlar ya da kurulmuş olanlar, testten revizyona dönenler. Detay sayfasında belgeler (başlatana kadar düzenlenebilir), repo/issue linkleri ve tekrar dene |
+| **Test** | Geliştirilmiş, test bekleyen ya da testi süren fikirler |
+| **Dağıtıma hazır** | Testi onaylanmış fikirler |
 | **Karşılaştırma** | 2–4 fikir yan yana, karşılaştırırken puan verme |
 | **Çalışma geçmişi** | Günlük üretim çalışmaları (toplanan her trend öğesiyle) ve fikir bazlı işler; süre ve log linkleriyle |
 | **Ayarlar** | Trend kaynaklarını aç/kapat, günlük çalışmayı elle tetikle |
