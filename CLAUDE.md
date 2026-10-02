@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Faz 3 (task & skeleton) is done.** The flow was redesigned with the user before starting: "Geliştir" → task form → Claude writes 4 planning docs → idea goes to `awaiting_development` → user reviews/edits docs → "Geliştirmeye başla" → skeleton repo. A real Plan Idea + Build Skeleton run succeeded in production on 2026-10-01. Decisions are in `docs/PROJE.md` "Kesinleşen kararlar" (rows dated Faz 3). See "Faz 3A/3B/3C — what's live" below.
 
-**Post-Faz-3 round (2026-10-02, in progress): development → test → ready-to-ship lifecycle.** A third `notes.txt` list (14 items), worked through in 6 groups with the same commit/push-per-group process as the 2nd feedback round. Approved plan: `/Users/utkualbayrak/.claude/plans/post-faz3-lifecycle.md`; decisions are the 2026-10-02 rows in `docs/PROJE.md`. Groups: 1 status model + list screens (done), 2 repo sync (done), 3 "Geliştirildi" form, 4 test process, 5 manual idea entry, 6 target platform + gesture tips. See "Post-Faz-3 Grup 1 — what's live" below.
+**Post-Faz-3 round (2026-10-02, in progress): development → test → ready-to-ship lifecycle.** A third `notes.txt` list (14 items), worked through in 6 groups with the same commit/push-per-group process as the 2nd feedback round. Approved plan: `/Users/utkualbayrak/.claude/plans/post-faz3-lifecycle.md`; decisions are the 2026-10-02 rows in `docs/PROJE.md`. Groups: 1 status model + list screens (done), 2 repo sync (done), 3 "Geliştirildi" form (done), 4 test process, 5 manual idea entry, 6 target platform + gesture tips. See "Post-Faz-3 Grup 1 — what's live" below.
 
 **Post-Faz-2 feedback pass is done (2026-09-30):** the user filed a 26-item feedback list (`notes.txt`, gitignored) before starting Faz 3, and asked to work through it first in 4 dependency-ordered groups — see the approved plan for full scope. **All 4 groups (data model/scoring, UI consistency, new screens, background AI features) are done and user-verified in production (2026-10-01)** — see "Grup 1" through "Grup 4 — what's live" below. A second pre-Faz-3 feedback round (`notes.txt` again) comes next, then Faz 3 (task form, `build-skeleton.yml`).
 
@@ -374,7 +374,7 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
 
 - **Idea status flow:** `new`/`on_hold` → `awaiting_development` → `in_development` → `awaiting_test` → `testing` → `approved`; a test can send an idea back as `rework`, which returns to Geliştirilenler and goes back to `awaiting_test` through the same "developed" step. `developed` is gone; migration `0008` moved its rows to `awaiting_test`.
 - **`ideas.status` has no SQL CHECK anymore (0008).** Valid statuses are `IDEA_STATUSES` in `apps/api/src/schema.ts`, and user-allowed transitions are `USER_STATUS_TRANSITIONS` there; `PATCH /ideas/:id` returns `409 invalid_status_transition` for anything else. Adding a status no longer needs an `ideas` rebuild. If a rebuild is ever needed for another reason, 0008 shows the current set of FK children to back up (`workflow_runs`, `idea_competitors`, `tasks`, and `task_documents` which hangs off `tasks`).
-- Grup 1's temporary transitions: "Geliştirildi, teste gönder" (`in_development`/`rework` → `awaiting_test`, task must be `done`) and "Geliştiriliyor'a geri al" (`awaiting_test` → `in_development`) in `DevelopmentCard`. Grup 3 replaces the first with the "Geliştirildi" form; Grup 4 adds the test transitions through their own endpoints.
+- `in_development`/`rework` → `awaiting_test` only goes through the "Geliştirildi" form (Grup 3). "Geliştiriliyor'a geri al" (`awaiting_test` → `in_development`) stays a plain PATCH. Test transitions come through their own endpoints (Grup 4).
 - **Web:** status groups live in `lib/idea-colors.ts` (`DEVELOPMENT_STATUSES`, `TEST_STATUSES`, `READY_STATUSES`, `ideaSection()` for the detail back link, `isInIdeaPool()` for the main list). `pages/StatusListPage.tsx` is the shared list screen behind `/developed`, `/testing` (Test) and `/ready` (Dağıtıma hazır). The dashboard has 10 tiles (`md:grid-cols-5`): Revizyonda, Testte and Dağıtıma hazır were added, Geliştirildi removed.
 
 ## Post-Faz-3 Grup 2 — what's live (repo sync)
@@ -385,6 +385,12 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
   - `GET /ideas/:id/task` now also returns `repo: { last_sync, files }`.
 - **Web:** `RepoSyncPanel` inside `DevelopmentCard` (sync button, changed md files with expandable diff, commit list marking commits newer than the previous sync's HEAD). The 4 plan-doc tabs show a Repodaki / Onaylı / Fark toggle when the repo copy (`DOCUMENT_REPO_PATHS` in `lib/task-labels.ts`) differs from the approved doc; any other `docs/*.md` in the repo becomes an extra read-only tab. A sky dot marks tabs changed in the last sync. Diffs use `components/DiffView.tsx` on top of the `diff` (jsdiff v9) package.
 - `lib/api.ts`'s `request()` now appends the API's `{ message }` to thrown errors (the `(HTTP nnn)` part is unchanged, existing `includes("HTTP 500")` checks still work).
+
+## Post-Faz-3 Grup 3 — what's live ("Geliştirildi" form)
+
+- **`/ideas/:id/developed`** (`DevReportPage.tsx`), reached from the "Geliştirildi" button in `DevelopmentCard` (task `done`, idea `in_development`/`rework`). No free-text areas, by request: roadmap checkboxes grouped by phase (with select-all per phase), and `RowListInput` (`components/RowListInput.tsx`, short editable rows + optional one-click suggestions) for missing features (MVP features suggested), extra features and notes.
+  - The roadmap comes from the synced repo's `docs/roadmap.md` if present (so `- [x]` ticked in the repo arrive pre-checked), else from the approved roadmap doc. `lib/roadmap.ts` `parseRoadmap()` takes every `- [ ]`/`- [x]` line and assigns it the last heading as phase. The form has its own sync button; re-parsing keeps manual ticks.
+- **`POST /ideas/:id/dev-report`** saves a `dev_reports` row (migration `0010`, no FK, same reasoning as 0009) and sets the idea to `awaiting_test`. Round rule: from `rework` → new round; from `in_development` → round 1, or overwrite the latest report if one exists (the idea was pulled back from "Test bekliyor"). `GET /ideas/:id/dev-reports` lists them, newest round first; `DevReportsCard` shows them on the detail page.
 
 ## What this project is
 
@@ -496,6 +502,7 @@ Private repo, name derived from the idea's English name (e.g. `mealmate-app`, su
 - **tasks** (rebuilt in Faz 3A): id, idea_id (UNIQUE), created_at, updated_at, params (json), status (planning / planning_failed / ready / queued / running / done / failed), repo_url, issue_url, project_item_id, workflow_run_id, error
 - **task_documents** (Faz 3A): task_id, kind (prd / screens / tech_plan / roadmap), content (Markdown), generated_at, user_edited_at
 - **repo_files** / **repo_syncs** (post-Faz-3 Grup 2): md file cache and sync history per task, no FK (see 0009)
+- **dev_reports** (post-Faz-3 Grup 3): id, idea_id, round (UNIQUE with idea_id), created_at, updated_at, roadmap_source, roadmap_items / missing_features / extra_features / notes (json), no FK
 - **trend_snapshots**: id, fetched_at, source, payload (json), cron_run_id (nullable, added Grup 4 — links a snapshot back to the run that produced it)
 - **app_settings** (Grup 3): key, value, updated_at — key-value, a missing key means that setting is enabled (see `SOURCE_SETTING_KEYS` in `apps/api/src/schema.ts`)
 - **cron_runs** (Grup 3): id, started_at, finished_at (nullable), status (running / success / failed), source_breakdown (json, nullable), error (nullable)

@@ -297,3 +297,35 @@ export function patchTaskDocument(taskId: string, kind: DocumentKind, content: s
 export function startBuild(taskId: string): Promise<{ task: Task }> {
   return request(`/tasks/${taskId}/build`, { method: "POST" });
 }
+
+// Faz 3 sonrası tur, Grup 3: "Geliştirildi" formu / geliştirme raporları.
+export interface RoadmapItem {
+  phase: string | null;
+  text: string;
+  done: boolean;
+}
+
+export interface DevReportInput {
+  roadmap_source: "repo" | "approved" | null;
+  roadmap_items: RoadmapItem[];
+  missing_features: string[];
+  extra_features: string[];
+  notes: string[];
+}
+
+export interface DevReport extends DevReportInput {
+  id: string;
+  idea_id: string;
+  round: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function fetchDevReports(ideaId: string): Promise<{ reports: DevReport[] }> {
+  return request(`/ideas/${ideaId}/dev-reports`);
+}
+
+// Fikri "Test bekliyor"a alır.
+export function submitDevReport(ideaId: string, report: DevReportInput): Promise<{ report: DevReport }> {
+  return request(`/ideas/${ideaId}/dev-report`, { method: "POST", body: JSON.stringify(report) });
+}

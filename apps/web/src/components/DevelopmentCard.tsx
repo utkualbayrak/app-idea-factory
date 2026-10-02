@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ExternalLink, Eye, Pencil, RotateCcw } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, Pencil, RotateCcw } from "lucide-react";
 import {
   patchIdea,
   patchTaskDocument,
@@ -129,7 +129,7 @@ export function DevelopmentCard({
     }
   }
 
-  async function handleMarkStatus(status: "awaiting_test" | "in_development") {
+  async function handleMarkStatus(status: "in_development") {
     setActionError(null);
     try {
       await patchIdea(ideaId, { status });
@@ -281,21 +281,19 @@ export function DevelopmentCard({
               </Link>
             </Button>
           )}
-          {/* Grup 3'te bu buton "Geliştirildi" formuna dönüşecek. */}
           {task.status === "done" && (ideaStatus === "in_development" || ideaStatus === "rework") && (
-            <ConfirmButton
-              label="Geliştirildi, teste gönder"
-              title="Fikri 'Test bekliyor' durumuna al?"
-              description="Fikir Test ekranına geçer; repo ve görev olduğu gibi kalır. Test başlamadan geri alabilirsin."
-              confirmLabel="Teste gönder"
-              onConfirm={() => handleMarkStatus("awaiting_test")}
-            />
+            <Button asChild>
+              <Link to={`/ideas/${ideaId}/developed`}>
+                <CheckCircle2 className="size-4" />
+                Geliştirildi
+              </Link>
+            </Button>
           )}
           {ideaStatus === "awaiting_test" && (
             <ConfirmButton
               label="Geliştiriliyor'a geri al"
               title="Fikri tekrar 'Geliştiriliyor' yap?"
-              description="Yalnızca durum değişir; fikir Geliştirilenler ekranına döner."
+              description="Fikir Geliştirilenler ekranına döner. Geliştirme raporu kalır; tekrar 'Geliştirildi' dediğinde aynı raporu güncellersin."
               confirmLabel="Geri al"
               onConfirm={() => handleMarkStatus("in_development")}
             />
@@ -343,7 +341,7 @@ function StatusMessage({ task }: { task: Task }) {
       return (
         <p className="text-sm text-muted-foreground">
           İskelet hazır — kurulum ve mimari için reponun README'sine, Claude'un özeti için issue'ya bak. Geliştirmeyi
-          bitirdiğinde fikri "Geliştirildi" olarak işaretleyebilirsin.
+          bitirdiğinde "Geliştirildi" formuyla neyin yapıldığını kaydedip fikri teste gönderebilirsin.
         </p>
       );
     case "planning_failed":

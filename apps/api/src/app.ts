@@ -4,6 +4,7 @@ import { z } from "zod";
 import { env } from "cloudflare:workers";
 import { requireWorkflowSecret } from "./auth";
 import { loadRepoState, RepoSyncError, syncRepo } from "./repo-sync";
+import { serializeDevReport, type DevReportRow } from "./lifecycle";
 import {
   serializeIdea,
   serializeCronRun,
@@ -22,6 +23,7 @@ import {
 import {
   ideaBatchRequestSchema,
   ideaPatchSchema,
+  devReportSubmitSchema,
   USER_STATUS_TRANSITIONS,
   type IdeaStatus,
   settingsPatchSchema,
@@ -625,6 +627,84 @@ app.get("/ideas/:id/task", async (req, res) => {
   const documents = results.sort((a, b) => order(a.kind) - order(b.kind)).map(serializeTaskDocument);
 
   res.json({ task: serializeTask(task), documents, repo });
+});
+
+// Faz 3 sonrası tur, Grup 3: geliştirme raporları ve "Geliştirildi" formu.
+app.get("/ideas/:id/dev-reports", async (req, res) => {
+  const { results } = await db()
+    .prepare("SELECT * FROM dev_reports WHERE idea_id = ?1 ORDER BY round DESC")
+    .bind(req.params.id)
+    .all<DevReportRow>();
+  res.json({ reports: results.map(serializeDevReport) });
+});
+
+// Formu kaydeder ve fikri 'awaiting_test' yapar. Tur numarası:
+// - rework'ten (testten dönmüş) gönderim → yeni tur.
+// - in_development'tan gönderim → hiç rapor yoksa 1. tur; varsa ("Test
+//   bekliyor"dan geri alınmış) son raporun üzerine yazılır.
+app.post("/ideas/:id/dev-report", async (req, res) => {
+  const parsed = devReportSubmitSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const idea = await db().prepare("SELECT * FROM ideas WHERE id = ?1").bind(req.params.id).first<IdeaRow>();
+  if (!idea) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (idea.status !== "in_development" && idea.status !== "rework") {
+    res.status(409).json({ error: "invalid_status", message: "Fikir geliştirme aşamasında değil." });
+    return;
+  }
+  const task = await db().prepare("SELECT status FROM tasks WHERE idea_id = ?1").bind(idea.id).first<{ status: string }>();
+  if (task?.status !== "done") {
+    res.status(409).json({ error: "skeleton_not_ready", message: "İskelet henüz hazır değil." });
+    return;
+  }
+
+  const latest = await db()
+    .prepare("SELECT * FROM dev_reports WHERE idea_id = ?1 ORDER BY round DESC LIMIT 1")
+    .bind(idea.id)
+    .first<DevReportRow>();
+  const replaceLatest = idea.status === "in_development" && latest != null;
+  const round = replaceLatest ? latest.round : (latest?.round ?? 0) + 1;
+
+  const now = new Date().toISOString();
+  const body = parsed.data;
+  const values = [
+    body.roadmap_source,
+    JSON.stringify(body.roadmap_items),
+    JSON.stringify(body.missing_features),
+    JSON.stringify(body.extra_features),
+    JSON.stringify(body.notes),
+  ];
+
+  const reportId = replaceLatest ? latest.id : crypto.randomUUID();
+  const write = replaceLatest
+    ? db()
+        .prepare(
+          `UPDATE dev_reports SET roadmap_source = ?1, roadmap_items = ?2, missing_features = ?3, extra_features = ?4,
+             notes = ?5, updated_at = ?6 WHERE id = ?7`,
+        )
+        .bind(...values, now, reportId)
+    : db()
+        .prepare(
+          `INSERT INTO dev_reports (id, idea_id, round, created_at, updated_at, roadmap_source, roadmap_items,
+             missing_features, extra_features, notes)
+           VALUES (?1, ?2, ?3, ?4, ?4, ?5, ?6, ?7, ?8, ?9)`,
+        )
+        .bind(reportId, idea.id, round, now, ...values);
+
+  await db().batch([
+    write,
+    db().prepare("UPDATE ideas SET status = 'awaiting_test' WHERE id = ?1").bind(idea.id),
+    stampActivity(idea.id, "status_changed", now),
+  ]);
+
+  const report = await db().prepare("SELECT * FROM dev_reports WHERE id = ?1").bind(reportId).first<DevReportRow>();
+  res.json({ report: report ? serializeDevReport(report) : null });
 });
 
 // Faz 3 sonrası tur, Grup 2: iskelet reposundan son commit'leri ve md

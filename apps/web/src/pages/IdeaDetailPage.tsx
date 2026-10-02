@@ -6,10 +6,12 @@ import {
   fetchIdeas,
   fetchIdeaTask,
   fetchCompetitors,
+  fetchDevReports,
   fetchWorkflowRuns,
   patchIdea,
   type Idea,
   type Competitor,
+  type DevReport,
   type IdeaWorkflow,
   type RepoState,
   type Task,
@@ -25,6 +27,7 @@ import { SourceIcon } from "@/components/SourceIcon";
 import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
 import { LastRunLine } from "@/components/LastRunLine";
 import { DevelopmentCard } from "@/components/DevelopmentCard";
+import { DevReportsCard } from "@/components/DevReportsCard";
 import { TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
 import { PageMessage } from "@/components/PageHeader";
 import { formatDateTime } from "@/lib/format-date";
@@ -72,6 +75,7 @@ export function IdeaDetailPage() {
   const [task, setTask] = useState<Task | null>(null);
   const [documents, setDocuments] = useState<TaskDocument[]>([]);
   const [repo, setRepo] = useState<RepoState | null>(null);
+  const [devReports, setDevReports] = useState<DevReport[]>([]);
 
   const loadRuns = useCallback(() => {
     if (!id) return;
@@ -88,6 +92,9 @@ export function IdeaDetailPage() {
         setDocuments(res.documents);
         setRepo(res.repo);
       })
+      .catch(() => {});
+    fetchDevReports(id)
+      .then((res) => setDevReports(res.reports))
       .catch(() => {});
   }, [id]);
 
@@ -254,6 +261,8 @@ export function IdeaDetailPage() {
           onChanged={handleTriggered}
         />
       )}
+
+      <DevReportsCard reports={devReports} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <InfoCard title="Problem">{idea.problem}</InfoCard>

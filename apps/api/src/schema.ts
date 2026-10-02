@@ -58,14 +58,35 @@ export const USER_STATUS_TRANSITIONS: Record<IdeaStatus, readonly IdeaStatus[]> 
   on_hold: ["new", "deleted"],
   deleted: [],
   awaiting_development: [],
-  // Grup 3'te "Geliştirildi" formu bu geçişi kendi ucuna alacak.
-  in_development: ["awaiting_test"],
-  rework: ["awaiting_test"],
-  // Test başlamadan geri alma.
+  // → awaiting_test yalnızca "Geliştirildi" formuyla (POST /ideas/:id/dev-report).
+  in_development: [],
+  rework: [],
+  // Test başlamadan geri alma. Rapor kalır; bir sonraki "Geliştirildi"
+  // gönderimi yeni tur açmak yerine o raporun üzerine yazar.
   awaiting_test: ["in_development"],
   testing: [],
   approved: [],
 };
+
+// Faz 3 sonrası tur, Grup 3: "Geliştirildi" formu. Serbest metin alanı yok —
+// her şey kısa satırlar halinde (kullanıcı isteği: "form şeklinde olsun").
+const shortLine = z.string().trim().min(1).max(300);
+
+export const devReportSubmitSchema = z.object({
+  roadmap_source: z.enum(["repo", "approved"]).nullable(),
+  roadmap_items: z
+    .array(
+      z.object({
+        phase: z.string().trim().max(200).nullable(),
+        text: z.string().trim().min(1).max(500),
+        done: z.boolean(),
+      }),
+    )
+    .max(200),
+  missing_features: z.array(shortLine).max(30),
+  extra_features: z.array(shortLine).max(30),
+  notes: z.array(shortLine).max(30),
+});
 
 export const ideaPatchSchema = z
   .object({

@@ -4,6 +4,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { IdeaListPage } from "@/pages/IdeaListPage";
 import { IdeaDetailPage } from "@/pages/IdeaDetailPage";
 import { DevelopPage } from "@/pages/DevelopPage";
+import { DevReportPage } from "@/pages/DevReportPage";
 import { DevelopedPage, ReadyPage, TestingPage } from "@/pages/StatusListPage";
 import { ComparePage } from "@/pages/ComparePage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -91,6 +92,7 @@ function App() {
             <Route path="/ideas" element={<IdeaListPage />} />
             <Route path="/ideas/:id" element={<IdeaDetailPage />} />
             <Route path="/ideas/:id/develop" element={<DevelopPage />} />
+            <Route path="/ideas/:id/developed" element={<DevReportPage />} />
             <Route path="/developed" element={<DevelopedPage />} />
             <Route path="/testing" element={<TestingPage />} />
             <Route path="/ready" element={<ReadyPage />} />
