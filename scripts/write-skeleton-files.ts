@@ -44,7 +44,7 @@ async function main() {
     "",
     String(idea.one_liner),
     "",
-    "Bu repo App Idea Factory tarafından üretilen bir fikrin iskeletidir. Planlama belgeleri `docs/` altında.",
+    "Bu repo Ideas tarafından üretilen bir fikrin iskeletidir. Planlama belgeleri `docs/` altında.",
     "",
     "```json",
     JSON.stringify(picked, null, 2),

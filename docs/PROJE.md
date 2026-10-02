@@ -210,7 +210,7 @@ Puanlar 0.00-10.00 arası, yalnızca 0.25'in katları (bkz. "Kesinleşen kararla
 
 - **Slack (ücretsiz plan):** Tek kanal, incoming webhook. Sabah fikir özeti (en yüksek puanlı 3 fikir, arayüz linkiyle), görev tamamlandı/başarısız bildirimleri. Ücretsiz planda mesaj geçmişi 90 gün; fikirler D1'de saklandığı için sorun değil. Slack mesajlarını Worker gönderir (günlük özet dahil, workflow fikirleri kaydettikten sonra).
 - **GitHub Issues + Projects:**
-  - Kişisel hesapta tek bir Projects panosu (örn. "App Idea Factory"), durumlar: Queued, In progress, Done, Failed.
+  - Kişisel hesapta tek bir Projects panosu (örn. "Ideas"), durumlar: Queued, In progress, Done, Failed.
   - Her iskelet görevi, iskelet reposunda bir issue olarak açılır ve panoya eklenir. Issue içeriği: fikir özeti, görev parametreleri, ana repodaki ilgili workflow çalıştırmasının linki.
   - Issue'lar ve pano güncellemeleri iskelet workflow'u tarafından yapılır (Worker değil).
   - Projects (v2) GraphQL API ile yönetilir; kişisel hesaptaki projeye erişim için gereken token türü ve yetkileri Faz 0'da doğrulanmalı.

@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
+**Display name is "Ideas"** (renamed from "App Idea Factory" on 2026-10-03: page title, manifest, sidebar, READMEs, skeleton commit author/README text). Logo: coral speech bubble with a navy spark, generated with OpenAI gpt-image-1; PNG icons in `apps/web/public` (favicon 32/64, apple-touch 180, manifest 192/512 + maskable), theme color `#ff7271`. Infra names (GitHub repo `app-idea-factory`, Worker `app-idea-factory`, D1 `app-idea-factory-db`, domains, `localStorage`/`sessionStorage` keys) deliberately keep the old name — renaming them would break live resources or reset stored preferences.
+
 **Faz 0 (setup) is done.** `docs/PROJE.md` is the authoritative project plan (written in Turkish); everything below is derived from it. GitHub repo, Cloudflare Worker (API), Cloudflare Pages/Workers static assets (web), and the D1 database all exist and are wired together and verified live (see "Faz 0 — what's live" below).
 
 **Faz 1 (idea pipeline) is done.** D1 schema, the `ideas` CRUD/batch API, the trend-collection scripts (Reddit, App Store, Product Hunt, Hacker News), and `daily-ideas.yml` (the actual cron + `workflow_dispatch` workflow, using `anthropics/claude-code-action@v1` to generate ideas) all exist and have been verified with a real, successful production run — see "Faz 1 — what's live" below for the full pipeline and the non-obvious bugs that had to be fixed to get there.

@@ -1,6 +1,6 @@
 <div align="center">
 
-# 💡 App Idea Factory
+# 💡 Ideas
 
 **Her sabah, gerçek trendlerden çıkarılmış, Claude'un puanladığı 10 yeni mobil uygulama fikri — kendi panelinde seni bekliyor.**
 
@@ -18,7 +18,7 @@
 
 ## Ne yapıyor?
 
-App Idea Factory, tamamen ücretsiz planlar üzerinde çalışan kişisel ve otomatik bir fikir hattı:
+Ideas, tamamen ücretsiz planlar üzerinde çalışan kişisel ve otomatik bir fikir hattı:
 
 1. **Trendleri toplar:** Her gün 06:00'da (Türkiye saati) Reddit, App Store listeleri, Product Hunt ve Hacker News'ten.
 2. **10 özgün mobil uygulama fikri üretir:** GitHub Actions içinde Claude Code ile; farklı kaynaklardaki sinyalleri birleştirir, son 90 günün fikirleriyle karşılaştırıp tekrarı önler.

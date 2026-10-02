@@ -1,6 +1,6 @@
 <div align="center">
 
-# 💡 App Idea Factory
+# 💡 Ideas
 
 **Every morning, ten fresh mobile app ideas — mined from real trends, scored by Claude, waiting in your own dashboard.**
 
@@ -18,7 +18,7 @@
 
 ## What it does
 
-App Idea Factory is a personal, fully automated idea pipeline that runs on free tiers only:
+Ideas is a personal, fully automated idea pipeline that runs on free tiers only:
 
 1. **Collects trends** every day at 06:00 (Türkiye time) from Reddit, the App Store charts, Product Hunt and Hacker News.
 2. **Generates 10 original mobile app ideas** with Claude Code inside GitHub Actions, synthesizing signals across sources and checking them against the last 90 days of ideas so nothing repeats.

@@ -68,8 +68,8 @@ function App() {
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <Link to="/" className="flex items-center gap-2 px-2 py-1 text-[1.05rem] font-bold">
-            <Lightbulb className="size-5 shrink-0" />
-            <span className="group-data-[collapsible=icon]:hidden">App Idea Factory</span>
+            <img src="/favicon-64.png" alt="" className="size-5 shrink-0" />
+            <span className="group-data-[collapsible=icon]:hidden">Ideas</span>
           </Link>
         </SidebarHeader>
         <SidebarContent>
