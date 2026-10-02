@@ -116,6 +116,7 @@ async function main() {
       "_Planlama belgeleri onaydan önce düzenlenmiş olabilir; kapsam ve kararlar için belgeler geçerlidir._",
       "",
       `- Platform: ${PLATFORM_LABELS[params.platform] ?? params.platform}`,
+      ...(params.targets ? [`- Hedef cihazlar: ${params.targets.map((t) => (t === "ios" ? "iOS" : "Android")).join(", ")}`] : []),
       `- Backend: ${params.backend}`,
       `- Kimlik doğrulama: ${params.auth}`,
       `- Tasarım: ${params.design.theme} · ${params.design.style}`,

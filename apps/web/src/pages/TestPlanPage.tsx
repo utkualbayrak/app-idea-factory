@@ -53,9 +53,9 @@ export function TestPlanPage() {
     Promise.all([fetchIdea(id), fetchIdeaTask(id), fetchDevReports(id)])
       .then(([ideaRes, taskRes, reportsRes]) => {
         setIdea(ideaRes.idea);
-        const platform = taskRes.task?.params.platform;
-        setPlatforms(defaultTestPlatforms(platform));
-        setChannel(defaultTestChannel(platform));
+        const params = taskRes.task?.params;
+        setPlatforms(defaultTestPlatforms(params));
+        setChannel(defaultTestChannel(params));
         // Senaryo önerileri: MVP özellikleri + son turda fazladan eklenenler.
         const extras = reportsRes.reports[0]?.extra_features ?? [];
         setScenarioSuggestions([...(taskRes.task?.params.mvp_features ?? []), ...extras]);

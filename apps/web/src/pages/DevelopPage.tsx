@@ -12,14 +12,17 @@ import {
   type TaskParams,
   type TaskPlatform,
   type TaskStyle,
+  type TaskTarget,
   type TaskTheme,
 } from "@/lib/api";
 import {
   AUTH_LABELS,
   BACKEND_LABELS,
+  FIXED_TARGETS,
   PLATFORM_LABELS,
   REPLANNABLE_STATUSES,
   STYLE_LABELS,
+  TARGET_LABELS,
   TASK_STATUS_LABELS,
   THEME_LABELS,
 } from "@/lib/task-labels";
@@ -38,6 +41,7 @@ const SUGGESTED_MAX = 5;
 
 const DEFAULT_PARAMS: Omit<TaskParams, "mvp_features"> = {
   platform: "expo",
+  targets: ["ios", "android"],
   backend: "none",
   auth: "none",
   design: { theme: "both", style: "minimal" },
@@ -57,6 +61,8 @@ export function DevelopPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [platform, setPlatform] = useState<TaskPlatform>(DEFAULT_PARAMS.platform);
+  // Çapraz platformda seçilen hedefler; native seçildiğinde FIXED_TARGETS geçerli.
+  const [targets, setTargets] = useState<TaskTarget[]>(DEFAULT_PARAMS.targets);
   const [backend, setBackend] = useState<TaskBackend>(DEFAULT_PARAMS.backend);
   const [auth, setAuth] = useState<TaskAuth>(DEFAULT_PARAMS.auth);
   const [theme, setTheme] = useState<TaskTheme>(DEFAULT_PARAMS.design.theme);
@@ -79,6 +85,7 @@ export function DevelopPage() {
         const params = taskRes.task?.params;
         if (params) {
           setPlatform(params.platform);
+          if (!FIXED_TARGETS[params.platform]) setTargets(params.targets);
           setBackend(params.backend);
           setAuth(params.auth);
           setTheme(params.design.theme);
@@ -94,6 +101,15 @@ export function DevelopPage() {
       .catch((err) => setLoadError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoaded(true));
   }, [id]);
+
+  const fixedTargets = FIXED_TARGETS[platform];
+  const effectiveTargets = fixedTargets ?? targets;
+
+  function toggleTarget(target: TaskTarget, checked: boolean) {
+    setTargets((prev) =>
+      checked ? (["ios", "android"] as const).filter((t) => t === target || prev.includes(t)) : prev.filter((t) => t !== target),
+    );
+  }
 
   const features = [...selected, ...custom];
   const featureCount = features.length;
@@ -113,12 +129,13 @@ export function DevelopPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!id || featureCount === 0) return;
+    if (!id || featureCount === 0 || effectiveTargets.length === 0) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
       await createTask(id, {
         platform,
+        targets: effectiveTargets,
         backend,
         auth,
         mvp_features: features,
@@ -191,6 +208,36 @@ export function DevelopPage() {
           <LabeledSelect label="Platform" value={platform} onChange={setPlatform} options={PLATFORM_LABELS} />
           <LabeledSelect label="Backend" value={backend} onChange={setBackend} options={BACKEND_LABELS} />
           <LabeledSelect label="Kimlik doğrulama" value={auth} onChange={setAuth} options={AUTH_LABELS} />
+          <div className="flex flex-col gap-2 sm:col-span-3">
+            <Label>Hedef cihazlar</Label>
+            {fixedTargets ? (
+              <p className="text-sm text-muted-foreground">
+                Yalnızca {fixedTargets.map((t) => TARGET_LABELS[t]).join(", ")} — native platform seçimi hedefi belirliyor.
+              </p>
+            ) : (
+              <>
+                <div className="flex gap-4">
+                  {(["ios", "android"] as const).map((target) => (
+                    <div key={target} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`target-${target}`}
+                        checked={targets.includes(target)}
+                        onCheckedChange={(v) => toggleTarget(target, v === true)}
+                      />
+                      <Label htmlFor={`target-${target}`} className="font-normal">
+                        {TARGET_LABELS[target]}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+                <p className={targets.length === 0 ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                  {targets.length === 0
+                    ? "En az bir hedef seç."
+                    : "Çapraz platform araçla yalnızca seçtiğin cihaz(lar) için plan ve iskelet hazırlanır."}
+                </p>
+              </>
+            )}
+          </div>
           {backend === "none" && auth !== "none" && (
             <p className="text-xs text-amber-700 sm:col-span-3 dark:text-amber-300">
               Backend olmadan giriş özelliği genelde anlamsızdır — Claude bunu belgelerde açık soru olarak işaretler.
@@ -310,7 +357,7 @@ export function DevelopPage() {
       {submitError && <PageMessage tone="error">{submitError}</PageMessage>}
 
       <div className="flex flex-wrap gap-3">
-        <Button type="submit" disabled={submitting || featureCount === 0}>
+        <Button type="submit" disabled={submitting || featureCount === 0 || effectiveTargets.length === 0}>
           {submitting ? "Gönderiliyor…" : isReplan ? "Belgeleri yeniden üret" : "Belgeleri hazırla"}
         </Button>
         <Button type="button" variant="outline" onClick={() => navigate(`/ideas/${id}`)}>

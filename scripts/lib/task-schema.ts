@@ -4,6 +4,8 @@ import { z } from "zod";
 // aynı olmalı — paketler arası paylaşım yok, ikisini birlikte güncelle.
 export const taskParamsSchema = z.object({
   platform: z.enum(["ios_swift", "android_kotlin", "expo", "flutter"]),
+  // Grup 6'dan önceki görevlerde yok.
+  targets: z.array(z.enum(["ios", "android"])).min(1).max(2).optional(),
   backend: z.enum(["none", "supabase", "firebase", "custom_api"]),
   auth: z.enum(["none", "email", "social"]),
   mvp_features: z.array(z.string().trim().min(1).max(300)).min(1).max(10),

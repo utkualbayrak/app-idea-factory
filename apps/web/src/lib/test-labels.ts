@@ -3,7 +3,7 @@ import type {
   FindingPlatform,
   FindingSeverity,
   ScenarioResult,
-  TaskPlatform,
+  TaskParams,
   TestChannel,
   TestPlatform,
   TestRound,
@@ -76,17 +76,16 @@ export const ROUND_STATUS_STYLES: Record<TestRound["status"], string> = {
   cancelled: "bg-muted text-muted-foreground",
 };
 
-// Görevin teknoloji seçiminden varsayılan test platformları ve kanalı.
-export function defaultTestPlatforms(platform: TaskPlatform | undefined): TestPlatform[] {
-  if (platform === "ios_swift") return ["ios"];
-  if (platform === "android_kotlin") return ["android"];
-  return ["ios", "android"];
+// Görevin hedef cihazlarından ve teknoloji seçiminden varsayılan test
+// platformları ve kanalı.
+export function defaultTestPlatforms(params: TaskParams | undefined): TestPlatform[] {
+  return params?.targets.length ? [...params.targets] : ["ios", "android"];
 }
 
-export function defaultTestChannel(platform: TaskPlatform | undefined): TestChannel {
-  if (platform === "ios_swift") return "testflight";
-  if (platform === "android_kotlin") return "play_internal";
-  if (platform === "expo") return "expo_go";
+export function defaultTestChannel(params: TaskParams | undefined): TestChannel {
+  if (params?.platform === "expo") return "expo_go";
+  const targets = defaultTestPlatforms(params);
+  if (targets.length === 1) return targets[0] === "ios" ? "testflight" : "play_internal";
   return "direct_install";
 }
 

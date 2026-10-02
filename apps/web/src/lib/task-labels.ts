@@ -1,7 +1,27 @@
-import type { DocumentKind, TaskAuth, TaskBackend, TaskPlatform, TaskStatus, TaskStyle, TaskTheme } from "@/lib/api";
+import type {
+  DocumentKind,
+  TaskAuth,
+  TaskBackend,
+  TaskPlatform,
+  TaskStatus,
+  TaskStyle,
+  TaskTarget,
+  TaskTheme,
+} from "@/lib/api";
 
 // Görev formu ve geliştirme kartındaki Türkçe etiketler (docs/PROJE.md
 // "Görev formu alanları").
+
+export const TARGET_LABELS: Record<TaskTarget, string> = {
+  ios: "iOS",
+  android: "Android",
+};
+
+// Native seçenekler tek bir cihaz ailesine kilitli; çapraz platformda seçilir.
+export const FIXED_TARGETS: Partial<Record<TaskPlatform, TaskTarget[]>> = {
+  ios_swift: ["ios"],
+  android_kotlin: ["android"],
+};
 
 export const PLATFORM_LABELS: Record<TaskPlatform, string> = {
   expo: "Çapraz platform — React Native / Expo",

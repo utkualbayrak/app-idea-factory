@@ -354,20 +354,35 @@ export const TASK_BACKENDS = ["none", "supabase", "firebase", "custom_api"] as c
 export const TASK_AUTHS = ["none", "email", "social"] as const;
 export const TASK_THEMES = ["light", "dark", "both"] as const;
 export const TASK_STYLES = ["minimal", "colorful"] as const;
+// Faz 3 sonrası tur, Grup 6: hedef cihazlar. Native seçenekler hedefi kendisi
+// belirler; Expo/Flutter'da yalnızca iOS, yalnızca Android ya da ikisi.
+export const TASK_TARGETS = ["ios", "android"] as const;
+export type TaskTarget = (typeof TASK_TARGETS)[number];
 
-export const taskParamsSchema = z.object({
-  platform: z.enum(TASK_PLATFORMS),
-  backend: z.enum(TASK_BACKENDS),
-  auth: z.enum(TASK_AUTHS),
-  // Fikrin core_features'ından seçilenler + kullanıcının serbest eklemeleri
-  // (3-5 önerilir, form bunu uyarı olarak gösterir; sınır daha geniş).
-  mvp_features: z.array(z.string().trim().min(1).max(300)).min(1).max(10),
-  design: z.object({
-    theme: z.enum(TASK_THEMES),
-    style: z.enum(TASK_STYLES),
-  }),
-  notes: z.string().max(4000).optional(),
-});
+export function resolveTargets(platform: (typeof TASK_PLATFORMS)[number], targets: readonly TaskTarget[] | undefined) {
+  if (platform === "ios_swift") return ["ios"] as TaskTarget[];
+  if (platform === "android_kotlin") return ["android"] as TaskTarget[];
+  const chosen = targets && targets.length > 0 ? targets : TASK_TARGETS;
+  return TASK_TARGETS.filter((t) => chosen.includes(t));
+}
+
+export const taskParamsSchema = z
+  .object({
+    platform: z.enum(TASK_PLATFORMS),
+    // Eski görevlerde yok; gönderilmezse platformdan türetilir (bkz. resolveTargets).
+    targets: z.array(z.enum(TASK_TARGETS)).max(2).optional(),
+    backend: z.enum(TASK_BACKENDS),
+    auth: z.enum(TASK_AUTHS),
+    // Fikrin core_features'ından seçilenler + kullanıcının serbest eklemeleri
+    // (3-5 önerilir, form bunu uyarı olarak gösterir; sınır daha geniş).
+    mvp_features: z.array(z.string().trim().min(1).max(300)).min(1).max(10),
+    design: z.object({
+      theme: z.enum(TASK_THEMES),
+      style: z.enum(TASK_STYLES),
+    }),
+    notes: z.string().max(4000).optional(),
+  })
+  .transform((params) => ({ ...params, targets: resolveTargets(params.platform, params.targets) }));
 
 export type TaskParams = z.infer<typeof taskParamsSchema>;
 

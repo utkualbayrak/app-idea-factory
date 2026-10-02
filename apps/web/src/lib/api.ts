@@ -214,9 +214,12 @@ export type TaskBackend = "none" | "supabase" | "firebase" | "custom_api";
 export type TaskAuth = "none" | "email" | "social";
 export type TaskTheme = "light" | "dark" | "both";
 export type TaskStyle = "minimal" | "colorful";
+export type TaskTarget = "ios" | "android";
 
 export interface TaskParams {
   platform: TaskPlatform;
+  /** API her zaman doldurur (eski görevlerde platformdan türetir); gönderirken native'de yok sayılır. */
+  targets: TaskTarget[];
   backend: TaskBackend;
   auth: TaskAuth;
   mvp_features: string[];

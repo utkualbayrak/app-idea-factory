@@ -21,6 +21,7 @@ import {
   PLATFORM_LABELS,
   REPLANNABLE_STATUSES,
   STYLE_LABELS,
+  TARGET_LABELS,
   TASK_STATUS_LABELS,
   THEME_LABELS,
 } from "@/lib/task-labels";
@@ -150,6 +151,8 @@ export function DevelopmentCard({
         <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]">
           <dt className="text-muted-foreground">Platform</dt>
           <dd>{PLATFORM_LABELS[params.platform]}</dd>
+          <dt className="text-muted-foreground">Hedef cihazlar</dt>
+          <dd>{params.targets.map((t) => TARGET_LABELS[t]).join(", ")}</dd>
           <dt className="text-muted-foreground">Backend</dt>
           <dd>{BACKEND_LABELS[params.backend]}</dd>
           <dt className="text-muted-foreground">Kimlik doğrulama</dt>
