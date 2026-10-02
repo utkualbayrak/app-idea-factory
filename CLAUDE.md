@@ -447,7 +447,10 @@ Access lets several emails in now, so records keep **who last changed them**. Th
   - D1 rejects long `UNION` chains ("too many terms in compound SELECT"), so these are separate `SELECT DISTINCT`s inside one `batch`.
   - Web: `lib/user-names.tsx` (`UserNamesProvider` in `main.tsx`, `displayName()`: mapping → part before `@`, `system` → "Otomasyon"), `components/UpdatedBy.tsx`, and `components/UserNamesCard.tsx` on Settings.
   - Shown on: the detail header, `DevelopmentCard`, doc tabs, `RepoSyncPanel`, `DevReportsCard`, `TestCard` rounds and the `ActivityBadge` tooltip.
-- Not per-user: `activity_seen_at` is still a single value per idea.
+- **Per-user "seen" (migration `0015`):** the `idea_seen` table (`idea_id`, `email`, `seen_at`) has no FK. Its email column is also included in the user-names `GET`.
+  - `withSeen()` in `app.ts` overlays the caller's `seen_at` onto `activity_seen_at` in `GET /ideas`, `GET /ideas/:id` and `PATCH /ideas/:id`. The web app needs no change.
+  - `mark_seen` from a verified user upserts `idea_seen` and leaves `ideas.activity_seen_at` untouched. That column is now a frozen shared baseline: a person with no row falls back to it, and only unverified (`null`-actor) requests still write it.
+  - Any new endpoint that returns ideas to the UI should go through `withSeen()`.
 
 ## What this project is
 

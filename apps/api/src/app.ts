@@ -102,6 +102,30 @@ function stampActivity(ideaId: string, kind: ActivityKind, at: string, by: strin
     .bind(at, kind, by, ideaId);
 }
 
+// Aktivite rozetinin "görüldü"sü kişi başına (0015): isteği yapan kişinin
+// idea_seen satırı varsa activity_seen_at onunla değiştirilir, yoksa
+// ideas.activity_seen_at (eski, ortak değer) kalır. Workflow ve kimliği
+// doğrulanamayan istekler ortak değeri görür.
+function personalSeen(actor: string | null) {
+  return actor && actor !== SYSTEM_ACTOR ? actor : null;
+}
+
+async function withSeen(rows: IdeaRow[], actor: string | null, ideaId?: string): Promise<IdeaRow[]> {
+  const email = personalSeen(actor);
+  if (!email || rows.length === 0) return rows;
+  const { results } = ideaId
+    ? await db()
+        .prepare("SELECT idea_id, seen_at FROM idea_seen WHERE email = ?1 AND idea_id = ?2")
+        .bind(email, ideaId)
+        .all<{ idea_id: string; seen_at: string }>()
+    : await db()
+        .prepare("SELECT idea_id, seen_at FROM idea_seen WHERE email = ?1")
+        .bind(email)
+        .all<{ idea_id: string; seen_at: string }>();
+  const seen = new Map(results.map((r) => [r.idea_id, r.seen_at]));
+  return rows.map((row) => (seen.has(row.id) ? { ...row, activity_seen_at: seen.get(row.id)! } : row));
+}
+
 // Fikirdeki "en son kim güncelledi" — yalnızca kullanıcı değişikliklerinde.
 function touchIdea(ideaId: string, at: string, by: string | null) {
   return db().prepare("UPDATE ideas SET updated_at = ?1, updated_by = ?2 WHERE id = ?3").bind(at, by, ideaId);
@@ -186,7 +210,7 @@ app.get("/ideas", async (req, res) => {
         .prepare("SELECT * FROM ideas WHERE status != 'deleted' ORDER BY created_at DESC")
         .all<IdeaRow>();
 
-  res.json({ ideas: results.map(serializeIdea) });
+  res.json({ ideas: (await withSeen(results, actorOf(res))).map(serializeIdea) });
 });
 
 app.get("/ideas/recent-names", requireWorkflowSecret, async (req, res) => {
@@ -218,7 +242,8 @@ app.get("/ideas/:id", async (req, res) => {
     return;
   }
 
-  res.json({ idea: serializeIdea(row) });
+  const [idea] = await withSeen([row], actorOf(res), row.id);
+  res.json({ idea: serializeIdea(idea) });
 });
 
 app.post("/ideas/batch", requireWorkflowSecret, async (req, res) => {
@@ -273,15 +298,20 @@ app.patch("/ideas/:id", async (req, res) => {
     return;
   }
 
-  const existing = await db()
+  const row = await db()
     .prepare("SELECT * FROM ideas WHERE id = ?1")
     .bind(req.params.id)
     .first<IdeaRow>();
 
-  if (!existing) {
+  if (!row) {
     res.status(404).json({ error: "not_found" });
     return;
   }
+  const actor = actorOf(res);
+  const seenBy = personalSeen(actor);
+  // Ortak (eski) değer: kişi başına satır yazılınca dokunulmaz.
+  const sharedSeenAt = row.activity_seen_at;
+  const [existing] = await withSeen([row], actor, row.id);
 
   if (
     parsed.data.status &&
@@ -309,13 +339,22 @@ app.patch("/ideas/:id", async (req, res) => {
 
   // Gerçek bir değişiklik varsa (aktivite damgalandıysa) "en son kim
   // güncelledi" de damgalanır; yalnızca mark_seen bir okuma işaretidir.
-  const actor = actorOf(res);
   const lastActivityAt = activityKind ? now : existing.last_activity_at;
   const lastActivityKind = activityKind ?? existing.last_activity_kind;
   const lastActivityBy = activityKind ? actor : existing.last_activity_by;
   const updatedAt = activityKind ? now : existing.updated_at;
   const updatedBy = activityKind ? actor : existing.updated_by;
   const activitySeenAt = markSeen ? now : existing.activity_seen_at;
+
+  if (markSeen && seenBy) {
+    await db()
+      .prepare(
+        `INSERT INTO idea_seen (idea_id, email, seen_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT(idea_id, email) DO UPDATE SET seen_at = ?3`,
+      )
+      .bind(row.id, seenBy, now)
+      .run();
+  }
 
   await db()
     .prepare(
@@ -332,7 +371,7 @@ app.patch("/ideas/:id", async (req, res) => {
       lastActivityAt,
       lastActivityKind,
       lastActivityBy,
-      activitySeenAt,
+      markSeen && !seenBy ? now : sharedSeenAt,
       updatedAt,
       updatedBy,
       req.params.id,
@@ -402,6 +441,7 @@ app.get("/admin/user-names", async (_req, res) => {
     ["test_rounds", "updated_by"],
     ["app_settings", "updated_by"],
     ["repo_syncs", "synced_by"],
+    ["idea_seen", "email"],
   ] as const;
   const [mapped, ...seen] = await db().batch<{ email: string; display_name?: string; updated_at?: string }>([
     db().prepare("SELECT email, display_name, updated_at FROM user_names"),
