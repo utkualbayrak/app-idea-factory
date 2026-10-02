@@ -204,3 +204,26 @@ export async function syncRepo(db: D1Database, token: string, taskId: string, re
 
   await db.batch(statements);
 }
+
+// Son commit (Geliştiriliyor rozetindeki tarih). Tek alt istek; sonuç
+// saklanmaz, ekran her açıldığında tazelenir.
+export async function fetchLastCommit(token: string, repoUrl: string): Promise<RepoCommit | null> {
+  const parsed = parseRepoUrl(repoUrl);
+  if (!parsed) throw new RepoSyncError(`Repo adresi anlaşılamadı: ${repoUrl}`);
+  const res = await github(token, `/repos/${parsed.owner}/${parsed.repo}/commits?per_page=1`);
+  if (res.status === 409) return null;
+  if (!res.ok) throw new RepoSyncError(`GitHub API ${res.status}`);
+  const [c] = (await res.json()) as {
+    sha: string;
+    html_url: string;
+    commit: { message: string; author: { name: string; date: string } | null; committer: { date: string } | null };
+  }[];
+  if (!c) return null;
+  return {
+    sha: c.sha,
+    message: c.commit.message,
+    author: c.commit.author?.name ?? null,
+    date: c.commit.committer?.date ?? c.commit.author?.date ?? null,
+    url: c.html_url,
+  };
+}

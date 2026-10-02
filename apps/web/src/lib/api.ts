@@ -442,3 +442,19 @@ export type ManualIdeaInput =
 export function createManualIdea(input: ManualIdeaInput): Promise<{ idea: Idea; dispatch_error: string | null }> {
   return request("/ideas/manual", { method: "POST", body: JSON.stringify(input) });
 }
+
+// Geliştirme aşamasındaki fikrin iskelet reposundaki son commit'i.
+// Aynı fikir aynı anda birden çok rozette (tablo + mobil liste) görünebildiği
+// için eşzamanlı istekler tek istekte birleştirilir; sonuç saklanmaz, ekran
+// her açıldığında tazelenir.
+const lastCommitInFlight = new Map<string, Promise<{ commit: RepoCommit | null }>>();
+
+export function fetchLastCommit(ideaId: string): Promise<{ commit: RepoCommit | null }> {
+  const pending = lastCommitInFlight.get(ideaId);
+  if (pending) return pending;
+  const promise = request<{ commit: RepoCommit | null }>(`/ideas/${ideaId}/last-commit`).finally(() =>
+    lastCommitInFlight.delete(ideaId),
+  );
+  lastCommitInFlight.set(ideaId, promise);
+  return promise;
+}

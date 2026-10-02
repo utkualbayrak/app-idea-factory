@@ -12,6 +12,8 @@ import {
   type ActivityIdea,
 } from "@/lib/activity";
 import { cn } from "@/lib/utils";
+import type { IdeaStatus } from "@/lib/api";
+import { COMMIT_DATE_STATUSES } from "@/lib/idea-colors";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -26,11 +28,26 @@ const STYLES = {
 // - hiç kaybolmaz, her zaman son aktiviteyi gösterir (tarih tooltip'te),
 // - okunmamışsa nokta ile vurgulanır (detay açılınca kalkar),
 // - 7 günden eskiyse soluk gösterilir.
-export function ActivityBadge({ idea, className }: { idea: ActivityIdea; className?: string }) {
+export function ActivityBadge({
+  idea,
+  className,
+}: {
+  idea: ActivityIdea & { status?: IdeaStatus };
+  className?: string;
+}) {
   // Render başına sabit "şimdi" (lazy init — render sırasında Date.now() çağırmamak için).
   const [now] = useState(() => Date.now());
   const { last_activity_at: at, last_activity_kind: kind } = idea;
   if (!at || !kind) return null;
+  // Üzerinde çalışılan fikirde "İskelet hazır" görüldükten sonra bayat bilgi:
+  // durum rozeti zaten "Geliştiriliyor · son commit tarihi" gösteriyor.
+  if (
+    kind === "skeleton_built" &&
+    idea.status &&
+    COMMIT_DATE_STATUSES.includes(idea.status) &&
+    !isActivityUnread(idea, now)
+  )
+    return null;
 
   const age = now - new Date(at).getTime();
   const inProgress = IN_PROGRESS_KINDS.includes(kind);

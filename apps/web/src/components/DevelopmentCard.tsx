@@ -30,6 +30,8 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { DiffView } from "@/components/DiffView";
 import { RepoSyncPanel } from "@/components/RepoSyncPanel";
 import { SegmentedControl } from "@/components/SegmentedControl";
+import { IdeaStatusBadge } from "@/components/IdeaStatusBadge";
+import { COMMIT_DATE_STATUSES } from "@/lib/idea-colors";
 import { LastRunLine } from "@/components/LastRunLine";
 import { Markdown } from "@/components/Markdown";
 import { Badge } from "@/components/ui/badge";
@@ -145,7 +147,11 @@ export function DevelopmentCard({
     <Card className="min-w-0">
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Geliştirme</CardTitle>
-        <Badge className={TASK_STATUS_STYLES[task.status]}>{TASK_STATUS_LABELS[task.status]}</Badge>
+        {task.status === "done" && COMMIT_DATE_STATUSES.includes(ideaStatus) ? (
+          <IdeaStatusBadge idea={{ id: ideaId, status: ideaStatus }} />
+        ) : (
+          <Badge className={TASK_STATUS_STYLES[task.status]}>{TASK_STATUS_LABELS[task.status]}</Badge>
+        )}
       </CardHeader>
       <CardContent className="flex min-w-0 flex-col gap-4">
         <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]">

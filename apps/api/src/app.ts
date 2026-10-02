@@ -3,7 +3,7 @@ import cors from "cors";
 import { z } from "zod";
 import { env } from "cloudflare:workers";
 import { requireWorkflowSecret } from "./auth";
-import { loadRepoState, RepoSyncError, syncRepo } from "./repo-sync";
+import { fetchLastCommit, loadRepoState, RepoSyncError, syncRepo } from "./repo-sync";
 import { serializeDevReport, serializeTestRound, type DevReportRow, type TestRoundRow } from "./lifecycle";
 import {
   serializeIdea,
@@ -1000,6 +1000,29 @@ app.post("/test-rounds/:id/cancel", async (req, res) => {
     stampActivity(round.idea_id, "status_changed", now),
   ]);
   res.json({ ok: true });
+});
+
+// Geliştirme aşamasındaki fikrin rozetindeki "son commit" tarihi. Görev ya da
+// repo yoksa commit null döner.
+app.get("/ideas/:id/last-commit", async (req, res) => {
+  const task = await db()
+    .prepare("SELECT repo_url FROM tasks WHERE idea_id = ?1")
+    .bind(req.params.id)
+    .first<{ repo_url: string | null }>();
+  const { GH_WORKFLOW_DISPATCH_TOKEN } = env as unknown as Env;
+  if (!task?.repo_url || !GH_WORKFLOW_DISPATCH_TOKEN) {
+    res.json({ commit: null });
+    return;
+  }
+  try {
+    res.json({ commit: await fetchLastCommit(GH_WORKFLOW_DISPATCH_TOKEN, task.repo_url) });
+  } catch (err) {
+    if (err instanceof RepoSyncError) {
+      res.status(502).json({ error: "github_failed", message: err.message });
+      return;
+    }
+    throw err;
+  }
 });
 
 // Faz 3 sonrası tur, Grup 2: iskelet reposundan son commit'leri ve md

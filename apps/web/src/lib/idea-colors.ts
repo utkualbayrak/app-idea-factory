@@ -58,6 +58,8 @@ export const STATUS_LABELS: Record<IdeaStatus, string> = {
 export const DEVELOPMENT_STATUSES: IdeaStatus[] = ["awaiting_development", "in_development", "rework"];
 // "Geliştirildi" denmiş, test sürecindeki fikirler: Test ekranı.
 export const TEST_STATUSES: IdeaStatus[] = ["awaiting_test", "testing"];
+// Durum rozetinde son commit tarihi gösterilen durumlar (iskelet üzerinde çalışılıyor).
+export const COMMIT_DATE_STATUSES: IdeaStatus[] = ["in_development", "rework"];
 // Testi onaylanmış fikirler: Dağıtıma hazır ekranı.
 export const READY_STATUSES: IdeaStatus[] = ["approved"];
 

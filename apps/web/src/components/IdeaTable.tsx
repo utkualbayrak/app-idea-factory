@@ -13,10 +13,11 @@ import {
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import type { Idea } from "@/lib/api";
-import { categoryColorClasses, statusColorClasses, STATUS_LABELS } from "@/lib/idea-colors";
+import { categoryColorClasses, isInIdeaPool } from "@/lib/idea-colors";
 import { combinedScore } from "@/lib/scoring";
 import { formatBatchDate } from "@/lib/format-date";
 import { ActivityBadge } from "@/components/ActivityBadge";
+import { IdeaStatusBadge } from "@/components/IdeaStatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -80,10 +81,6 @@ function CombinedScoreCell({ idea }: { idea: Idea }) {
       <TooltipContent>%40 Claude + %60 kullanıcı puanı</TooltipContent>
     </Tooltip>
   );
-}
-
-function StatusBadge({ status }: { status: Idea["status"] }) {
-  return <Badge className={statusColorClasses(status)}>{STATUS_LABELS[status]}</Badge>;
 }
 
 function CategoryBadge({ category }: { category: string }) {
@@ -209,7 +206,7 @@ function buildColumns(selection?: SelectionProps): ColumnDef<Idea>[] {
       header: ({ column }) => <SortButton column={column} label="Durum · aktivite" />,
       cell: ({ row }) => (
         <div className="flex min-w-0 flex-col items-start gap-1">
-          <StatusBadge status={row.original.status} />
+          <IdeaStatusBadge idea={row.original} />
           <ActivityBadge idea={row.original} />
         </div>
       ),
@@ -373,6 +370,7 @@ export function IdeaTable({
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {formatBatchDate(idea.batch_date)}
                     </span>
+                    {!isInIdeaPool(idea.status) && <IdeaStatusBadge idea={idea} />}
                     <ActivityBadge idea={idea} />
                   </div>
                 </div>

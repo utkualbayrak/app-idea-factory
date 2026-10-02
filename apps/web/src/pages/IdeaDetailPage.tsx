@@ -21,6 +21,7 @@ import {
   type WorkflowRun,
 } from "@/lib/api";
 import { ActivityBadge } from "@/components/ActivityBadge";
+import { IdeaStatusBadge } from "@/components/IdeaStatusBadge";
 import { isActivityUnread } from "@/lib/activity";
 import { ScoreSlider } from "@/components/ScoreSlider";
 import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
@@ -35,7 +36,7 @@ import { TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
 import { PageMessage } from "@/components/PageHeader";
 import { formatDateTime } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
-import { categoryColorClasses, ideaSection, statusColorClasses, STATUS_LABELS } from "@/lib/idea-colors";
+import { categoryColorClasses, ideaSection } from "@/lib/idea-colors";
 import { ideaToMarkdown } from "@/lib/export-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -216,7 +217,7 @@ export function IdeaDetailPage() {
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold">{idea.name}</h1>
           <Badge className={categoryColorClasses(idea.category)}>{idea.category}</Badge>
-          <Badge className={statusColorClasses(idea.status)}>{STATUS_LABELS[idea.status]}</Badge>
+          <IdeaStatusBadge idea={idea} />
           {idea.origin === "manual" && <Badge variant="outline">Elle girildi</Badge>}
           <ActivityBadge idea={idea} />
         </div>

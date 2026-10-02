@@ -416,6 +416,10 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
 - `DevelopPage` shows "Hedef cihazlar" checkboxes for Expo/Flutter and a fixed note for native; `DevelopmentCard` and the skeleton issue body list the targets; `TestPlanPage`'s platform/channel defaults now come from `targets`.
 - Prompts (user-approved 2026-10-02): `plan-idea.md` reads `targets` (documents cover only the target devices) and has an optional "Etkileşim ve hareket notları" section in `screens.md` (decision 13); `build-skeleton.md` limits Expo's `platforms` and Flutter's `flutter create --platforms` to `targets`.
 
+## Post-Faz-3, 4th notes round — what's live
+
+- **Last-commit status badge (Grup A):** `components/IdeaStatusBadge.tsx` is the status badge everywhere (list desktop + mobile for non-pool statuses, detail header, `DevelopmentCard` header once the skeleton is done). For `COMMIT_DATE_STATUSES` (`in_development`, `rework`, in `lib/idea-colors.ts`) it shows "Geliştiriliyor · 13.10.2026" with the skeleton repo's last commit date, fetched on every mount through `GET /ideas/:id/last-commit` (one GitHub call, nothing stored); only the badge shows a spinner meanwhile. `lib/api.ts` `fetchLastCommit` de-duplicates concurrent requests for the same idea (the table renders desktop and mobile trees at once), but never caches. Once seen, the stale "İskelet hazır" activity badge is hidden for those statuses.
+
 ## What this project is
 
 A personal automation platform that:
