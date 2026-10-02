@@ -116,6 +116,14 @@ export async function fetchIdeaById(id: string): Promise<unknown> {
   return body.idea;
 }
 
+// Yeniden değerlendirme, "Rakipleri bul"un kaydettiği listeyi girdi olarak alır.
+export async function fetchIdeaCompetitors(id: string): Promise<unknown[]> {
+  const body = await fetchJson<{ competitors: unknown[] }>(`${BASE_URL}/ideas/${id}/competitors`, {
+    headers: authHeaders(),
+  });
+  return body.competitors;
+}
+
 export async function submitReevaluation(id: string, data: unknown): Promise<void> {
   await fetchJson(`${BASE_URL}/admin/ideas/${id}/reevaluate`, {
     method: "PATCH",

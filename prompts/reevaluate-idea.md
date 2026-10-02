@@ -5,6 +5,7 @@
 ## 1. Girdiyi oku
 
 - `scripts/output/idea.json` dosyasından şunları kullan: `name`, `one_liner`, `problem`, `target_audience`, `core_features`, `monetization`, `category`, `tags`, mevcut `scores` ve `user_note`.
+- `competitors` (varsa): "Rakipleri bul" işinin web aramasıyla bulup kaydettiği, doğrulanmış uygulamalar (`app_name`, `url`, `similarity`, `note`).
 - Dosya yoksa, okunamıyorsa veya geçerli JSON değilse: çıktıya hiçbir şey yazma ve dur.
 - `user_note` yoksa, boşsa veya yalnızca boşluk içeriyorsa: mevcut `scores` ve `tags` alanlarını değiştirmeden çıktıya yaz; `change_summary` alanına "Kullanıcı notu olmadığı için puanlar değiştirilmedi." yaz ve dur.
 
@@ -47,7 +48,7 @@ Tüm puanlar 0.00–10.00 arasında bir **sayıdır** (string değil) ve yalnız
 
 ### `originality` — Piyasada birebir aynısı var mı?
 
-Piyasayı canlı olarak tarayamadığını unutma; bilgine ve kullanıcının notuna dayan. Emin değilsen bunu gerekçede belirt.
+`competitors` doluysa özgünlüğü öncelikle bu listeye göre değerlendir. Gerekçede bu listeden adlar kullan ve "canlı arama yapamadım" deme; liste zaten canlı aramanın sonucudur. Listede olmayan bir uygulamayı ancak bilgine dayandığını açıkça belirterek anabilirsin. `competitors` boşsa veya yoksa, rakip araması henüz yapılmamış demektir: bilgine ve kullanıcının notuna dayan, bunu gerekçede belirt ve gerekirse "Rakipleri bul" işinin çalıştırılmasını öner.
 
 - **2**: Bilinen, yaygın uygulamaların neredeyse kopyası.
 - **5**: Mevcut bir kategoriye küçük ama anlamlı bir iyileştirme.

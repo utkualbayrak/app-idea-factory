@@ -49,7 +49,7 @@ jobs:
 
       - name: Fetch idea
         working-directory: scripts
-        run: pnpm exec tsx fetch-idea.ts "${{ inputs.idea_id }}" output/idea.json
+        run: pnpm exec tsx fetch-idea.ts "${{ inputs.idea_id }}" output/idea.json --with-competitors
         env:
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
