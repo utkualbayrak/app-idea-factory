@@ -4,7 +4,12 @@ on:
   schedule:
     # 06:00 Türkiye saati (UTC+3) = 03:00 UTC. docs/PROJE.md "Akış 1".
     - cron: "0 3 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Çalışma geçmişi kaydının id'si (arayüzden tetiklenince Worker verir; elle çalıştırırken boş bırak)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -31,8 +36,9 @@ jobs:
 
       - name: Start cron run (cron geçmişi ekranı için)
         working-directory: scripts
-        run: pnpm exec tsx start-cron-run.ts
+        run: pnpm exec tsx start-cron-run.ts daily "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
+          RUN_ID: ${{ inputs.run_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
@@ -99,6 +105,7 @@ jobs:
         working-directory: scripts
         run: pnpm exec tsx finish-cron-run.ts success output/trends.json
         env:
+          RUN_ID: ${{ inputs.run_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
@@ -108,6 +115,7 @@ jobs:
         working-directory: scripts
         run: pnpm exec tsx finish-cron-run.ts failed output/trends.json "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
+          RUN_ID: ${{ inputs.run_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

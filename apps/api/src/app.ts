@@ -37,6 +37,9 @@ import {
   settingsPatchSchema,
   cronRunPatchSchema,
   cronRunCreateSchema,
+  CRON_WORKFLOWS,
+  CRON_RUN_STALE_MS,
+  IDEA_JOB_STALE_MS,
   proposalsSubmitSchema,
   MAINTENANCE_SETTING_DEFAULTS,
   POOL_STATUSES,
@@ -553,12 +556,57 @@ app.post("/admin/trigger-workflow", async (req, res) => {
       return;
     }
 
+    // Aynı iş bu fikir için zaten sıradaysa/çalışıyorsa ikinci kez tetiklenmez
+    // (1 saatten eski kayıt takılmış sayılır, yeniden denemeye izin verilir).
+    const active = await db()
+      .prepare(
+        "SELECT id FROM workflow_runs WHERE workflow = ?1 AND idea_id = ?2 AND status IN ('queued', 'running') AND created_at >= ?3",
+      )
+      .bind(workflow, ideaId, new Date(Date.now() - IDEA_JOB_STALE_MS).toISOString())
+      .first();
+    if (active) {
+      res.status(409).json({ error: "already_running", message: "Bu iş bu fikir için zaten çalışıyor." });
+      return;
+    }
+
     const job = await queueIdeaJob(GH_WORKFLOW_DISPATCH_TOKEN, workflow, ideaId, actorOf(res));
     if (!job.ok) {
       res.status(502).json({ error: "github_dispatch_failed", status: job.status });
       return;
     }
     res.status(202).json({ ok: true, job_id: job.jobId });
+    return;
+  }
+
+  // Günlük üretim / havuz bakımı: Çalışma geçmişi kaydı tetikleme anında
+  // açılır ve id'si run_id input'uyla workflow'a geçer (start-cron-run.ts onu
+  // kullanır), böylece ekran işi tetiklendiği andan itibaren "çalışıyor" görür.
+  const cronKind = CRON_WORKFLOWS[workflow];
+  if (cronKind) {
+    const active = await db()
+      .prepare("SELECT id FROM cron_runs WHERE kind = ?1 AND status = 'running' AND started_at >= ?2")
+      .bind(cronKind, new Date(Date.now() - CRON_RUN_STALE_MS).toISOString())
+      .first();
+    if (active) {
+      res.status(409).json({ error: "already_running", message: "Bu iş zaten çalışıyor." });
+      return;
+    }
+    const runId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await db()
+      .prepare("INSERT INTO cron_runs (id, started_at, kind) VALUES (?1, ?2, ?3)")
+      .bind(runId, now, cronKind)
+      .run();
+    const dispatched = await dispatchWorkflow(GH_WORKFLOW_DISPATCH_TOKEN, workflow, { ...inputs, run_id: runId });
+    if (!dispatched.ok) {
+      await db()
+        .prepare("UPDATE cron_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3")
+        .bind(now, `GitHub tetikleme başarısız (HTTP ${dispatched.status})`, runId)
+        .run();
+      res.status(502).json({ error: "github_dispatch_failed", status: dispatched.status });
+      return;
+    }
+    res.status(202).json({ ok: true, job_id: null, run_id: runId });
     return;
   }
 
@@ -1440,8 +1488,8 @@ app.post("/admin/cron-runs", requireWorkflowSecret, async (req, res) => {
   const id = crypto.randomUUID();
   // started_at açıkça ISO yazılıyor (DB default'u Z'siz format üretir, bkz. toUtcIso).
   await db()
-    .prepare("INSERT INTO cron_runs (id, started_at, kind) VALUES (?1, ?2, ?3)")
-    .bind(id, new Date().toISOString(), parsed.data.kind ?? "daily")
+    .prepare("INSERT INTO cron_runs (id, started_at, kind, run_url) VALUES (?1, ?2, ?3, ?4)")
+    .bind(id, new Date().toISOString(), parsed.data.kind ?? "daily", parsed.data.run_url ?? null)
     .run();
   res.status(201).json({ id });
 });
@@ -1453,11 +1501,21 @@ app.patch("/admin/cron-runs/:id", requireWorkflowSecret, async (req, res) => {
     return;
   }
 
+  // İş başladı: kayıt tetiklenirken açılmıştı, yalnızca log adresi yazılır.
+  if (parsed.data.status === "running") {
+    await db()
+      .prepare("UPDATE cron_runs SET run_url = COALESCE(?1, run_url) WHERE id = ?2")
+      .bind(parsed.data.run_url ?? null, req.params.id)
+      .run();
+    res.json({ ok: true });
+    return;
+  }
+
   const now = new Date().toISOString();
   await db()
     .prepare(
       `UPDATE cron_runs SET status = ?1, finished_at = ?2, source_breakdown = ?3, error = ?4,
-         summary = COALESCE(?6, summary) WHERE id = ?5`,
+         summary = COALESCE(?6, summary), run_url = COALESCE(?7, run_url) WHERE id = ?5`,
     )
     .bind(
       parsed.data.status,
@@ -1466,6 +1524,7 @@ app.patch("/admin/cron-runs/:id", requireWorkflowSecret, async (req, res) => {
       parsed.data.error ?? null,
       req.params.id,
       parsed.data.summary ? JSON.stringify(parsed.data.summary) : null,
+      parsed.data.run_url ?? null,
     )
     .run();
 

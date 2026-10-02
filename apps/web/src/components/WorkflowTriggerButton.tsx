@@ -42,8 +42,11 @@ export function WorkflowTriggerButton({
       setMessage(successMessage);
       onTriggered?.();
     } catch (err) {
+      const text = err instanceof Error ? err.message : String(err);
       setMessage(
-        `Tetiklenemedi: ${err instanceof Error ? err.message : String(err)}. GH_WORKFLOW_DISPATCH_TOKEN Worker secret'ı eklenmemiş olabilir.`,
+        text.includes("HTTP 409")
+          ? "Bu iş zaten çalışıyor; bitince tekrar deneyebilirsin."
+          : `Tetiklenemedi: ${text}.${text.includes("HTTP 500") ? " GH_WORKFLOW_DISPATCH_TOKEN Worker secret'ı eklenmemiş olabilir." : ""}`,
       );
     } finally {
       setLoading(false);

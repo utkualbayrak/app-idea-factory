@@ -496,6 +496,24 @@ Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wi
 - **Çalışma geçmişi** has a third tab "Havuz bakımı" (`?tab=maintenance`, `cron_runs.kind=merge`, summary counts via `SUMMARY_LABELS`).
 - **Dashboard** has a "Bekleyen öneri" tile; the grid is now `md:grid-cols-6`.
 
+### Fixes after the first real maintenance run (2026-10-03)
+
+- **The first run failed:** with 49 pool ideas Claude wrote more than 6 merges, and the hard schema `.max(6)` rejected the whole output. Now `scripts/lib/idea-schema.ts` has no max; `submit-proposals.ts` keeps the first `MAX_MERGES_PER_RUN`/`MAX_FEATURES_PER_RUN` and counts the rest as skipped. Those ideas stay in the pool for the next run. The API still enforces 6.
+- **Running-state awareness for UI-triggered jobs:**
+  - **Daily ideas / pool maintenance:** `/admin/trigger-workflow` refuses with `409 already_running` while a run of that kind is `running` and younger than `CRON_RUN_STALE_MS` (45 min). Otherwise it creates the `cron_runs` row **at dispatch time** and passes its id as the `run_id` workflow input.
+  - **Per-idea jobs:** the API also returns 409 while the same workflow is `queued`/`running` for that idea and younger than 1 h (`IDEA_JOB_STALE_MS`).
+- **How `run_id` flows through the scripts:**
+  - `start-cron-run.ts` reuses `RUN_ID` (step env) and only PATCHes `status: running` + `run_url`. Without `RUN_ID` (cron schedule, manual GitHub run) it creates the row itself.
+  - `finish-cron-run.ts` falls back to `RUN_ID` if `CRON_RUN_ID` was never set.
+  - `merge-ideas.yml`'s `check` job closes the row when it fails, and `check-merge-due.ts` closes it when the run isn't due.
+- Migration `0017` adds `cron_runs.run_url`.
+- **Web:**
+  - `components/CronJobControl.tsx` is used in Settings (both general jobs) and the Proposals header. It shows the last run, locks the button while the run is active, polls every 15 s, flags stuck runs, and calls `onFinished`.
+  - `isRunActive`/`isCronRunActive` in `lib/activity.ts`.
+  - The detail page and `ManualJobsCard` disable a per-idea job button while that job is active, and poll until it finishes.
+  - `WorkflowTriggerButton` shows "zaten çalışıyor" on 409 and only blames the token on 500.
+  - `RunError` moved to `components/RunError.tsx`.
+
 ## What this project is
 
 A personal automation platform that:

@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { proposalsOutputSchema } from "./lib/idea-schema";
+import { MAX_FEATURES_PER_RUN, MAX_MERGES_PER_RUN, proposalsOutputSchema } from "./lib/idea-schema";
 import { submitProposals } from "./lib/api-client";
 
 // Kullanım: tsx submit-proposals.ts <proposals.json path>
@@ -34,12 +34,26 @@ async function main() {
     console.error("Sema hatasi:\n" + JSON.stringify(z.treeifyError(parsed.error), null, 2));
     return fail(outDir, "Claude çıktısı şemaya uymuyor.");
   }
-  const { status, error, merges, features } = parsed.data;
+  const { status, error } = parsed.data;
   if (status !== "ok") return fail(outDir, `Claude havuzu değerlendiremedi: ${error ?? "girdi hatası"}`);
+
+  // Sınırı aşan öneriler atlanır; havuzda kaldıkları için sonraki koşuda tekrar önerilebilirler.
+  const merges = parsed.data.merges.slice(0, MAX_MERGES_PER_RUN);
+  const features = parsed.data.features.slice(0, MAX_FEATURES_PER_RUN);
+  const dropped = parsed.data.merges.length - merges.length + parsed.data.features.length - features.length;
+  if (dropped > 0) {
+    console.warn(
+      `UYARI: Claude sınırdan fazla öneri yazdı (${parsed.data.merges.length} birleştirme, ` +
+        `${parsed.data.features.length} özellik); ilk ${MAX_MERGES_PER_RUN}+${MAX_FEATURES_PER_RUN} gönderiliyor, ${dropped} atlandı.`,
+    );
+  }
 
   if (merges.length === 0 && features.length === 0) {
     console.log("Öneri yok.");
-    await writeFile(path.join(outDir, "run-summary.json"), JSON.stringify({ merges_applied: 0, merges_pending: 0, features: 0, skipped: 0 }));
+    await writeFile(
+      path.join(outDir, "run-summary.json"),
+      JSON.stringify({ merges_applied: 0, merges_pending: 0, features: 0, skipped: 0 }),
+    );
     return;
   }
 
@@ -54,7 +68,7 @@ async function main() {
   for (const reason of result.skipped) console.warn(`UYARI: ${reason}`);
   console.log(
     `Birleştirme: ${result.merges_applied} otomatik uygulandı, ${result.merges_pending} onay bekliyor. ` +
-      `Özellik önerisi: ${result.features}. Atlanan: ${result.skipped.length}.`,
+      `Özellik önerisi: ${result.features}. Atlanan: ${result.skipped.length + dropped}.`,
   );
   await writeFile(
     path.join(outDir, "run-summary.json"),
@@ -62,7 +76,7 @@ async function main() {
       merges_applied: result.merges_applied,
       merges_pending: result.merges_pending,
       features: result.features,
-      skipped: result.skipped.length,
+      skipped: result.skipped.length + dropped,
     }),
   );
 }

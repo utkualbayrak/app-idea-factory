@@ -239,9 +239,11 @@ export const settingsPatchSchema = z.union([
   z.object({ key: z.literal("purge_after_days"), value: z.number().int().min(0).max(3650) }),
 ]);
 
+// status 'running': iş başladı, yalnızca run_url yazılır (kayıt tetiklenirken açıldı).
 export const cronRunPatchSchema = z
   .object({
-    status: z.enum(["success", "failed"]),
+    status: z.enum(["running", "success", "failed"]),
+    run_url: z.string().optional(),
     source_breakdown: z.record(z.string(), z.number().int().min(0)).optional(),
     // Havuz bakımı koşusunun sayıları (birleştirme, öneri, arşiv, silme).
     summary: z.record(z.string(), z.number().int().min(0)).optional(),
@@ -259,7 +261,21 @@ export const userNamePutSchema = z.object({
 export type CronRunPatch = z.infer<typeof cronRunPatchSchema>;
 
 export const CRON_RUN_KINDS = ["daily", "merge"] as const;
-export const cronRunCreateSchema = z.object({ kind: z.enum(CRON_RUN_KINDS).optional() });
+export const cronRunCreateSchema = z.object({
+  kind: z.enum(CRON_RUN_KINDS).optional(),
+  run_url: z.string().optional(),
+});
+
+// Arayüzden tetiklenen genel işler: kayıt tetikleme anında açılır, aynı tür
+// iş çalışırken tekrar tetiklenemez.
+export const CRON_WORKFLOWS: Record<string, (typeof CRON_RUN_KINDS)[number]> = {
+  "daily-ideas.yml": "daily",
+  "merge-ideas.yml": "merge",
+};
+// Bu süreden eski 'running' kayıt takılmış sayılır (iş timeout'u 30 dk + kuyruk payı).
+export const CRON_RUN_STALE_MS = 45 * 60 * 1000;
+// Fikir işlerinde aynı iş aynı fikir için bu süre içinde sıradaysa/çalışıyorsa tekrar tetiklenmez.
+export const IDEA_JOB_STALE_MS = 60 * 60 * 1000;
 
 // Grup 3: GitHub workflow_dispatch tetikleme (cron, yeniden değerlendirme,
 // rakip bulma — hepsi aynı mekanizma).

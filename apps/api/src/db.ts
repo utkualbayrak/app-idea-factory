@@ -88,6 +88,7 @@ export interface CronRunRow {
   error: string | null;
   kind: "daily" | "merge";
   summary: string | null;
+  run_url: string | null;
 }
 
 export interface CronRun extends Omit<CronRunRow, "source_breakdown" | "summary"> {

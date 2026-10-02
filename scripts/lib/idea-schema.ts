@@ -106,8 +106,7 @@ export const proposalsOutputSchema = z.object({
         reason: z.string().min(1),
         idea: mergedIdeaSchema,
       }),
-    )
-    .max(6),
+    ),
   features: z
     .array(
       z.object({
@@ -117,8 +116,12 @@ export const proposalsOutputSchema = z.object({
         description: z.string().trim().min(1).max(2000),
         reason: z.string().min(1),
       }),
-    )
-    .max(6),
+    ),
 });
+
+// Bir koşuda en fazla bu kadar öneri gönderilir (API'deki MAX_*_PER_RUN ile
+// aynı). Claude fazlasını yazarsa koşu düşmez, fazlası atlanır.
+export const MAX_MERGES_PER_RUN = 6;
+export const MAX_FEATURES_PER_RUN = 6;
 
 export type ProposalsOutput = z.infer<typeof proposalsOutputSchema>;

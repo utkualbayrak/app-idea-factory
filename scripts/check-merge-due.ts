@@ -1,5 +1,5 @@
 import { appendFile } from "node:fs/promises";
-import { fetchMergeDue } from "./lib/api-client";
+import { fetchMergeDue, finishCronRun } from "./lib/api-client";
 
 // Kullanım: tsx check-merge-due.ts [force]
 // merge-ideas.yml her gün çalışır; bakım ancak son başarılı bakımdan bu yana
@@ -15,6 +15,11 @@ async function main() {
       ? `Bakım yapılacak${force && !due ? " (elle zorlandı)" : ""}. Son başarılı bakım: ${lastAt ?? "yok"}, aralık: ${interval} gün.`
       : `Bakım zamanı değil. Son başarılı bakım: ${lastAt}, aralık: ${interval} gün.`,
   );
+
+  // Arayüzden açılmış bir kayıt varsa ve bakım yapılmayacaksa kayıt kapatılır.
+  if (!run && process.env.RUN_ID) {
+    await finishCronRun(process.env.RUN_ID, { status: "failed", error: "Bakım zamanı gelmediği için atlandı." });
+  }
 
   const githubOutput = process.env.GITHUB_OUTPUT;
   if (githubOutput) await appendFile(githubOutput, `due=${run}\n`, "utf-8");

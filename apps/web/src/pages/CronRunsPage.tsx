@@ -17,6 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { formatDateTime, formatDuration } from "@/lib/format-date";
 import { WORKFLOW_LABELS } from "@/lib/activity";
+import { RunError } from "@/components/RunError";
 
 type RunStatus = WorkflowRun["status"];
 
@@ -44,23 +45,6 @@ interface SnapshotPayload {
   label?: string;
   items?: SnapshotItem[];
   error?: string;
-}
-
-// error: düz bir sebep, düz bir log URL'si ya da "sebep | URL"
-// (finish-cron-run.ts, failure-reason.txt varsa sebebi log linkinin önüne ekler).
-function RunError({ error }: { error: string }) {
-  const [reason, url] = error.startsWith("http") ? ["", error] : error.split(" | ");
-  return (
-    <>
-      {reason}
-      {reason && url && " — "}
-      {url && (
-        <a href={url} target="_blank" rel="noreferrer" className="underline underline-offset-4">
-          Çalışma loglarını gör
-        </a>
-      )}
-    </>
-  );
 }
 
 // Her sekmenin üstündeki özet şeridi: toplam / başarılı / başarısız / devam eden.
@@ -298,6 +282,11 @@ function DailyRunsTab({ kind }: { kind: CronRunKind }) {
                   <p className="text-sm break-words text-destructive">
                     <RunError error={run.error} />
                   </p>
+                )}
+                {run.run_url && !run.error && (
+                  <a href={run.run_url} target="_blank" rel="noreferrer" className="w-fit text-sm underline underline-offset-4">
+                    Çalışma loglarını gör
+                  </a>
                 )}
 
                 {expanded && (

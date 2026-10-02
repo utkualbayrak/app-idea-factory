@@ -148,6 +148,8 @@ export interface CronRun {
   kind: CronRunKind;
   /** Havuz bakımı sayıları: merges_applied, merges_pending, features, skipped, archived, purged. */
   summary: Record<string, number> | null;
+  /** GitHub Actions log adresi (iş başlayınca yazılır). */
+  run_url: string | null;
 }
 
 // Havuz bakımı ayarları (gün).
@@ -199,7 +201,12 @@ export type DispatchableWorkflow =
   | "evaluate-idea.yml"
   | "merge-ideas.yml";
 
-export function triggerWorkflow(workflow: DispatchableWorkflow, inputs?: Record<string, string>): Promise<{ ok: true }> {
+// Aynı iş zaten çalışıyorsa API 409 döner. Günlük üretim/havuz bakımında
+// Çalışma geçmişi kaydı tetikleme anında açılır (run_id).
+export function triggerWorkflow(
+  workflow: DispatchableWorkflow,
+  inputs?: Record<string, string>,
+): Promise<{ ok: true; job_id: string | null; run_id?: string }> {
   return request("/admin/trigger-workflow", { method: "POST", body: JSON.stringify({ workflow, inputs }) });
 }
 

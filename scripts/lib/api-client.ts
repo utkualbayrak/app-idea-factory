@@ -76,13 +76,22 @@ export async function fetchSettings(): Promise<Record<string, boolean>> {
   return body.settings;
 }
 
-export async function startCronRun(kind: "daily" | "merge" = "daily"): Promise<string> {
+export async function startCronRun(kind: "daily" | "merge" = "daily", runUrl?: string): Promise<string> {
   const body = await fetchJson<{ id: string }>(`${BASE_URL}/admin/cron-runs`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ kind }),
+    body: JSON.stringify({ kind, run_url: runUrl }),
   });
   return body.id;
+}
+
+// Arayüzden tetiklenen işte kayıt zaten açık (run_id input'u); yalnızca log adresi yazılır.
+export async function markCronRunStarted(id: string, runUrl?: string): Promise<void> {
+  await fetchJson(`${BASE_URL}/admin/cron-runs/${id}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "running", run_url: runUrl }),
+  });
 }
 
 export async function finishCronRun(

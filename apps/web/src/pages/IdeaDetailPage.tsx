@@ -28,7 +28,7 @@ import {
 import { ActivityBadge } from "@/components/ActivityBadge";
 import { IdeaStatusBadge } from "@/components/IdeaStatusBadge";
 import { UpdatedBy } from "@/components/UpdatedBy";
-import { isActivityUnread } from "@/lib/activity";
+import { isActivityUnread, isRunActive } from "@/lib/activity";
 import { ScoreSlider } from "@/components/ScoreSlider";
 import { ScoreReasonPopover } from "@/components/ScoreReasonPopover";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -184,6 +184,25 @@ export function IdeaDetailPage() {
   }, [hash, idea, task, testRounds]);
 
   const lastRun = (workflow: IdeaWorkflow) => runs.find((run) => run.workflow === workflow);
+  // Aynı iş sıradayken/çalışırken butonu tekrar basılamaz (API de 409 döner).
+  const running = (workflow: IdeaWorkflow) => isRunActive(lastRun(workflow));
+
+  // Fikir işi (değerlendirme, rakip arama…) sürerken sayfa 15 sn'de bir
+  // yoklanır; iş bitince puanlar/rakipler ve "Son …" satırı kendiliğinden gelir.
+  const jobActive = runs.some((run) => isRunActive(run));
+  useEffect(() => {
+    if (!jobActive || !id) return;
+    const timer = setInterval(() => {
+      loadRuns();
+      fetchIdea(id)
+        .then((res) => setIdea(res.idea))
+        .catch(() => {});
+      fetchCompetitors(id)
+        .then((res) => setCompetitors(res.competitors))
+        .catch(() => {});
+    }, 15_000);
+    return () => clearInterval(timer);
+  }, [jobActive, id, loadRuns]);
 
   async function handleRate(value: number) {
     if (!id) return;
@@ -320,6 +339,7 @@ export function IdeaDetailPage() {
                 successMessage="Tetiklendi — birkaç dakika içinde sayfayı yenileyip kontrol edebilirsin."
                 workflow="evaluate-idea.yml"
                 inputs={id ? { idea_id: id } : undefined}
+                disabled={running("evaluate-idea.yml")}
                 icon={<Sparkles className="size-4" />}
                 onTriggered={handleTriggered}
               />
@@ -435,6 +455,7 @@ export function IdeaDetailPage() {
             successMessage="Tetiklendi — birkaç dakika içinde sayfayı yenileyip kontrol edebilirsin."
             workflow="find-competitors.yml"
             inputs={id ? { idea_id: id } : undefined}
+            disabled={running("find-competitors.yml")}
             icon={<Search className="size-4" />}
             onTriggered={handleTriggered}
           />
@@ -479,7 +500,7 @@ export function IdeaDetailPage() {
             successMessage="Tetiklendi — birkaç dakika içinde sayfayı yenileyip kontrol edebilirsin."
             workflow="reevaluate-idea.yml"
             inputs={id ? { idea_id: id } : undefined}
-            disabled={!idea.user_note || !idea.scores}
+            disabled={!idea.user_note || !idea.scores || running("reevaluate-idea.yml")}
             icon={<Sparkles className="size-4" />}
             onTriggered={handleTriggered}
           />

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Combine } from "lucide-react";
 import { fetchProposals, type Proposal, type ProposalsResponse } from "@/lib/api";
 import { ProposalCard } from "@/components/ProposalCards";
-import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
+import { CronJobControl } from "@/components/CronJobControl";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -54,13 +54,13 @@ export function ProposalsPage() {
       title="Öneriler"
       description="Havuz bakımı benzer fikirleri birleştirmeyi ve geliştirmedeki fikirlere özellik eklemeyi önerir. Hiç dokunmadığın fikirlerin birleştirmesi otomatik uygulanır."
       actions={
-        <WorkflowTriggerButton
-          label="Havuz bakımını şimdi çalıştır"
-          loadingLabel="Tetikleniyor…"
-          successMessage="Tetiklendi — birkaç dakika içinde Çalışma geçmişi > Havuz bakımı'nda görünecek."
+        <CronJobControl
+          kind="merge"
           workflow="merge-ideas.yml"
+          label="Havuz bakımını şimdi çalıştır"
           inputs={{ force: "true" }}
           icon={<Combine className="size-4" />}
+          onFinished={load}
         />
       }
     />

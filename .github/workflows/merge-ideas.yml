@@ -16,6 +16,10 @@ on:
         description: "Aralık dolmamış olsa da bakımı çalıştır"
         required: false
         default: "true"
+      run_id:
+        description: "Çalışma geçmişi kaydının id'si (arayüzden tetiklenince Worker verir; elle çalıştırırken boş bırak)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -52,6 +56,18 @@ jobs:
         run: pnpm exec tsx check-merge-due.ts "$FORCE"
         env:
           FORCE: ${{ inputs.force }}
+          RUN_ID: ${{ inputs.run_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      # Arayüzden açılmış kayıt, kontrol adımı patlarsa "çalışıyor"da kalmasın.
+      - name: Close run record on failure
+        if: always() && (failure() || cancelled()) && inputs.run_id != ''
+        working-directory: scripts
+        run: pnpm exec tsx finish-cron-run.ts failed "" "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        env:
+          RUN_ID: ${{ inputs.run_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
@@ -78,8 +94,9 @@ jobs:
 
       - name: Start maintenance run (Çalışma geçmişi için)
         working-directory: scripts
-        run: pnpm exec tsx start-cron-run.ts merge
+        run: pnpm exec tsx start-cron-run.ts merge "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
+          RUN_ID: ${{ inputs.run_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
@@ -109,12 +126,14 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 
-      # CRON_RUN_ID start-cron-run.ts'ten $GITHUB_ENV ile gelir.
+      # CRON_RUN_ID start-cron-run.ts'ten $GITHUB_ENV ile gelir; RUN_ID yalnızca
+      # start adımından önce patlayan işte kaydı kapatmak için yedek.
       - name: Finish maintenance run (başarılı)
         if: always() && success()
         working-directory: scripts
         run: pnpm exec tsx finish-cron-run.ts success
         env:
+          RUN_ID: ${{ inputs.run_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
@@ -124,6 +143,7 @@ jobs:
         working-directory: scripts
         run: pnpm exec tsx finish-cron-run.ts failed "" "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
         env:
+          RUN_ID: ${{ inputs.run_id }}
           WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

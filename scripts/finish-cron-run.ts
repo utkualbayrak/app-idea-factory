@@ -14,7 +14,9 @@ async function main() {
     throw new Error("İlk argüman 'success' veya 'failed' olmalı");
   }
 
-  const id = process.env.CRON_RUN_ID;
+  // RUN_ID: arayüzden tetiklenen işte API'nin önceden açtığı kayıt; iş
+  // start-cron-run.ts'ten önce patlasa da kayıt "çalışıyor"da kalmasın.
+  const id = process.env.CRON_RUN_ID || process.env.RUN_ID;
   if (!id) {
     console.log("CRON_RUN_ID yok (start-cron-run.ts çalışmamış olabilir) — atlanıyor.");
     return;

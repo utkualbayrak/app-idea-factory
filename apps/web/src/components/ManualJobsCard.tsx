@@ -15,6 +15,8 @@ import {
   type WorkflowRun,
 } from "@/lib/api";
 import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
+import { CronJobControl } from "@/components/CronJobControl";
+import { isRunActive } from "@/lib/activity";
 import { LastRunLine } from "@/components/LastRunLine";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { isInIdeaPool, STATUS_LABELS } from "@/lib/idea-colors";
@@ -137,6 +139,15 @@ export function ManualJobsCard() {
 
   useEffect(loadSelected, [loadSelected]);
 
+  // Seçili fikir için sırada/çalışan bir iş varsa bitene kadar yokla: buton
+  // kilidi ve "Son" satırı kendiliğinden güncellensin.
+  const anyActive = runs.some((run) => isRunActive(run));
+  useEffect(() => {
+    if (!anyActive) return;
+    const timer = setInterval(loadSelected, 15_000);
+    return () => clearInterval(timer);
+  }, [anyActive, loadSelected]);
+
   function handleSelect(id: string) {
     setTask(null);
     setRuns([]);
@@ -153,6 +164,7 @@ export function ManualJobsCard() {
 
   const idea = ideas?.find((i) => i.id === selectedId) ?? null;
   const lastRun = (workflow: IdeaWorkflow) => runs.find((run) => run.workflow === workflow);
+  const running = (workflow: IdeaWorkflow) => isRunActive(lastRun(workflow));
   const inputs = idea ? { idea_id: idea.id } : undefined;
 
   const reevaluateBlock = !idea
@@ -197,11 +209,10 @@ export function ManualJobsCard() {
             title="Günlük fikir üretimi"
             description="Trendleri toplar, Claude 10 yeni fikir üretir. Her gün 06:00'da kendiliğinden çalışır."
           >
-            <WorkflowTriggerButton
-              label="Şimdi çalıştır"
-              loadingLabel="Tetikleniyor…"
-              successMessage={SUCCESS}
+            <CronJobControl
+              kind="daily"
               workflow="daily-ideas.yml"
+              label="Şimdi çalıştır"
               icon={<Lightbulb className="size-4" />}
             />
           </JobRow>
@@ -209,11 +220,10 @@ export function ManualJobsCard() {
             title="Havuz bakımı"
             description="Benzer fikirleri birleştirir, geliştirmedekilere özellik önerir. Her gün 07:00'de kontrol eder, aralık dolduysa çalışır; buradan aralık beklenmeden çalışır."
           >
-            <WorkflowTriggerButton
-              label="Şimdi çalıştır"
-              loadingLabel="Tetikleniyor…"
-              successMessage={SUCCESS}
+            <CronJobControl
+              kind="merge"
               workflow="merge-ideas.yml"
+              label="Şimdi çalıştır"
               inputs={{ force: "true" }}
               icon={<Combine className="size-4" />}
             />
@@ -263,6 +273,7 @@ export function ManualJobsCard() {
                   successMessage={SUCCESS}
                   workflow="evaluate-idea.yml"
                   inputs={inputs}
+                  disabled={running("evaluate-idea.yml")}
                   icon={<Sparkles className="size-4" />}
                   onTriggered={loadSelected}
                 />
@@ -279,7 +290,7 @@ export function ManualJobsCard() {
                   successMessage={SUCCESS}
                   workflow="reevaluate-idea.yml"
                   inputs={inputs}
-                  disabled={reevaluateBlock != null}
+                  disabled={reevaluateBlock != null || running("reevaluate-idea.yml")}
                   icon={<Sparkles className="size-4" />}
                   onTriggered={loadSelected}
                 />
@@ -292,6 +303,7 @@ export function ManualJobsCard() {
                   successMessage={SUCCESS}
                   workflow="find-competitors.yml"
                   inputs={inputs}
+                  disabled={running("find-competitors.yml")}
                   icon={<Search className="size-4" />}
                   onTriggered={loadSelected}
                 />

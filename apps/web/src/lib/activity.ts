@@ -1,4 +1,4 @@
-import type { ActivityKind, Idea, IdeaWorkflow } from "@/lib/api";
+import type { ActivityKind, CronRun, Idea, IdeaWorkflow, WorkflowRun } from "@/lib/api";
 
 // Fikir aktivite rozeti için saf yardımcılar (components/ActivityBadge.tsx
 // ve detay sayfası kullanır).
@@ -64,4 +64,19 @@ export function isActivityUnread(idea: ActivityIdea, now = Date.now()): boolean 
   if (!at || !kind || !(SUCCESS_KINDS.includes(kind) || FAILED_KINDS.includes(kind))) return false;
   if (now - new Date(at).getTime() > STALE_AFTER_MS) return false;
   return !seen || new Date(seen).getTime() < new Date(at).getTime();
+}
+
+// Fikir işi hâlâ sırada/çalışıyor mu (1 saatten eskisi takılmış sayılır;
+// API de o süreden sonra yeniden tetiklemeye izin verir).
+export function isRunActive(run: Pick<WorkflowRun, "status" | "created_at"> | undefined, now = Date.now()): boolean {
+  if (!run || (run.status !== "queued" && run.status !== "running")) return false;
+  return now - new Date(run.created_at).getTime() < STUCK_AFTER_MS;
+}
+
+// Günlük üretim / havuz bakımı: 45 dakikadan eski 'running' kayıt takılmış
+// sayılır (apps/api CRON_RUN_STALE_MS ile aynı).
+export const CRON_RUN_STALE_MS = 45 * 60 * 1000;
+
+export function isCronRunActive(run: Pick<CronRun, "status" | "started_at"> | undefined, now = Date.now()): boolean {
+  return run?.status === "running" && now - new Date(run.started_at).getTime() < CRON_RUN_STALE_MS;
 }
