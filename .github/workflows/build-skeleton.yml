@@ -111,17 +111,18 @@ jobs:
             echo 'args=--max-turns 90 --permission-mode acceptEdits' >> "$GITHUB_OUTPUT"
           fi
 
+      # continue-on-error: action, Claude işi bitirse bile tur sınırı aşıldıysa
+      # adımı başarısız sayıyor (2026-10-03: 146/120 turda bitmiş, kontrolleri
+      # geçmiş bir iskelet bu yüzden düştü). Kararı aşağıdaki rapor kontrolü ve
+      # Expo doğrulama kapısı verir; rapor yoksa iş yine başarısız olur.
       - name: Build skeleton with Claude Code
         id: claude
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: "Read prompts/build-skeleton.md and follow its instructions exactly. The skeleton repository is checked out at skeleton/ (approved planning documents in skeleton/docs/, the idea in skeleton/IDEA.md) and the task parameters are in scripts/output/task-params.json. Do not ask for confirmation or clarification — complete the task end to end and write scripts/output/skeleton-report.json."
           claude_args: ${{ steps.claude-args.outputs.args }}
-
-      - name: Note Claude Code failure reason
-        if: failure() && steps.claude.outcome == 'failure'
-        run: echo "Claude Code adımı başarısız oldu (tur veya süre sınırı aşılmış olabilir)." > scripts/output/failure-reason.txt
 
       # Claude başarısız olsa bile o ana kadarki iş itilir (incelemek için;
       # "Tekrar dene" zaten baştan yazar). create-expo-app kendi git init'ini

@@ -48,7 +48,7 @@ async function main() {
     const [outDir] = rest;
     const report = await readReport(outDir);
     if (!report) {
-      await writeReason(outDir, "Claude iskelet raporu yazmadı ya da rapor geçersiz (iş yarıda kalmış olabilir).");
+      await writeReason(outDir, "Claude iskelet raporu yazmadı ya da rapor geçersiz (iş yarıda kalmış, tur veya süre sınırı aşılmış olabilir).");
       process.exit(1);
     }
     if (report.status !== "ok") {
