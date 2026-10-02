@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Clipboard, ClipboardCheck, GitCompare, Hammer, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, GitCompare, Hammer, Search, Sparkles } from "lucide-react";
 import {
   fetchIdea,
   fetchIdeas,
@@ -48,7 +48,8 @@ import { PageMessage } from "@/components/PageHeader";
 import { formatDate, formatDateTime, formatPurgeDate } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
 import { canRenameIdea, categoryColorClasses, ideaSection, isInIdeaPool } from "@/lib/idea-colors";
-import { ideaToMarkdown } from "@/lib/export-markdown";
+import { exportFileName, ideaToMarkdown } from "@/lib/export-markdown";
+import { ExportMenu } from "@/components/ExportMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,7 +85,6 @@ export function IdeaDetailPage() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [otherIdeas, setOtherIdeas] = useState<Idea[] | null>(null);
-  const [copied, setCopied] = useState(false);
   const [competitors, setCompetitors] = useState<Competitor[] | null>(null);
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
   const [task, setTask] = useState<Task | null>(null);
@@ -243,13 +243,6 @@ export function IdeaDetailPage() {
     }
   }
 
-  async function handleExport() {
-    if (!idea) return;
-    await navigator.clipboard.writeText(ideaToMarkdown(idea));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   if (error) return <PageMessage tone="error">Fikir yüklenemedi: {error}</PageMessage>;
   if (!idea) return <PageMessage>Yükleniyor…</PageMessage>;
 
@@ -373,6 +366,7 @@ export function IdeaDetailPage() {
       {task && id && (
         <DevelopmentCard
           ideaId={id}
+          ideaName={idea.name}
           ideaStatus={idea.status}
           task={task}
           documents={documents}
@@ -533,10 +527,12 @@ export function IdeaDetailPage() {
       </Card>
 
       <div className="flex flex-wrap gap-3">
-        <Button variant="outline" onClick={handleExport}>
-          {copied ? <ClipboardCheck className="size-4" /> : <Clipboard className="size-4" />}
-          {copied ? "Kopyalandı" : "Dışa aktar"}
-        </Button>
+        <ExportMenu
+          fileName={exportFileName(idea.name)}
+          getContent={() =>
+            ideaToMarkdown({ idea, competitors, task, documents, repo, devReports, testRounds })
+          }
+        />
         <DropdownMenu onOpenChange={handleCompareMenuOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">

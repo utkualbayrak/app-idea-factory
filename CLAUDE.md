@@ -544,6 +544,11 @@ Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wi
 - With `update_docs` and the task `ready`, `replaceName()` in `app.ts` swaps the old name in all 4 `task_documents` (exact spelling, plus the lowercase one-word form → new name lowercased without non-alphanumerics, for bundle ids/repo names; never inside another word) and stamps `user_edited_at`/`edited_by` on changed docs.
 - Web: `components/RenameIdeaButton.tsx` (pencil next to the title on the detail page, dialog with format hints and the docs checkbox); visibility rule is `canRenameIdea()` in `lib/idea-colors.ts`.
 
+## Stage-aware export (2026-10-03)
+
+- `lib/export-markdown.ts` `ideaToMarkdown({ idea, competitors, task, documents, repo, devReports, testRounds })` exports whatever the detail page has loaded: idea + scores + note, then competitors, task params/repo/issue, the 4 plan docs (repo copy when synced and different, headings demoted under one `# Name`), dev reports and test rounds. `documentsToMarkdown()` is docs only.
+- `components/ExportMenu.tsx` is the shared "Dışa aktar" dropdown (copy to clipboard / download `.md`, content built on select so it's current). Used by the detail page's main button, `DevelopmentCard`'s "Tüm belgeleri dışa aktar", and each doc tab (exports the version on screen: draft while editing, repo or approved per the toggle) including extra repo `docs/*.md` tabs. File names via `exportFileName()` (`mealmate-prd.md`).
+
 ## What this project is
 
 A personal automation platform that:

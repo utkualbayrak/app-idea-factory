@@ -34,6 +34,8 @@ import { IdeaStatusBadge } from "@/components/IdeaStatusBadge";
 import { COMMIT_DATE_STATUSES } from "@/lib/idea-colors";
 import { LastRunLine } from "@/components/LastRunLine";
 import { Markdown } from "@/components/Markdown";
+import { ExportMenu } from "@/components/ExportMenu";
+import { documentsToMarkdown, exportFileName } from "@/lib/export-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +56,8 @@ const TASK_STATUS_STYLES: Record<Task["status"], string> = {
 
 interface DevelopmentCardProps {
   ideaId: string;
+  /** Dışa aktarılan dosyaların adı ve başlığı için. */
+  ideaName: string;
   ideaStatus: IdeaStatus;
   task: Task;
   documents: TaskDocument[];
@@ -71,6 +75,7 @@ interface DevelopmentCardProps {
 // "Geliştirmeye başla" / "Tekrar dene" ve iskelet repo/issue linkleri.
 export function DevelopmentCard({
   ideaId,
+  ideaName,
   ideaStatus,
   task,
   documents,
@@ -214,6 +219,16 @@ export function DevelopmentCard({
         <StatusMessage task={task} />
 
         {docs.length > 0 && (
+          <div className="flex justify-end">
+            <ExportMenu
+              size="sm"
+              label="Tüm belgeleri dışa aktar"
+              fileName={exportFileName(ideaName, "belgeler")}
+              getContent={() => documentsToMarkdown(ideaName, docs, repo)}
+            />
+          </div>
+        )}
+        {docs.length > 0 && (
           <Tabs defaultValue={docs[0].kind} className="min-w-0">
             {/* Mobilde dört sekme sığmazsa satır kendi içinde kayar. */}
             <div className="overflow-x-auto">
@@ -243,6 +258,7 @@ export function DevelopmentCard({
               <TabsContent key={doc.kind} value={doc.kind} className="min-w-0 rounded-md border p-4">
                 <DocumentPanel
                   doc={doc}
+                  fileName={exportFileName(ideaName, DOCUMENT_REPO_PATHS[doc.kind].slice("docs/".length, -".md".length))}
                   repoFile={repoFileFor(doc.kind)}
                   editable={editable}
                   draft={drafts[doc.kind]}
@@ -253,7 +269,10 @@ export function DevelopmentCard({
             ))}
             {extraDocs.map((file) => (
               <TabsContent key={file.path} value={`repo:${file.path}`} className="min-w-0 rounded-md border p-4">
-                <RepoDocPanel file={file} />
+                <RepoDocPanel
+                  file={file}
+                  fileName={exportFileName(ideaName, file.path.slice("docs/".length).replace(/\.md$/i, ""))}
+                />
               </TabsContent>
             ))}
           </Tabs>
@@ -370,7 +389,7 @@ function StatusMessage({ task }: { task: Task }) {
 }
 
 // docs/ altında plan belgeleri dışında kalan, repoda sonradan eklenmiş md.
-function RepoDocPanel({ file }: { file: RepoFile }) {
+function RepoDocPanel({ file, fileName }: { file: RepoFile; fileName: string }) {
   const [view, setView] = useState<"content" | "diff">("content");
   const hasDiff = file.content != null && file.previous_content != null;
 
@@ -381,7 +400,8 @@ function RepoDocPanel({ file }: { file: RepoFile }) {
           Repoda · ilk görüldü {formatDateTime(file.first_seen_at)}
           {file.changed_at !== file.first_seen_at && ` · son değişiklik ${formatDateTime(file.changed_at)}`}
         </p>
-        {hasDiff && (
+        <div className="flex flex-wrap items-center gap-2">
+          {hasDiff && (
           <SegmentedControl
             value={view}
             onChange={setView}
@@ -390,7 +410,11 @@ function RepoDocPanel({ file }: { file: RepoFile }) {
               { value: "diff", label: "Fark (önceki senkron)" },
             ]}
           />
-        )}
+          )}
+          {file.content != null && (
+            <ExportMenu size="sm" fileName={fileName} getContent={() => file.content ?? ""} />
+          )}
+        </div>
       </div>
       {file.content == null ? (
         <p className="text-sm text-muted-foreground">Dosya çok büyük, içeriği çekilmedi — repoda görüntüle.</p>
@@ -405,6 +429,7 @@ function RepoDocPanel({ file }: { file: RepoFile }) {
 
 function DocumentPanel({
   doc,
+  fileName,
   repoFile,
   editable,
   draft,
@@ -412,6 +437,7 @@ function DocumentPanel({
   onSave,
 }: {
   doc: TaskDocument;
+  fileName: string;
   repoFile: RepoFile | undefined;
   editable: boolean;
   draft: string | undefined;
@@ -467,6 +493,11 @@ function DocumentPanel({
             ]}
           />
         )}
+        <ExportMenu
+          size="sm"
+          fileName={fileName}
+          getContent={() => draft ?? (repoDiffers && view !== "approved" && repoContent != null ? repoContent : doc.content)}
+        />
         {editable && !editing && (
           <Button variant="outline" size="sm" onClick={() => onDraftChange(doc.content)}>
             <Pencil className="size-4" />
