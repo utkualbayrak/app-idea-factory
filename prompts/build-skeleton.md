@@ -13,7 +13,7 @@ Bu belgeleri kullanıcı okuyup gerekirse düzenledi ve onayladı. **Tek doğrul
 - `skeleton/docs/tech-plan.md` — stack, uygulama kimliği, klasör yapısı, veri modeli, test kurulumu ve **"İskeletin kapsamı"** bölümü
 - `skeleton/docs/roadmap.md` — iskelet sonrası işler (yalnızca bağlam için; bunları yapma)
 - `skeleton/IDEA.md` — fikrin tam hali (yalnızca arka plan bilgisi)
-- `scripts/output/task-params.json` — yalnızca `platform` alanını kullan
+- `scripts/output/task-params.json` — yalnızca `platform` ve `targets` alanlarını kullan; `targets` yoksa iki cihaz da
 
 ### Hangi kaynak geçerli?
 
@@ -75,6 +75,7 @@ Kod, dosya ve bileşen adları İngilizce; kullanıcıya görünen metinler, bel
 - `skeleton-work/.git` klasörü oluştuysa önce onu sil. Sonra oluşan dosyaları `skeleton/` içine kopyala (`skeleton/docs/`, `skeleton/IDEA.md` ve `skeleton/.git/`'in üzerine yazmadan).
 - Şablonun örnek ekranlarını, örnek bileşenlerini, örnek varlıklarını (asset) ve şablona özgü yardımcı script'leri (örn. projeyi sıfırlama script'i) kaldır; yerlerine belgelerdeki ekranları koy.
 - `app.json`/`app.config` içinde `name`, `slug`, `ios.bundleIdentifier` ve `android.package` değerlerini tech-plan.md'ye göre ayarla.
+- `targets` tek cihazsa `app.json`'da `platforms`'u o cihazla sınırla ve diğer platformun ayar bloğunu yazma.
 - Ek paketleri `npx expo install <paket>` ile ekle (Expo SDK'sıyla uyumlu sürüm seçer).
 - `skeleton/` içinde sırayla çalıştır ve hataları düzelterek tekrarla:
   1. `npm install`
@@ -88,7 +89,7 @@ Kod, dosya ve bileşen adları İngilizce; kullanıcıya görünen metinler, bel
 
 Bu ortamda bu platformların araçları kurulu değil ve bu platformlar için komut çalıştırma izni yok; dosyaları doğrudan yaz. Derlenemeyeceği için ekstra dikkatli ol: import'lar, paket adları, dosya yolları ve sözdizimi tutarlı olsun. Bilmediğin veya emin olmadığın bir API'yi kullanma; platformun yaygın, uzun süredir kararlı API'lerini tercih et.
 
-- **`flutter`**: `pubspec.yaml` (uygulama adı tech-plan.md'ye uygun), `analysis_options.yaml`, `lib/` altındaki kod ve `test/` altındaki örnek test. `android/`, `ios/` gibi platform klasörlerini elle yazma; README'de ilk adım olarak `flutter create --org <uygulama kimliğinin son parça hariç hali> .` ile üretileceğini ve ardından `flutter pub get` çalıştırılacağını belirt.
+- **`flutter`**: `pubspec.yaml` (uygulama adı tech-plan.md'ye uygun), `analysis_options.yaml`, `lib/` altındaki kod ve `test/` altındaki örnek test. `android/`, `ios/` gibi platform klasörlerini elle yazma; README'de ilk adım olarak `flutter create --org <uygulama kimliğinin son parça hariç hali> --platforms=<targets, virgülle> .` ile üretileceğini ve ardından `flutter pub get` çalıştırılacağını belirt.
 - **`ios_swift`**: Xcode proje dosyasını (`.xcodeproj`) elle yazma. Bunun yerine [XcodeGen](https://github.com/yonaskolb/XcodeGen) için bir `project.yml` (bundle identifier ve minimum iOS sürümü tech-plan.md'ye göre; uygulama ve test hedefleriyle) ve kaynak dosyaları yaz; README'de `xcodegen generate` adımını anlat. SwiftLint için `.swiftlint.yml`.
 - **`android_kotlin`**: Gradle (Kotlin DSL) dosyaları (`applicationId` ve `minSdk` tech-plan.md'ye göre), `app/` modülü, kaynaklar ve örnek bir birim testi. İkili dosya olan `gradle-wrapper.jar`'ı yazma; README'de wrapper'ın `gradle wrapper` ile ya da Android Studio'da projeyi açarak üretileceğini anlat.
 

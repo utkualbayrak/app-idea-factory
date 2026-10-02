@@ -14,6 +14,7 @@ Bu yüzden belgeler hem bir insanın hızlıca okuyup karar verebileceği kadar 
 - `scripts/output/idea.json`: `name`, `one_liner`, `problem`, `target_audience`, `core_features`, `monetization`, `category`, `tags`, `scores` (gerekçeleriyle) ve varsa `user_note`.
 - `scripts/output/task-params.json`:
   - `platform`: `ios_swift` (iOS, Swift), `android_kotlin` (Android, Kotlin), `expo` (çapraz platform, React Native + Expo), `flutter` (çapraz platform, Flutter)
+  - `targets`: hedef cihazlar — `["ios"]`, `["android"]` ya da `["ios", "android"]`. Native platformlarda platformla aynıdır; `expo`/`flutter`'da kullanıcı seçer.
   - `backend`: `none` (backend yok, veri cihazda), `supabase`, `firebase`, `custom_api` (ayrı, özel bir API)
   - `auth`: `none`, `email` (e-posta ile giriş), `social` (sosyal giriş: Apple/Google)
   - `mvp_features`: MVP'de olacak özelliklerin listesi
@@ -28,6 +29,8 @@ Bu yüzden belgeler hem bir insanın hızlıca okuyup karar verebileceği kadar 
 - `mvp_features` boş bir diziyse: hiçbir dosya yazma ve dur.
 
 ## 2. Kurallar
+
+- **Hedef cihazlar**: Belgeleri yalnızca `targets`'taki cihazlar için yaz. Tek hedef varsa diğer platforma özgü konuları (mağaza, izinler, bildirim kurulumu, uygulama kimliği) yazma.
 
 ### Kullanıcı seçimleri
 
@@ -124,6 +127,7 @@ Bölümler:
 - **Ekran listesi**: Tablo — ekran adı, amacı, ilgili özellik kimliği(leri). Ayarlar veya onboarding gibi bir özelliğe bağlı olmayan ekranlar için "—" yaz.
 - **Ekran detayları**: Her ekran için `### <ScreenName>` alt başlığı; içerik ve bileşenler, kullanıcı aksiyonları, boş / yükleniyor / hata durumları.
 - **Ana akışlar**: 2–4 kritik akış, numaralı adımlarla (örn. ilk açılış/onboarding, ana iş akışı). Adımlarda ekran adlarını kullan.
+- **Etkileşim ve hareket notları** (yalnızca fikre gerçekten değer katıyorsa; yoksa bu bölümü yazma): Hedef platformun yerleşik hareketleri (örn. iOS'ta kenardan kaydırarak geri, satırı kaydırarak sil/arşivle, uzun basınca bağlam menüsü, aşağı çekerek yenileme, haptik geri bildirim; Android'de sistem geri hareketi). Her not tek satır: hangi ekranda, hangi hareket, ne yapar. Bilinen bir hareketi başka bir anlamda kullanma. Hareketle yapılan her önemli işin görünür bir alternatifi (buton/menü) de olsun.
 - **Tasarım notları**: Tema ve stile göre şunları somut olarak yaz:
   - Renk paleti: ana renk, vurgu rengi, arka plan, yüzey ve metin renkleri için hex değerleri. Tema `both` ise açık ve koyu için ayrı ayrı.
   - Metin/arka plan renk çiftlerinin okunabilir kontrastta olması (WCAG AA hedefi).
