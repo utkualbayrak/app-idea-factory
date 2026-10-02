@@ -39,6 +39,7 @@ import { SourceIcon } from "@/components/SourceIcon";
 import { WorkflowTriggerButton } from "@/components/WorkflowTriggerButton";
 import { LastRunLine } from "@/components/LastRunLine";
 import { DevelopmentCard } from "@/components/DevelopmentCard";
+import { RenameIdeaButton } from "@/components/RenameIdeaButton";
 import { DevReportsCard } from "@/components/DevReportsCard";
 import { ReworkBanner, TestCard } from "@/components/TestCard";
 import { TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
@@ -46,7 +47,7 @@ import { FeatureProposalCard, IdeaSummaryTile } from "@/components/ProposalCards
 import { PageMessage } from "@/components/PageHeader";
 import { formatDate, formatDateTime, formatPurgeDate } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
-import { categoryColorClasses, ideaSection, isInIdeaPool } from "@/lib/idea-colors";
+import { canRenameIdea, categoryColorClasses, ideaSection, isInIdeaPool } from "@/lib/idea-colors";
 import { ideaToMarkdown } from "@/lib/export-markdown";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -268,6 +269,16 @@ export function IdeaDetailPage() {
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold">{idea.name}</h1>
+          {canRenameIdea(idea.status, task?.status) && (
+            <RenameIdeaButton
+              idea={idea}
+              task={task}
+              onRenamed={(renamed) => {
+                setIdea(renamed);
+                loadTask();
+              }}
+            />
+          )}
           <Badge className={categoryColorClasses(idea.category)}>{idea.category}</Badge>
           <IdeaStatusBadge idea={idea} />
           {idea.origin === "manual" && <Badge variant="outline">Elle girildi</Badge>}

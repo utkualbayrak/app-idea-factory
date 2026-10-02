@@ -1,4 +1,4 @@
-import type { IdeaStatus } from "@/lib/api";
+import type { IdeaStatus, TaskStatus } from "@/lib/api";
 
 // Kategori isimlerine deterministik (hash tabanlı) renk ataması — aynı
 // kategori her zaman aynı rengi alır, yeni kategoriler eklendikçe elle
@@ -86,6 +86,12 @@ export function ideaSection(status: IdeaStatus): IdeaSection {
 // yine de havuz yalnızca new/on_hold.
 export function isInIdeaPool(status: IdeaStatus): boolean {
   return status === "new" || status === "on_hold";
+}
+
+// Ad yalnızca "Geliştirme bekliyor"da değiştirilebilir (iskelet repo'su bu
+// addan türetilir); belgeler üretilirken beklenir.
+export function canRenameIdea(status: IdeaStatus, taskStatus: TaskStatus | undefined): boolean {
+  return status === "awaiting_development" && taskStatus !== "planning";
 }
 
 export function statusColorClasses(status: IdeaStatus): string {

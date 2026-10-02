@@ -11,6 +11,7 @@ export const ACTIVITY_LABELS: Record<ActivityKind, string> = {
   note_updated: "Not güncellendi",
   rating_updated: "Puan verildi",
   status_changed: "Durum değişti",
+  renamed: "Adı değişti",
   reevaluate_queued: "Değerlendiriliyor…",
   reevaluated: "Yeniden değerlendirildi",
   reevaluate_failed: "Değerlendirme başarısız",

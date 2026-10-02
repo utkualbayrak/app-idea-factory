@@ -538,6 +538,12 @@ Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wi
 - Failures only warn; the build continues and the pending ones are retried on the next build attempt.
 - All pool-maintenance groups (1, 2, 2b, 3) are done. READMEs (EN/TR) describe pool maintenance, the Proposals/Archive screens and the Settings job runner.
 
+## Renaming an idea (2026-10-03)
+
+- **`POST /ideas/:id/rename`** (`{ name, update_docs }`, `ideaRenameSchema`): only while the idea is `awaiting_development` and its task isn't `planning`, since the skeleton repo name is derived from the name at build time. `nameTaken()` against other ideas and `retired_names`; stamps the new `renamed` activity kind and `touchIdea`.
+- With `update_docs` and the task `ready`, `replaceName()` in `app.ts` swaps the old name in all 4 `task_documents` (exact spelling, plus the lowercase one-word form → new name lowercased without non-alphanumerics, for bundle ids/repo names; never inside another word) and stamps `user_edited_at`/`edited_by` on changed docs.
+- Web: `components/RenameIdeaButton.tsx` (pencil next to the title on the detail page, dialog with format hints and the docs checkbox); visibility rule is `canRenameIdea()` in `lib/idea-colors.ts`.
+
 ## What this project is
 
 A personal automation platform that:

@@ -214,6 +214,19 @@ export const ideaPatchSchema = z
   })
   .refine((data) => Object.keys(data).length > 0, "En az bir alan gönderilmeli");
 
+// "Geliştirme bekliyor" aşamasında fikrin adını değiştirme. Repo adı bu
+// addan türetildiği için en az bir ASCII harf/rakam şart.
+export const ideaRenameSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(40)
+    .refine((name) => /[a-z0-9]/i.test(name), "Ad en az bir harf ya da rakam içermeli"),
+  // Planlama belgelerinde eski ad geçen yerleri de yeni adla değiştir.
+  update_docs: z.boolean().default(true),
+});
+
 export type IdeaInput = z.infer<typeof ideaInputSchema>;
 export type IdeaBatchRequest = z.infer<typeof ideaBatchRequestSchema>;
 export type IdeaPatch = z.infer<typeof ideaPatchSchema>;
@@ -357,6 +370,7 @@ export const ACTIVITY_KINDS = [
   "note_updated",
   "rating_updated",
   "status_changed",
+  "renamed",
   "reevaluate_queued",
   "reevaluated",
   "reevaluate_failed",

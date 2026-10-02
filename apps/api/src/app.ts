@@ -27,6 +27,7 @@ import {
 import {
   ideaBatchRequestSchema,
   ideaPatchSchema,
+  ideaRenameSchema,
   devReportSubmitSchema,
   manualIdeaSchema,
   evaluationSchema,
@@ -426,6 +427,92 @@ app.patch("/ideas/:id", async (req, res) => {
       deleted_at: deletedAt,
     } as IdeaRow),
   });
+});
+
+// Belgelerde eski adı yeni adla değiştirir: birebir yazımı ve (ad tek
+// parça bir kelimeyse) küçük harfli halini — bundle id, paket adı, repo adı
+// gibi yerlerde geçer, oralara da yeni adın küçük harfli, boşluksuz hali yazılır.
+// Başka bir kelimenin parçası olan geçişlere dokunulmaz.
+function replaceName(content: string, oldName: string, newName: string): string {
+  const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const swap = (text: string, from: string, to: string) =>
+    text.replace(new RegExp(`(?<![A-Za-z0-9])${escape(from)}(?![A-Za-z0-9])`, "g"), to);
+  let next = swap(content, oldName, newName);
+  const lower = oldName.toLowerCase();
+  if (lower !== oldName && /^[a-z0-9]+$/.test(lower)) {
+    next = swap(next, lower, newName.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  }
+  return next;
+}
+
+// "Geliştirme bekliyor" aşamasında fikrin adını değiştirme: iskelet repo'su
+// bu addan türetildiği için yalnızca repo açılmadan önce. Belgeler üretilirken
+// (görev 'planning') beklenir, yoksa belgeler eski adla gelir.
+app.post("/ideas/:id/rename", async (req, res) => {
+  const parsed = ideaRenameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", message: parsed.error.issues[0]?.message });
+    return;
+  }
+  const { name, update_docs: updateDocs } = parsed.data;
+
+  const row = await db().prepare("SELECT * FROM ideas WHERE id = ?1").bind(req.params.id).first<IdeaRow>();
+  if (!row) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  if (row.status !== "awaiting_development") {
+    res.status(409).json({ error: "invalid_status", message: "Ad yalnızca geliştirme beklerken değiştirilebilir." });
+    return;
+  }
+  const task = await db().prepare("SELECT * FROM tasks WHERE idea_id = ?1").bind(row.id).first<TaskRow>();
+  if (task?.status === "planning") {
+    res.status(409).json({ error: "task_planning", message: "Belgeler hazırlanırken ad değiştirilemez." });
+    return;
+  }
+  if (name === row.name) {
+    res.json({ idea: serializeIdea((await withSeen([row], actorOf(res), row.id))[0]), documents_updated: 0 });
+    return;
+  }
+  if (await nameTaken(name, row.id)) {
+    res.status(409).json({ error: "name_taken", message: `"${name}" adı başka bir fikirde kullanılmış.` });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const actor = actorOf(res);
+  const statements = [
+    db().prepare("UPDATE ideas SET name = ?1 WHERE id = ?2").bind(name, row.id),
+    stampActivity(row.id, "renamed", now, actor),
+    touchIdea(row.id, now, actor),
+  ];
+
+  let documentsUpdated = 0;
+  // Belgeler yalnızca düzenlenebilirken ('ready') güncellenir; planning_failed
+  // görevin belgeleri zaten yeniden üretilecek.
+  if (updateDocs && task?.status === "ready") {
+    const { results: docs } = await db()
+      .prepare("SELECT * FROM task_documents WHERE task_id = ?1")
+      .bind(task.id)
+      .all<TaskDocumentRow>();
+    for (const doc of docs) {
+      const content = replaceName(doc.content, row.name, name);
+      if (content === doc.content) continue;
+      documentsUpdated++;
+      statements.push(
+        db()
+          .prepare(
+            "UPDATE task_documents SET content = ?1, user_edited_at = ?2, edited_by = ?3 WHERE task_id = ?4 AND kind = ?5",
+          )
+          .bind(content, now, actor, task.id, doc.kind),
+      );
+    }
+  }
+  await db().batch(statements);
+
+  const updated = await db().prepare("SELECT * FROM ideas WHERE id = ?1").bind(row.id).first<IdeaRow>();
+  const [seen] = await withSeen([updated!], actor, row.id);
+  res.json({ idea: serializeIdea(seen), documents_updated: documentsUpdated });
 });
 
 // Grup 3: ayarlar ekranı (kaynak aç/kapat + manuel cron tetikleme).

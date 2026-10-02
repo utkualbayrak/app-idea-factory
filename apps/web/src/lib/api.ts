@@ -77,6 +77,7 @@ export type ActivityKind =
   | "note_updated"
   | "rating_updated"
   | "status_changed"
+  | "renamed"
   | "reevaluate_queued"
   | "reevaluated"
   | "reevaluate_failed"
@@ -129,6 +130,19 @@ export function fetchArchivedIdeas(): Promise<{ ideas: Idea[] }> {
 // Arşivden havuza döndürür; Claude kalan özetten alanları yeniden doldurur.
 export function restoreIdea(id: string): Promise<{ ok: true; dispatch_error: string | null }> {
   return request(`/ideas/${id}/restore`, { method: "POST" });
+}
+
+// Yalnızca "Geliştirme bekliyor" aşamasında; updateDocs planlama belgelerindeki
+// eski adı da değiştirir.
+export function renameIdea(
+  id: string,
+  name: string,
+  updateDocs: boolean,
+): Promise<{ idea: Idea; documents_updated: number }> {
+  return request(`/ideas/${id}/rename`, {
+    method: "POST",
+    body: JSON.stringify({ name, update_docs: updateDocs }),
+  });
 }
 
 export function fetchIdea(id: string): Promise<{ idea: Idea }> {
