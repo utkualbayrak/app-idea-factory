@@ -24,6 +24,8 @@ import {
   ideaBatchRequestSchema,
   ideaPatchSchema,
   devReportSubmitSchema,
+  manualIdeaSchema,
+  evaluationSchema,
   testPlanSchema,
   testResultSubmitSchema,
   USER_STATUS_TRANSITIONS,
@@ -107,6 +109,49 @@ async function dispatchWorkflow(token: string, workflow: string, inputs: Record<
     },
     body: JSON.stringify({ ref: "main", inputs }),
   });
+}
+
+// Fikir bazlı bir işi (yeniden değerlendirme, rakip bulma, değerlendirme)
+// başlatır: Çalışma geçmişinde görünsün diye önce workflow_runs'a 'queued'
+// satırı yazılır; id'si workflow'a job_id input'u olarak geçer, workflow
+// başlarken/biterken bu satırı günceller (scripts/start-workflow-run.ts,
+// finish-workflow-run.ts). GitHub tetiklemesi başarısızsa satır ve fikir
+// aktivitesi hemen 'failed' olur.
+async function queueIdeaJob(token: string, workflow: IdeaWorkflow, ideaId: string) {
+  const now = new Date().toISOString();
+  const jobId = crypto.randomUUID();
+  await db().batch([
+    db()
+      .prepare("INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at) VALUES (?1, ?2, ?3, 'queued', ?4)")
+      .bind(jobId, workflow, ideaId, now),
+    stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
+  ]);
+
+  const ghRes = await dispatchWorkflow(token, workflow, { idea_id: ideaId, job_id: jobId });
+  if (!ghRes.ok) {
+    await db().batch([
+      db()
+        .prepare("UPDATE workflow_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3")
+        .bind(now, `GitHub tetikleme başarısız (HTTP ${ghRes.status})`, jobId),
+      stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][2], now),
+    ]);
+  }
+  return { ok: ghRes.ok, status: ghRes.status, jobId };
+}
+
+// scripts/validate-ideas.ts'deki ile aynı: "MealMate" / "Meal-Mates" aynı ad.
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .replace(/s$/, "");
+}
+
+async function nameTaken(name: string, exceptId?: string): Promise<boolean> {
+  const target = normalizeName(name);
+  if (!target) return false;
+  const { results } = await db().prepare("SELECT id, name FROM ideas").all<{ id: string; name: string }>();
+  return results.some((row) => row.id !== exceptId && normalizeName(row.name) === target);
 }
 
 app.get("/health", async (_req, res) => {
@@ -336,13 +381,7 @@ app.post("/admin/trigger-workflow", async (req, res) => {
 
   const { workflow } = parsed.data;
   const inputs: Record<string, string> = { ...parsed.data.inputs };
-  const now = new Date().toISOString();
 
-  // Fikir bazlı işler (yeniden değerlendirme, rakip bulma) Çalışma geçmişi
-  // ekranında görünsün diye önce workflow_runs'a 'queued' satırı yazılır; id'si
-  // workflow'a job_id input'u olarak geçer, workflow başlarken/biterken bu
-  // satırı günceller (scripts/start-workflow-run.ts, finish-workflow-run.ts).
-  let jobId: string | null = null;
   if (isIdeaWorkflow(workflow)) {
     const ideaId = inputs.idea_id;
     const idea = ideaId
@@ -353,32 +392,21 @@ app.post("/admin/trigger-workflow", async (req, res) => {
       return;
     }
 
-    jobId = crypto.randomUUID();
-    inputs.job_id = jobId;
-    await db().batch([
-      db()
-        .prepare("INSERT INTO workflow_runs (id, workflow, idea_id, status, created_at) VALUES (?1, ?2, ?3, 'queued', ?4)")
-        .bind(jobId, workflow, ideaId, now),
-      stampActivity(ideaId, WORKFLOW_ACTIVITY[workflow][0], now),
-    ]);
-  }
-
-  const ghRes = await dispatchWorkflow(GH_WORKFLOW_DISPATCH_TOKEN, workflow, inputs);
-
-  if (!ghRes.ok) {
-    if (jobId && isIdeaWorkflow(workflow)) {
-      await db().batch([
-        db()
-          .prepare("UPDATE workflow_runs SET status = 'failed', finished_at = ?1, error = ?2 WHERE id = ?3")
-          .bind(now, `GitHub tetikleme başarısız (HTTP ${ghRes.status})`, jobId),
-        stampActivity(inputs.idea_id, WORKFLOW_ACTIVITY[workflow][2], now),
-      ]);
+    const job = await queueIdeaJob(GH_WORKFLOW_DISPATCH_TOKEN, workflow, ideaId);
+    if (!job.ok) {
+      res.status(502).json({ error: "github_dispatch_failed", status: job.status });
+      return;
     }
-    res.status(502).json({ error: "github_dispatch_failed", status: ghRes.status });
+    res.status(202).json({ ok: true, job_id: job.jobId });
     return;
   }
 
-  res.status(202).json({ ok: true, job_id: jobId });
+  const ghRes = await dispatchWorkflow(GH_WORKFLOW_DISPATCH_TOKEN, workflow, inputs);
+  if (!ghRes.ok) {
+    res.status(502).json({ error: "github_dispatch_failed", status: ghRes.status });
+    return;
+  }
+  res.status(202).json({ ok: true, job_id: null });
 });
 
 // 2. tur Grup C: fikir bazlı işlerin geçmişi (Çalışma geçmişi > Fikir işleri,
@@ -567,6 +595,11 @@ app.post("/tasks", async (req, res) => {
     res.status(409).json({ error: "invalid_idea_status", status: idea.status });
     return;
   }
+  // Elle girilmiş, henüz puanlanmamış (ve belki doldurulmamış) fikir planlanamaz.
+  if (JSON.parse(idea.scores) == null) {
+    res.status(409).json({ error: "not_evaluated", message: "Fikir henüz Claude ile değerlendirilmedi." });
+    return;
+  }
 
   const now = new Date().toISOString();
   const taskId = existing?.id ?? crypto.randomUUID();
@@ -629,6 +662,151 @@ app.get("/ideas/:id/task", async (req, res) => {
   const documents = results.sort((a, b) => order(a.kind) - order(b.kind)).map(serializeTaskDocument);
 
   res.json({ task: serializeTask(task), documents, repo });
+});
+
+// Faz 3 sonrası tur, Grup 5: elle fikir girişi. Formla girilen fikir
+// puansız kaydedilir; açıklamayla girilen fikir için evaluate-idea.yml hemen
+// tetiklenir (alanları doldurup puanlar). İsim çakışması günlük üretimdeki
+// gibi normalize edilerek tüm fikirlere (silinmişler dahil) karşı kontrol edilir.
+app.post("/ideas/manual", async (req, res) => {
+  const parsed = manualIdeaSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+  const input = parsed.data;
+  if (input.name && (await nameTaken(input.name))) {
+    res.status(409).json({ error: "name_taken", message: `"${input.name}" adı (ya da çok benzeri) zaten kullanılıyor.` });
+    return;
+  }
+
+  const { GH_WORKFLOW_DISPATCH_TOKEN } = env as unknown as Env;
+  if (input.mode === "describe" && !GH_WORKFLOW_DISPATCH_TOKEN) {
+    res.status(500).json({ error: "not_configured", message: "GH_WORKFLOW_DISPATCH_TOKEN Worker secret'ı yok." });
+    return;
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const batchDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Istanbul" }).format(new Date());
+  // "describe" yolunda alanlar Claude doldurana kadar boş; tek cümle yerine
+  // açıklamanın başı gösterilir.
+  const row =
+    input.mode === "form"
+      ? {
+          name: input.name,
+          one_liner: input.one_liner,
+          problem: input.problem,
+          target_audience: input.target_audience,
+          core_features: input.core_features,
+          monetization: input.monetization,
+          category: input.category.toLowerCase(),
+          tags: input.tags.map((t) => t.toLowerCase()),
+          source_text: null,
+        }
+      : {
+          name: input.name || "Adsız fikir",
+          one_liner: input.description.length > 160 ? `${input.description.slice(0, 157)}…` : input.description,
+          problem: "",
+          target_audience: "",
+          core_features: [],
+          monetization: "",
+          category: "",
+          tags: [],
+          source_text: input.description,
+        };
+
+  await db()
+    .prepare(
+      `INSERT INTO ideas (id, created_at, batch_date, name, one_liner, problem, target_audience, core_features,
+         monetization, category, inspiration_sources, tags, scores, status, origin, source_text)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, '[]', ?11, 'null', 'new', 'manual', ?12)`,
+    )
+    .bind(
+      id,
+      now,
+      batchDate,
+      row.name,
+      row.one_liner,
+      row.problem,
+      row.target_audience,
+      JSON.stringify(row.core_features),
+      row.monetization,
+      row.category,
+      JSON.stringify(row.tags),
+      row.source_text,
+    )
+    .run();
+
+  let dispatchError: string | null = null;
+  if (input.mode === "describe" && GH_WORKFLOW_DISPATCH_TOKEN) {
+    const job = await queueIdeaJob(GH_WORKFLOW_DISPATCH_TOKEN, "evaluate-idea.yml", id);
+    if (!job.ok) dispatchError = `Claude işi tetiklenemedi (GitHub HTTP ${job.status}); detay sayfasından tekrar deneyebilirsin.`;
+  }
+
+  const created = await db().prepare("SELECT * FROM ideas WHERE id = ?1").bind(id).first<IdeaRow>();
+  res.status(201).json({ idea: created ? serializeIdea(created) : null, dispatch_error: dispatchError });
+});
+
+// evaluate-idea.yml sonucu (workflow-only). Fikir "describe" yoluyla girilmiş
+// ve henüz doldurulmamışsa (source_text var, scores null) fields ile tüm
+// alanlar yazılır; aksi halde yalnızca puan, etiket ve (boşsa) kategori.
+app.patch("/admin/ideas/:id/evaluation", requireWorkflowSecret, async (req, res) => {
+  const parsed = evaluationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body", details: z.flattenError(parsed.error) });
+    return;
+  }
+  const idea = await db().prepare("SELECT * FROM ideas WHERE id = ?1").bind(req.params.id).first<IdeaRow>();
+  if (!idea) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+
+  const { scores, tags, category, fields } = parsed.data;
+  const completing = idea.source_text != null && JSON.parse(idea.scores) == null;
+  if (completing && !fields) {
+    res.status(400).json({ error: "fields_required", message: "Açıklamadan girilen fikir için alanlar zorunlu." });
+    return;
+  }
+  if (completing && fields && (await nameTaken(fields.name, idea.id))) {
+    res.status(409).json({ error: "name_taken", message: `"${fields.name}" adı zaten kullanılıyor.` });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const statements: D1PreparedStatement[] = [
+    db()
+      .prepare("UPDATE ideas SET scores = ?1, tags = ?2, category = ?3, last_reevaluated_at = ?4 WHERE id = ?5")
+      .bind(
+        JSON.stringify(scores),
+        JSON.stringify(completing || JSON.parse(idea.tags).length === 0 ? tags : JSON.parse(idea.tags)),
+        completing || !idea.category ? category : idea.category,
+        now,
+        idea.id,
+      ),
+    stampActivity(idea.id, "evaluated", now),
+  ];
+  if (completing && fields) {
+    statements.push(
+      db()
+        .prepare(
+          `UPDATE ideas SET name = ?1, one_liner = ?2, problem = ?3, target_audience = ?4, core_features = ?5,
+             monetization = ?6 WHERE id = ?7`,
+        )
+        .bind(
+          fields.name,
+          fields.one_liner,
+          fields.problem,
+          fields.target_audience,
+          JSON.stringify(fields.core_features),
+          fields.monetization,
+          idea.id,
+        ),
+    );
+  }
+  await db().batch(statements);
+  res.json({ ok: true, completed: completing });
 });
 
 // Faz 3 sonrası tur, Grup 3: geliştirme raporları ve "Geliştirildi" formu.

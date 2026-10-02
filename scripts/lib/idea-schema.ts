@@ -46,6 +46,29 @@ export const reevaluationSchema = z.object({
 
 export type Reevaluation = z.infer<typeof reevaluationSchema>;
 
+// Faz 3 sonrası tur, Grup 5: evaluate-idea.yml çıktısı (prompts/evaluate-idea.md).
+// apps/api/src/schema.ts'deki evaluationSchema ile aynı olmalı; status alanı
+// yalnızca burada (betik "ok" değilse hiçbir şey göndermez).
+export const evaluationOutputSchema = z.object({
+  status: z.enum(["ok", "input_error"]),
+  error: z.string().optional(),
+  scores: ideaScoresSchema.optional(),
+  tags: z.array(z.string().min(1)).min(1).max(4).optional(),
+  category: z.string().min(1).optional(),
+  fields: z
+    .object({
+      name: z.string().min(1).max(40),
+      one_liner: z.string().min(1),
+      problem: z.string().min(1),
+      target_audience: z.string().min(1),
+      core_features: z.array(z.string().min(1)).min(1).max(10),
+      monetization: z.string().min(1),
+    })
+    .optional(),
+});
+
+export type EvaluationOutput = z.infer<typeof evaluationOutputSchema>;
+
 // Grup 4: rakip/benzer uygulama bulma (apps/api/src/schema.ts'deki
 // competitorSchema ile aynı olmalı).
 export const COMPETITOR_SIMILARITIES = ["direct", "partial", "alternative"] as const;

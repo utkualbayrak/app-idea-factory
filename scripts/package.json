@@ -19,6 +19,7 @@
     "submit-ideas": "tsx submit-ideas.ts",
     "fetch-idea": "tsx fetch-idea.ts",
     "submit-reevaluation": "tsx submit-reevaluation.ts",
+    "submit-evaluation": "tsx submit-evaluation.ts",
     "submit-competitors": "tsx submit-competitors.ts",
     "submit-trend-snapshots": "tsx submit-trend-snapshots.ts",
     "fetch-task": "tsx fetch-task.ts",

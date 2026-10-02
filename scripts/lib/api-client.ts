@@ -109,6 +109,14 @@ export async function submitReevaluation(id: string, data: unknown): Promise<voi
   });
 }
 
+export async function submitEvaluation(id: string, data: unknown): Promise<void> {
+  await fetchJson(`${BASE_URL}/admin/ideas/${id}/evaluation`, {
+    method: "PATCH",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
 export async function submitCompetitors(ideaId: string, competitors: Competitor[]): Promise<void> {
   await fetchJson(`${BASE_URL}/admin/competitors`, {
     method: "POST",

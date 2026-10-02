@@ -40,7 +40,8 @@ export interface Idea {
   category: string;
   inspiration_sources: string[];
   tags: string[];
-  scores: IdeaScores;
+  /** null: elle girilmiş, henüz puanlanmamış fikir. */
+  scores: IdeaScores | null;
   user_rating: number | null;
   user_note: string | null;
   user_note_updated_at: string | null;
@@ -50,6 +51,9 @@ export interface Idea {
   last_activity_kind: ActivityKind | null;
   activity_seen_at: string | null;
   status: IdeaStatus;
+  origin: "cron" | "manual";
+  /** "Açıklama yaz, Claude doldursun" yolunda kullanıcının yazdığı metin. */
+  source_text: string | null;
 }
 
 // apps/api/src/schema.ts ACTIVITY_KINDS ile aynı.
@@ -66,6 +70,9 @@ export type ActivityKind =
   | "plan_queued"
   | "planned"
   | "plan_failed"
+  | "evaluate_queued"
+  | "evaluated"
+  | "evaluate_failed"
   | "skeleton_queued"
   | "skeleton_built"
   | "skeleton_failed";
@@ -130,7 +137,11 @@ export function patchSettings(key: SourceSettingKey, value: boolean): Promise<{ 
   return request("/admin/settings", { method: "PATCH", body: JSON.stringify({ key, value }) });
 }
 
-export type DispatchableWorkflow = "daily-ideas.yml" | "reevaluate-idea.yml" | "find-competitors.yml";
+export type DispatchableWorkflow =
+  | "daily-ideas.yml"
+  | "reevaluate-idea.yml"
+  | "find-competitors.yml"
+  | "evaluate-idea.yml";
 
 export function triggerWorkflow(workflow: DispatchableWorkflow, inputs?: Record<string, string>): Promise<{ ok: true }> {
   return request("/admin/trigger-workflow", { method: "POST", body: JSON.stringify({ workflow, inputs }) });
@@ -170,7 +181,12 @@ export function fetchCompetitors(ideaId: string): Promise<{ competitors: Competi
 }
 
 // 2. tur Grup C: fikir bazlı işlerin geçmişi (Çalışma geçmişi > Fikir işleri).
-export type IdeaWorkflow = "reevaluate-idea.yml" | "find-competitors.yml" | "plan-idea.yml" | "build-skeleton.yml";
+export type IdeaWorkflow =
+  | "reevaluate-idea.yml"
+  | "find-competitors.yml"
+  | "plan-idea.yml"
+  | "build-skeleton.yml"
+  | "evaluate-idea.yml";
 
 export interface WorkflowRun {
   id: string;
@@ -401,4 +417,25 @@ export function submitTestResult(
 // Turu iptal eder; fikir "Test bekliyor"a döner.
 export function cancelTestRound(roundId: string): Promise<{ ok: true }> {
   return request(`/test-rounds/${roundId}/cancel`, { method: "POST" });
+}
+
+// Faz 3 sonrası tur, Grup 5: elle fikir girişi.
+export type ManualIdeaInput =
+  | {
+      mode: "form";
+      name: string;
+      one_liner: string;
+      problem: string;
+      target_audience: string;
+      core_features: string[];
+      monetization: string;
+      category: string;
+      tags: string[];
+    }
+  | { mode: "describe"; name?: string; description: string };
+
+// "describe" yolunda Claude işi hemen tetiklenir; tetiklenemezse
+// dispatch_error dolu gelir (fikir yine de oluşturulmuştur).
+export function createManualIdea(input: ManualIdeaInput): Promise<{ idea: Idea; dispatch_error: string | null }> {
+  return request("/ideas/manual", { method: "POST", body: JSON.stringify(input) });
 }

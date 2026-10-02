@@ -20,6 +20,9 @@ export const ACTIVITY_LABELS: Record<ActivityKind, string> = {
   plan_queued: "Belgeler hazırlanıyor…",
   planned: "Belgeler hazır",
   plan_failed: "Belge üretimi başarısız",
+  evaluate_queued: "Claude değerlendiriyor…",
+  evaluated: "Değerlendirildi",
+  evaluate_failed: "Değerlendirme başarısız",
   skeleton_queued: "İskelet kuruluyor…",
   skeleton_built: "İskelet hazır",
   skeleton_failed: "İskelet üretimi başarısız",
@@ -31,11 +34,24 @@ export const WORKFLOW_LABELS: Record<IdeaWorkflow, string> = {
   "find-competitors.yml": "Rakip bulma",
   "plan-idea.yml": "Planlama belgeleri",
   "build-skeleton.yml": "İskelet üretimi",
+  "evaluate-idea.yml": "Değerlendirme (elle girilen)",
 };
 
-export const IN_PROGRESS_KINDS: ActivityKind[] = ["reevaluate_queued", "competitors_queued", "plan_queued", "skeleton_queued"];
-export const SUCCESS_KINDS: ActivityKind[] = ["reevaluated", "competitors_found", "planned", "skeleton_built"];
-export const FAILED_KINDS: ActivityKind[] = ["reevaluate_failed", "competitors_failed", "plan_failed", "skeleton_failed"];
+export const IN_PROGRESS_KINDS: ActivityKind[] = [
+  "reevaluate_queued",
+  "competitors_queued",
+  "plan_queued",
+  "skeleton_queued",
+  "evaluate_queued",
+];
+export const SUCCESS_KINDS: ActivityKind[] = ["reevaluated", "competitors_found", "planned", "skeleton_built", "evaluated"];
+export const FAILED_KINDS: ActivityKind[] = [
+  "reevaluate_failed",
+  "competitors_failed",
+  "plan_failed",
+  "skeleton_failed",
+  "evaluate_failed",
+];
 
 export type ActivityIdea = Pick<Idea, "last_activity_at" | "last_activity_kind" | "activity_seen_at">;
 

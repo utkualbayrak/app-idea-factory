@@ -35,6 +35,7 @@ App Idea Factory, tamamen ücretsiz planlar üzerinde çalışan kişisel ve oto
 |---|---|
 | **Gösterge paneli** | Anlık sayaçlar, kategori dağılımı, günlük ortalama puan trendi, son işler ve son trend çalışması |
 | **Fikirler** | Tek, sıralanabilir ve filtrelenebilir tablo (arama, kategori, durum, minimum puanlar, tarih aralığı), sayfa başına 20, 4'e kadar karşılaştırma |
+| **Fikir ekle** | Günlük taramanın bulamadığı bir fikri gir: serbestçe anlat, Claude alanları doldurup puanlasın; ya da formu kendin doldur, Claude sonra puanlasın |
 | **Fikir detayı** | Fikrin tamamı, Claude'un gerekçeleriyle puan dökümü, 0–10 puanın ve notun, rakipler, yeniden değerlendirme, Markdown dışa aktarma |
 | **Geliştir** | Fikir için görev formu: platform, backend, auth, MVP özellikleri, tasarım, notlar |
 | **Geliştirilenler** | Geliştirme akışındaki fikirler: planlama belgeleri onayını bekleyenler, iskeleti kurulanlar ya da kurulmuş olanlar, testten revizyona dönenler. Detay sayfasında belgeler (başlatana kadar düzenlenebilir), repo/issue linkleri, tekrar dene ve son commit'leri ve değişen Markdown dosyalarını çeken repo senkronu |
@@ -55,7 +56,7 @@ flowchart TD
 
     UI["React SPA<br/>web Worker (statik dosyalar)"] -->|"/api/* service binding ile"| API["API Worker<br/>Workers üzerinde Express"]
     API <--> DB[("Cloudflare D1")]
-    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton"]
+    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton · evaluate-idea"]
     JOBS -->|"sonuç + iş durumu"| API
 
     ACCESS{{"Cloudflare Access<br/>(yalnızca sahibin e-postası)"}} -.korur.- UI

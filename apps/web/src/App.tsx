@@ -5,6 +5,7 @@ import { IdeaListPage } from "@/pages/IdeaListPage";
 import { IdeaDetailPage } from "@/pages/IdeaDetailPage";
 import { DevelopPage } from "@/pages/DevelopPage";
 import { DevReportPage } from "@/pages/DevReportPage";
+import { NewIdeaPage } from "@/pages/NewIdeaPage";
 import { TestPlanPage } from "@/pages/TestPlanPage";
 import { TestResultPage } from "@/pages/TestResultPage";
 import { DevelopedPage, ReadyPage, TestingPage } from "@/pages/StatusListPage";
@@ -93,6 +94,7 @@ function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/ideas" element={<IdeaListPage />} />
             <Route path="/ideas/:id" element={<IdeaDetailPage />} />
+            <Route path="/ideas/new" element={<NewIdeaPage />} />
             <Route path="/ideas/:id/develop" element={<DevelopPage />} />
             <Route path="/ideas/:id/developed" element={<DevReportPage />} />
             <Route path="/ideas/:id/test/start" element={<TestPlanPage />} />

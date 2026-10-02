@@ -32,14 +32,19 @@ export function ideaToMarkdown(idea: Idea): string {
     lines.push(`**Etiketler:** ${idea.tags.join(", ")}`, "");
   }
 
-  lines.push(
-    "## Claude puan dökümü",
-    `- Pazar: ${idea.scores.market.toFixed(2)}/10 — ${idea.scores.market_reason}`,
-    `- Uygulanabilirlik (solo): ${idea.scores.feasibility_solo_dev.toFixed(2)}/10 — ${idea.scores.feasibility_solo_dev_reason}`,
-    `- Özgünlük: ${idea.scores.originality.toFixed(2)}/10 — ${idea.scores.originality_reason}`,
-    `- Genel: ${idea.scores.overall.toFixed(2)}/10 — ${idea.scores.overall_reason}`,
-    "",
-  );
+  const { scores } = idea;
+  if (scores) {
+    lines.push(
+      "## Claude puan dökümü",
+      `- Pazar: ${scores.market.toFixed(2)}/10 — ${scores.market_reason}`,
+      `- Uygulanabilirlik (solo): ${scores.feasibility_solo_dev.toFixed(2)}/10 — ${scores.feasibility_solo_dev_reason}`,
+      `- Özgünlük: ${scores.originality.toFixed(2)}/10 — ${scores.originality_reason}`,
+      `- Genel: ${scores.overall.toFixed(2)}/10 — ${scores.overall_reason}`,
+      "",
+    );
+  } else {
+    lines.push("## Claude puan dökümü", "Henüz puanlanmadı.", "");
+  }
 
   if (idea.user_rating != null) {
     lines.push(`**Kullanıcı puanı:** ${idea.user_rating.toFixed(2)}/10`, "");

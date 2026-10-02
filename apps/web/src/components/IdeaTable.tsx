@@ -30,6 +30,16 @@ const DEFAULT_SORTING: SortingState = [{ id: "date", desc: true }];
 
 
 function ClaudeScoreCell({ idea }: { idea: Idea }) {
+  if (!idea.scores) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-default text-muted-foreground">—</span>
+        </TooltipTrigger>
+        <TooltipContent>Henüz puanlanmadı</TooltipContent>
+      </Tooltip>
+    );
+  }
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -49,14 +59,14 @@ function ClaudeScoreCell({ idea }: { idea: Idea }) {
 }
 
 function CombinedScoreCell({ idea }: { idea: Idea }) {
-  const combined = combinedScore(idea.scores.overall, idea.user_rating);
+  const combined = combinedScore(idea.scores?.overall ?? null, idea.user_rating);
   if (combined == null) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="cursor-default text-muted-foreground">—</span>
         </TooltipTrigger>
-        <TooltipContent>Kullanıcı puanı bekleniyor</TooltipContent>
+        <TooltipContent>{idea.scores ? "Kullanıcı puanı bekleniyor" : "Claude puanı bekleniyor"}</TooltipContent>
       </Tooltip>
     );
   }
@@ -168,7 +178,7 @@ function buildColumns(selection?: SelectionProps): ColumnDef<Idea>[] {
     },
     {
       id: "claude_score",
-      accessorFn: (idea) => idea.scores.overall,
+      accessorFn: (idea) => idea.scores?.overall ?? -1,
       header: ({ column }) => <SortButton column={column} label="Claude puanı" />,
       cell: ({ row }) => <ClaudeScoreCell idea={row.original} />,
     },
@@ -187,7 +197,7 @@ function buildColumns(selection?: SelectionProps): ColumnDef<Idea>[] {
     },
     {
       id: "combined_score",
-      accessorFn: (idea) => combinedScore(idea.scores.overall, idea.user_rating) ?? -1,
+      accessorFn: (idea) => combinedScore(idea.scores?.overall ?? null, idea.user_rating) ?? -1,
       header: ({ column }) => <SortButton column={column} label="Birleşik puan" />,
       cell: ({ row }) => <CombinedScoreCell idea={row.original} />,
     },

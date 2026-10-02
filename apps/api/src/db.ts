@@ -34,6 +34,8 @@ export interface IdeaRow {
   last_activity_kind: string | null;
   activity_seen_at: string | null;
   status: string;
+  origin: "cron" | "manual";
+  source_text: string | null;
 }
 
 export interface Idea
@@ -41,7 +43,8 @@ export interface Idea
   core_features: string[];
   inspiration_sources: string[];
   tags: string[];
-  scores: IdeaInput["scores"];
+  /** null: elle girilmiş, henüz puanlanmamış fikir (D1'de JSON 'null'). */
+  scores: IdeaInput["scores"] | null;
 }
 
 export function serializeIdea(row: IdeaRow): Idea {

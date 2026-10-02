@@ -142,6 +142,49 @@ export const testResultSubmitSchema = z
     path: ["rework_reason", "finding_indexes"],
   });
 
+// Faz 3 sonrası tur, Grup 5: elle fikir girişi. İki yol:
+// - "form": tüm alanları kullanıcı girer, puanlar boş kalır ("Claude ile değerlendir").
+// - "describe": kullanıcı serbest bir açıklama yazar, evaluate-idea.yml
+//   açıklamadan alanları doldurur ve puanlar (oluşturunca otomatik tetiklenir).
+export const manualIdeaSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("form"),
+    name: z.string().trim().min(1).max(40),
+    one_liner: z.string().trim().min(1).max(300),
+    problem: z.string().trim().min(1).max(2000),
+    target_audience: z.string().trim().min(1).max(1000),
+    core_features: z.array(shortLine).min(1).max(10),
+    monetization: z.string().trim().min(1).max(1000),
+    category: z.string().trim().min(1).max(40),
+    tags: z.array(z.string().trim().min(1).max(30)).max(4),
+  }),
+  z.object({
+    mode: z.literal("describe"),
+    // Boşsa Claude ad koyar.
+    name: z.string().trim().max(40).optional(),
+    description: z.string().trim().min(30).max(8000),
+  }),
+]);
+
+// evaluate-idea.yml çıktısı (scripts/lib/idea-schema.ts evaluationSchema ile
+// aynı olmalı). fields yalnızca "describe" yolunda, fikir ilk kez
+// doldurulurken zorunlu; API diğer durumlarda alanlara dokunmaz.
+export const evaluationSchema = z.object({
+  scores: ideaScoresSchema,
+  tags: z.array(z.string().min(1)).min(1).max(4),
+  category: z.string().min(1),
+  fields: z
+    .object({
+      name: z.string().min(1).max(40),
+      one_liner: z.string().min(1),
+      problem: z.string().min(1),
+      target_audience: z.string().min(1),
+      core_features: z.array(z.string().min(1)).min(1).max(10),
+      monetization: z.string().min(1),
+    })
+    .optional(),
+});
+
 export const ideaPatchSchema = z
   .object({
     user_rating: scoreValue.nullable().optional(),
@@ -183,7 +226,12 @@ export type CronRunPatch = z.infer<typeof cronRunPatchSchema>;
 
 // Grup 3: GitHub workflow_dispatch tetikleme (cron, yeniden değerlendirme,
 // rakip bulma — hepsi aynı mekanizma).
-export const DISPATCHABLE_WORKFLOWS = ["daily-ideas.yml", "reevaluate-idea.yml", "find-competitors.yml"] as const;
+export const DISPATCHABLE_WORKFLOWS = [
+  "daily-ideas.yml",
+  "reevaluate-idea.yml",
+  "find-competitors.yml",
+  "evaluate-idea.yml",
+] as const;
 
 export const triggerWorkflowSchema = z.object({
   workflow: z.enum(DISPATCHABLE_WORKFLOWS),
@@ -242,7 +290,13 @@ export type TrendSnapshotsSubmit = z.infer<typeof trendSnapshotsSubmitSchema>;
 // plan-idea.yml (Faz 3A) ve build-skeleton.yml (Faz 3C) burada ama
 // DISPATCHABLE_WORKFLOWS'ta değil: yalnızca görev uçları (POST /tasks,
 // POST /tasks/:id/build) üzerinden tetiklenebilirler.
-export const IDEA_WORKFLOWS = ["reevaluate-idea.yml", "find-competitors.yml", "plan-idea.yml", "build-skeleton.yml"] as const;
+export const IDEA_WORKFLOWS = [
+  "reevaluate-idea.yml",
+  "find-competitors.yml",
+  "plan-idea.yml",
+  "build-skeleton.yml",
+  "evaluate-idea.yml",
+] as const;
 export type IdeaWorkflow = (typeof IDEA_WORKFLOWS)[number];
 
 export const ACTIVITY_KINDS = [
@@ -258,6 +312,9 @@ export const ACTIVITY_KINDS = [
   "plan_queued",
   "planned",
   "plan_failed",
+  "evaluate_queued",
+  "evaluated",
+  "evaluate_failed",
   "skeleton_queued",
   "skeleton_built",
   "skeleton_failed",
@@ -270,6 +327,7 @@ export const WORKFLOW_ACTIVITY: Record<IdeaWorkflow, [ActivityKind, ActivityKind
   "find-competitors.yml": ["competitors_queued", "competitors_found", "competitors_failed"],
   "plan-idea.yml": ["plan_queued", "planned", "plan_failed"],
   "build-skeleton.yml": ["skeleton_queued", "skeleton_built", "skeleton_failed"],
+  "evaluate-idea.yml": ["evaluate_queued", "evaluated", "evaluate_failed"],
 };
 
 export const workflowRunPatchSchema = z.object({

@@ -1,0 +1,102 @@
+name: Evaluate Idea
+
+# Faz 3 sonrası tur, Grup 5: elle girilen fikri değerlendirir. Fikir serbest
+# açıklamayla girildiyse ve henüz doldurulmadıysa Claude önce alanları
+# doldurur (ad, özet, problem, kitle, özellikler, gelir modeli), sonra puanlar;
+# formla girildiyse yalnızca puanlar. Worker tetikler (POST /ideas/manual ya
+# da detaydaki "Claude ile değerlendir"), elle de çalıştırılabilir.
+on:
+  workflow_dispatch:
+    inputs:
+      idea_id:
+        description: "Değerlendirilecek fikrin id'si"
+        required: true
+      job_id:
+        description: "Çalışma geçmişi kaydının id'si (Worker tetiklerken verir; elle çalıştırırken boş bırakılabilir)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start workflow run (Çalışma geçmişi için)
+        working-directory: scripts
+        run: pnpm exec tsx start-workflow-run.ts "$JOB_ID" "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" evaluate-idea.yml "$IDEA_ID"
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          IDEA_ID: ${{ inputs.idea_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Fetch idea
+        working-directory: scripts
+        run: pnpm exec tsx fetch-idea.ts "$IDEA_ID" output/idea.json
+        env:
+          IDEA_ID: ${{ inputs.idea_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      # Alan doldururken ad çakışmasın diye mevcut fikir adları (son ~10 yıl = hepsi).
+      - name: Fetch existing idea names
+        working-directory: scripts
+        run: pnpm exec tsx fetch-recent-names.ts output/recent-names.json 3650
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Evaluate with Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: "Read prompts/evaluate-idea.md and follow its instructions exactly for the idea in scripts/output/idea.json. Do not ask for confirmation or clarification — complete the task end to end and write the output file."
+          claude_args: "--max-turns 15 --permission-mode acceptEdits"
+
+      - name: Submit evaluation
+        working-directory: scripts
+        run: pnpm exec tsx submit-evaluation.ts "$IDEA_ID" output/evaluation.json
+        env:
+          IDEA_ID: ${{ inputs.idea_id }}
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Finish workflow run (başarılı)
+        if: always() && success()
+        working-directory: scripts
+        run: pnpm exec tsx finish-workflow-run.ts "$WORKFLOW_RUN_ID" success
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Finish workflow run (başarısız)
+        if: always() && (failure() || cancelled())
+        working-directory: scripts
+        run: pnpm exec tsx finish-workflow-run.ts "$WORKFLOW_RUN_ID" failed output/failure-reason.txt
+        env:
+          WORKFLOW_API_SHARED_SECRET: ${{ secrets.WORKFLOW_API_SHARED_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}

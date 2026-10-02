@@ -35,6 +35,7 @@ App Idea Factory is a personal, fully automated idea pipeline that runs on free 
 |---|---|
 | **Dashboard** | Live counters, category distribution, daily average score trend, latest jobs and the latest trend run |
 | **Ideas** | One sortable, filterable table (search, category, status, score minimums, date range), 20 per page, compare up to 4 |
+| **Add idea** | Enter an idea the daily run did not find: describe it freely and let Claude fill in the fields and score it, or fill in the form yourself and have Claude score it later |
 | **Idea detail** | Full idea, score breakdown with Claude's reasoning, your 0–10 rating and note, competitors, re-evaluation, Markdown export |
 | **Develop** | Task form for an idea: platform, backend, auth, MVP features, design, notes |
 | **Developed** | Ideas in the development flow: awaiting your review of the planning docs, skeleton in progress or built, and ideas sent back from testing (rework). The detail page shows the docs (editable until you start), repo/issue links, retry, and a repo sync that pulls recent commits and changed Markdown files |
@@ -55,7 +56,7 @@ flowchart TD
 
     UI["React SPA<br/>web Worker (static assets)"] -->|"/api/* via service binding"| API["API Worker<br/>Express on Workers"]
     API <--> DB[("Cloudflare D1")]
-    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton"]
+    API -->|"workflow_dispatch"| JOBS["GitHub Actions<br/>reevaluate-idea · find-competitors<br/>plan-idea · build-skeleton · evaluate-idea"]
     JOBS -->|"results + run status"| API
 
     ACCESS{{"Cloudflare Access<br/>(owner email only)"}} -.protects.- UI

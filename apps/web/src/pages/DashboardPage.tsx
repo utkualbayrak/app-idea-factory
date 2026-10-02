@@ -82,7 +82,9 @@ export function DashboardPage() {
       fresh: count((i) => i.status === "new"),
       onHold: count((i) => i.status === "on_hold"),
       unrated: count((i) => (i.status === "new" || i.status === "on_hold") && i.user_rating == null),
-      highScored: count((i) => (combinedScore(i.scores.overall, i.user_rating) ?? i.scores.overall) >= 8),
+      highScored: count(
+        (i) => i.scores != null && (combinedScore(i.scores.overall, i.user_rating) ?? i.scores.overall) >= 8,
+      ),
       inDevelopment: count((i) => i.status === "awaiting_development" || i.status === "in_development"),
       rework: count((i) => i.status === "rework"),
       inTest: count((i) => TEST_STATUSES.includes(i.status)),
@@ -108,6 +110,7 @@ export function DashboardPage() {
   const trendPoints = useMemo<TrendPoint[]>(() => {
     const map = new Map<string, { sum: number; count: number }>();
     for (const idea of rangeIdeas) {
+      if (!idea.scores) continue;
       const entry = map.get(idea.batch_date) ?? { sum: 0, count: 0 };
       entry.sum += idea.scores.overall;
       entry.count += 1;

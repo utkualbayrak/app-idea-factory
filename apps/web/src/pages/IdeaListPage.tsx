@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
 import { isInIdeaPool } from "@/lib/idea-colors";
@@ -125,11 +126,11 @@ export function IdeaListPage() {
     if (filters.status !== "all") result = result.filter((idea) => idea.status === filters.status);
     if (filters.minRating !== "0") result = result.filter((idea) => (idea.user_rating ?? 0) >= Number(filters.minRating));
     if (filters.onlyUnrated) result = result.filter((idea) => idea.user_rating == null);
-    if (filters.minMarket !== "0") result = result.filter((idea) => idea.scores.market >= Number(filters.minMarket));
+    if (filters.minMarket !== "0") result = result.filter((idea) => (idea.scores?.market ?? -1) >= Number(filters.minMarket));
     if (filters.minFeasibility !== "0")
-      result = result.filter((idea) => idea.scores.feasibility_solo_dev >= Number(filters.minFeasibility));
+      result = result.filter((idea) => (idea.scores?.feasibility_solo_dev ?? -1) >= Number(filters.minFeasibility));
     if (filters.minOriginality !== "0")
-      result = result.filter((idea) => idea.scores.originality >= Number(filters.minOriginality));
+      result = result.filter((idea) => (idea.scores?.originality ?? -1) >= Number(filters.minOriginality));
     if (filters.dateFrom) result = result.filter((idea) => idea.batch_date >= filters.dateFrom);
     if (filters.dateTo) result = result.filter((idea) => idea.batch_date <= filters.dateTo);
 
@@ -141,6 +142,14 @@ export function IdeaListPage() {
     <PageHeader
       title="Fikirler"
       description="Yeni ve askıdaki fikirler. Geliştirilenler ayrı ekranda."
+      actions={
+        <Button asChild>
+          <Link to="/ideas/new">
+            <Plus className="size-4" />
+            Fikir ekle
+          </Link>
+        </Button>
+      }
     />
   );
 

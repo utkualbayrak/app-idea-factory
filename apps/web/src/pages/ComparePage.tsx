@@ -87,10 +87,14 @@ export function ComparePage() {
               <p className="text-sm text-muted-foreground">{idea.one_liner}</p>
 
               <div className="grid grid-cols-2 gap-2 text-sm">
-                <CompareStat label="Claude puanı" value={`${idea.scores.overall.toFixed(2)}/10`} />
+                <CompareStat label="Claude puanı" value={idea.scores ? `${idea.scores.overall.toFixed(2)}/10` : "—"} />
                 <CompareStat
                   label="Pazar / Uygulanabilirlik / Özgünlük"
-                  value={`${idea.scores.market.toFixed(2)} / ${idea.scores.feasibility_solo_dev.toFixed(2)} / ${idea.scores.originality.toFixed(2)}`}
+                  value={
+                    idea.scores
+                      ? `${idea.scores.market.toFixed(2)} / ${idea.scores.feasibility_solo_dev.toFixed(2)} / ${idea.scores.originality.toFixed(2)}`
+                      : "Henüz puanlanmadı"
+                  }
                 />
               </div>
 

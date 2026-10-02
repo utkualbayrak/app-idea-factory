@@ -217,6 +217,7 @@ export function IdeaDetailPage() {
           <h1 className="text-2xl font-semibold">{idea.name}</h1>
           <Badge className={categoryColorClasses(idea.category)}>{idea.category}</Badge>
           <Badge className={statusColorClasses(idea.status)}>{STATUS_LABELS[idea.status]}</Badge>
+          {idea.origin === "manual" && <Badge variant="outline">Elle girildi</Badge>}
           <ActivityBadge idea={idea} />
         </div>
         <p className="mt-1 text-muted-foreground">{idea.one_liner}</p>
@@ -224,36 +225,72 @@ export function IdeaDetailPage() {
 
       {idea.status === "rework" && <ReworkBanner rounds={testRounds} />}
 
+      {idea.source_text && idea.scores == null && (
+        <Card className="min-w-0">
+          <CardHeader>
+            <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Senin açıklaman</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Claude bu açıklamadan fikrin alanlarını dolduracak ve puanlayacak.
+            </p>
+          </CardHeader>
+          <CardContent className="min-w-0 text-sm break-words whitespace-pre-wrap">{idea.source_text}</CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Claude puan dökümü</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <ScoreBar
-            label="Pazar"
-            help={SCORE_HELP.market}
-            value={idea.scores.market}
-            reason={idea.scores.market_reason}
-          />
-          <ScoreBar
-            label="Uygulanabilirlik (solo)"
-            help={SCORE_HELP.feasibility_solo_dev}
-            value={idea.scores.feasibility_solo_dev}
-            reason={idea.scores.feasibility_solo_dev_reason}
-          />
-          <ScoreBar
-            label="Özgünlük"
-            help={SCORE_HELP.originality}
-            value={idea.scores.originality}
-            reason={idea.scores.originality_reason}
-          />
-          <ScoreBar
-            label="Genel"
-            help={SCORE_HELP.overall}
-            value={idea.scores.overall}
-            reason={idea.scores.overall_reason}
-            highlight
-          />
+          {idea.scores ? (
+            <>
+              <ScoreBar
+                label="Pazar"
+                help={SCORE_HELP.market}
+                value={idea.scores.market}
+                reason={idea.scores.market_reason}
+              />
+              <ScoreBar
+                label="Uygulanabilirlik (solo)"
+                help={SCORE_HELP.feasibility_solo_dev}
+                value={idea.scores.feasibility_solo_dev}
+                reason={idea.scores.feasibility_solo_dev_reason}
+              />
+              <ScoreBar
+                label="Özgünlük"
+                help={SCORE_HELP.originality}
+                value={idea.scores.originality}
+                reason={idea.scores.originality_reason}
+              />
+              <ScoreBar
+                label="Genel"
+                help={SCORE_HELP.overall}
+                value={idea.scores.overall}
+                reason={idea.scores.overall_reason}
+                highlight
+              />
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {idea.source_text
+                ? "Henüz doldurulmadı ve puanlanmadı."
+                : "Henüz puanlanmadı. Claude bu fikri günlük fikirlerle aynı ölçütlerle puanlayabilir."}
+            </p>
+          )}
+          {idea.origin === "manual" && (
+            <>
+              <WorkflowTriggerButton
+                label={idea.scores ? "Claude ile tekrar değerlendir" : idea.source_text ? "Claude ile doldur ve puanla" : "Claude ile değerlendir"}
+                loadingLabel="Tetikleniyor…"
+                successMessage="Tetiklendi — birkaç dakika içinde sayfayı yenileyip kontrol edebilirsin."
+                workflow="evaluate-idea.yml"
+                inputs={id ? { idea_id: id } : undefined}
+                icon={<Sparkles className="size-4" />}
+                onTriggered={handleTriggered}
+              />
+              <LastRunLine run={lastRun("evaluate-idea.yml")} label="Son değerlendirme" />
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -275,27 +312,37 @@ export function IdeaDetailPage() {
 
       <DevReportsCard reports={devReports} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <InfoCard title="Problem">{idea.problem}</InfoCard>
-        <InfoCard title="Hedef kitle">{idea.target_audience}</InfoCard>
-      </div>
+      {(idea.problem || idea.target_audience) && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <InfoCard title="Problem">{idea.problem || "—"}</InfoCard>
+          <InfoCard title="Hedef kitle">{idea.target_audience || "—"}</InfoCard>
+        </div>
+      )}
 
-      <InfoCard title="Temel özellikler">
-        <ul className="list-disc space-y-1 pl-5">
-          {idea.core_features.map((feature) => (
-            <li key={feature}>{feature}</li>
-          ))}
-        </ul>
-      </InfoCard>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <InfoCard title="Gelir modeli">{idea.monetization}</InfoCard>
-        <InfoCard title="İlham kaynakları">
-          <div className="flex flex-wrap gap-2">
-            {idea.inspiration_sources.map((source) => (
-              <SourceIcon key={source} url={source} />
+      {idea.core_features.length > 0 && (
+        <InfoCard title="Temel özellikler">
+          <ul className="list-disc space-y-1 pl-5">
+            {idea.core_features.map((feature) => (
+              <li key={feature}>{feature}</li>
             ))}
-          </div>
+          </ul>
+        </InfoCard>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <InfoCard title="Gelir modeli">{idea.monetization || "—"}</InfoCard>
+        <InfoCard title="İlham kaynakları">
+          {idea.inspiration_sources.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {idea.inspiration_sources.map((source) => (
+                <SourceIcon key={source} url={source} />
+              ))}
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">
+              {idea.origin === "manual" ? "Elle girildi, trend kaynağı yok." : "—"}
+            </span>
+          )}
         </InfoCard>
       </div>
 
@@ -391,13 +438,17 @@ export function IdeaDetailPage() {
             successMessage="Tetiklendi — birkaç dakika içinde sayfayı yenileyip kontrol edebilirsin."
             workflow="reevaluate-idea.yml"
             inputs={id ? { idea_id: id } : undefined}
-            disabled={!idea.user_note}
+            disabled={!idea.user_note || !idea.scores}
             icon={<Sparkles className="size-4" />}
             onTriggered={handleTriggered}
           />
           <LastRunLine run={lastRun("reevaluate-idea.yml")} label="Son değerlendirme işi" />
-          {!idea.user_note && (
-            <p className="text-xs text-muted-foreground">Yeniden değerlendirme için önce bir not ekleyip kaydet.</p>
+          {!idea.scores ? (
+            <p className="text-xs text-muted-foreground">Yeniden değerlendirme, fikir ilk kez puanlandıktan sonra açılır.</p>
+          ) : (
+            !idea.user_note && (
+              <p className="text-xs text-muted-foreground">Yeniden değerlendirme için önce bir not ekleyip kaydet.</p>
+            )
           )}
         </CardContent>
       </Card>
@@ -460,14 +511,20 @@ export function IdeaDetailPage() {
           disabled={idea.status === "deleted"}
           onConfirm={handleDelete}
         />
-        {!task && (idea.status === "new" || idea.status === "on_hold") && (
-          <Button asChild>
-            <Link to={`/ideas/${id}/develop`}>
+        {!task && (idea.status === "new" || idea.status === "on_hold") &&
+          (idea.scores ? (
+            <Button asChild>
+              <Link to={`/ideas/${id}/develop`}>
+                <Hammer className="size-4" />
+                Geliştir
+              </Link>
+            </Button>
+          ) : (
+            <Button disabled title="Önce Claude ile değerlendir">
               <Hammer className="size-4" />
-              Geliştir
-            </Link>
-          </Button>
-        )}
+              Geliştir (önce değerlendir)
+            </Button>
+          ))}
       </div>
     </div>
   );
