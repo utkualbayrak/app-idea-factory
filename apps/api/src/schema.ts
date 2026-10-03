@@ -181,7 +181,8 @@ export const manualIdeaSchema = z.discriminatedUnion("mode", [
     mode: z.literal("describe"),
     // Boşsa Claude ad koyar.
     name: z.string().trim().max(40).optional(),
-    description: z.string().trim().min(30).max(8000),
+    // Yapıştırılan ya da içe aktarılan Markdown belge (PRD vb.) de olabilir.
+    description: z.string().trim().min(30).max(30000),
   }),
 ]);
 

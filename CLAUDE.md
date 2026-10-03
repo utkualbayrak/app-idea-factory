@@ -404,7 +404,12 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
 ## Post-Faz-3 Grup 5 — what's live (manual idea entry)
 
 - **`/ideas/new`** (`NewIdeaPage.tsx`, "Fikir ekle" on the Fikirler list), two paths chosen with a `SegmentedControl`:
-  - **"Anlat, Claude doldursun"** (`mode: "describe"`): optional name + free description (30–8000 chars). `POST /ideas/manual` stores it in `ideas.source_text`, with empty fields, name "Adsız fikir" if none was given, and the description's start as `one_liner`, then immediately queues `evaluate-idea.yml`.
+  - **"Anlat, Claude doldursun"** (`mode: "describe"`): optional name + free description (30–30000 chars). `POST /ideas/manual` stores it in `ideas.source_text`, with empty fields, name "Adsız fikir" if none was given, and `plainSummary()` (first meaningful line with Markdown markers stripped) as the temporary `one_liner`, then immediately queues `evaluate-idea.yml`.
+    - **Markdown import (2026-10-03):** `components/MarkdownImportField.tsx` wraps the description textarea. You can paste, drag-drop or pick a `.md`/`.markdown`/`.txt` file (max 1 MB), which fills the textarea and switches to preview.
+      - Replacing existing text asks for confirmation first.
+      - Text over the limit is never truncated: the counter turns red and save stays disabled.
+      - The first `# Heading` (last segment after a dash) is suggested as the name when it's short and Latin.
+      - The imported document is only used to create the idea, not for planning. The detail page's "Senin açıklaman" card renders it as Markdown, collapsed when long.
   - **"Formu kendim doldurayım"** (`mode: "form"`): all fields entered by hand, no scores. The detail page offers "Claude ile değerlendir".
 - Migration `0012` (plain `ALTER TABLE ADD COLUMN`, no rebuild): `ideas.origin` (`cron`/`manual`, default `cron`) and `ideas.source_text`. **Unscored ideas store the JSON string `'null'` in `scores`** (the column is NOT NULL and changing that would need a rebuild), so `Idea.scores` is `IdeaScores | null` on both sides. Every score consumer in the web app handles null ("—", "Henüz puanlanmadı", skipped in averages, excluded by min-score filters). Planning (`POST /tasks`, "Geliştir") and "Notlarımla yeniden değerlendir" require scores.
 - Name collisions are checked in the API (`nameTaken()`, same normalization as `scripts/validate-ideas.ts`, against all ideas including deleted) on create and when Claude names a described idea.

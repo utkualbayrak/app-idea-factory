@@ -969,6 +969,31 @@ app.get("/ideas/:id/task", async (req, res) => {
   res.json({ task: serializeTask(task), documents, repo });
 });
 
+// Claude doldurana kadar listede görünecek geçici özet. Açıklama içe aktarılmış
+// bir Markdown belge olabilir; başlıkları, kod bloklarını ve işaretleri atlayıp
+// ilk anlamlı satırı alır.
+function plainSummary(text: string): string {
+  let inFence = false;
+  let line = "";
+  for (const raw of text.split("\n")) {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith("```")) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence || trimmed === "" || trimmed.startsWith("#") || /^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) continue;
+    line = trimmed
+      .replace(/^(>\s*)+/, "")
+      .replace(/^([-*+]|\d+\.)\s+(\[[ xX]\]\s+)?/, "")
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/[*_`~]/g, "")
+      .trim();
+    if (line) break;
+  }
+  if (!line) line = text.replace(/[#*_`>]/g, "").replace(/\s+/g, " ").trim();
+  return line.length > 160 ? `${line.slice(0, 157)}…` : line;
+}
+
 // Faz 3 sonrası tur, Grup 5: elle fikir girişi. Formla girilen fikir
 // puansız kaydedilir; açıklamayla girilen fikir için evaluate-idea.yml hemen
 // tetiklenir (alanları doldurup puanlar). İsim çakışması günlük üretimdeki
@@ -1011,7 +1036,7 @@ app.post("/ideas/manual", async (req, res) => {
         }
       : {
           name: input.name || "Adsız fikir",
-          one_liner: input.description.length > 160 ? `${input.description.slice(0, 157)}…` : input.description,
+          one_liner: plainSummary(input.description),
           problem: "",
           target_audience: "",
           core_features: [],

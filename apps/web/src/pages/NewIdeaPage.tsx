@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { createManualIdea, fetchIdeas, type ManualIdeaInput } from "@/lib/api";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
+import { MarkdownImportField } from "@/components/MarkdownImportField";
 import { RowListInput } from "@/components/RowListInput";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,16 @@ import { Textarea } from "@/components/ui/textarea";
 type Mode = "describe" | "form";
 
 const DESCRIPTION_MIN = 30;
+const DESCRIPTION_MAX = 30000;
+
+// İçe aktarılan belgenin ilk başlığından ad önerisi ("# Ürün belgesi — MealMate"
+// → "MealMate"). Yalnızca kısa, Latin harfli bir adsa önerilir.
+function suggestName(text: string): string | null {
+  const heading = text.match(/^#\s+(.+)$/m)?.[1]?.trim();
+  if (!heading) return null;
+  const candidate = heading.split(/\s+[—–-]\s+/).pop()?.replace(/[*_`]/g, "").trim() ?? "";
+  return /^[A-Za-z0-9][A-Za-z0-9 .-]{0,39}$/.test(candidate) ? candidate : null;
+}
 
 // Cron'un bulamadığı, kullanıcının aklına gelen fikirler. İki yol:
 // - Açıklama: serbestçe anlatırsın, Claude sistemin alanlarına dönüştürüp puanlar.
@@ -44,7 +55,8 @@ export function NewIdeaPage() {
       .catch(() => {});
   }, []);
 
-  const describeValid = description.trim().length >= DESCRIPTION_MIN;
+  const describeValid =
+    description.trim().length >= DESCRIPTION_MIN && description.trim().length <= DESCRIPTION_MAX;
   const formValid =
     name.trim() !== "" &&
     oneLiner.trim() !== "" &&
@@ -112,7 +124,8 @@ export function NewIdeaPage() {
             <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Fikrini anlat</CardTitle>
             <p className="text-xs text-muted-foreground">
               Ne çözüyor, kimin için, temel olarak ne yapıyor, nasıl para kazanır, aklındaki özel detaylar (örn. iOS
-              hareketleri, widget)… Ne kadar ayrıntılı yazarsan Claude o kadar sadık kalır. Kaydedince Claude alanları
+              hareketleri, widget)… Başka bir yerde yazdığın bir belgeyi (PRD, not) Markdown dosyası olarak içe
+              aktarabilirsin. Ne kadar ayrıntılı yazarsan Claude o kadar sadık kalır. Kaydedince Claude alanları
               doldurup puanlar (birkaç dakika).
             </p>
           </CardHeader>
@@ -127,22 +140,19 @@ export function NewIdeaPage() {
                 placeholder="Boş bırakırsan Claude koyar"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="describe-text">Açıklama</Label>
-              <Textarea
-                id="describe-text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={12}
-                maxLength={8000}
-                placeholder="Kafandaki uygulamayı anlat…"
-              />
-              <p className="text-xs text-muted-foreground">
-                {description.trim().length < DESCRIPTION_MIN
-                  ? `En az ${DESCRIPTION_MIN} karakter.`
-                  : `${description.trim().length} / 8000 karakter`}
-              </p>
-            </div>
+            <MarkdownImportField
+              id="describe-text"
+              label="Açıklama"
+              value={description}
+              onChange={setDescription}
+              minLength={DESCRIPTION_MIN}
+              maxLength={DESCRIPTION_MAX}
+              placeholder="Kafandaki uygulamayı anlat ya da başka bir yerde yazdığın belgeyi (PRD vb.) yapıştır…"
+              onImported={(text) => {
+                const suggested = suggestName(text);
+                if (suggested && !name.trim()) setName(suggested);
+              }}
+            />
           </CardContent>
         </Card>
       ) : (

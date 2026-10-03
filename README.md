@@ -36,7 +36,7 @@ Ideas is a personal, fully automated idea pipeline that runs on free tiers only:
 |---|---|
 | **Dashboard** | Live counters, category distribution, daily average score trend, latest jobs and the latest trend run |
 | **Ideas** | One sortable, filterable table (search, category, status, score minimums, date range), 20 per page, compare up to 4 |
-| **Add idea** | Enter an idea the daily run did not find: describe it freely and let Claude fill in the fields and score it, or fill in the form yourself and have Claude score it later |
+| **Add idea** | Enter an idea the daily run did not find: describe it freely (or paste / drag in a Markdown document such as a PRD you wrote elsewhere) and let Claude fill in the fields and score it, or fill in the form yourself and have Claude score it later |
 | **Idea detail** | Full idea, score breakdown with Claude's reasoning, your 0–10 rating and note, competitors, re-evaluation, Markdown export |
 | **Develop** | Task form for an idea: platform and targets (iOS / Android / web), backend, auth, MVP features, design (theme, visual style, gamification level, density, reference apps), notes |
 | **Kanban** | Development, test and ready-to-ship ideas as color-coded columns. Dragging a card to another column opens that step's form (or a short confirmation); the status only changes once it is submitted |

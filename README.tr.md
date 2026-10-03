@@ -36,7 +36,7 @@ Ideas, tamamen ücretsiz planlar üzerinde çalışan kişisel ve otomatik bir f
 |---|---|
 | **Gösterge paneli** | Anlık sayaçlar, kategori dağılımı, günlük ortalama puan trendi, son işler ve son trend çalışması |
 | **Fikirler** | Tek, sıralanabilir ve filtrelenebilir tablo (arama, kategori, durum, minimum puanlar, tarih aralığı), sayfa başına 20, 4'e kadar karşılaştırma |
-| **Fikir ekle** | Günlük taramanın bulamadığı bir fikri gir: serbestçe anlat, Claude alanları doldurup puanlasın; ya da formu kendin doldur, Claude sonra puanlasın |
+| **Fikir ekle** | Günlük taramanın bulamadığı bir fikri gir: serbestçe anlat (ya da başka bir yerde yazdığın PRD gibi bir Markdown belgeyi yapıştır / sürükle bırak), Claude alanları doldurup puanlasın; ya da formu kendin doldur, Claude sonra puanlasın |
 | **Fikir detayı** | Fikrin tamamı, Claude'un gerekçeleriyle puan dökümü, 0–10 puanın ve notun, rakipler, yeniden değerlendirme, Markdown dışa aktarma |
 | **Geliştir** | Fikir için görev formu: platform ve hedefler (iOS / Android / web), backend, auth, MVP özellikleri, tasarım (tema, görsel dil, oyunlaştırma düzeyi, yoğunluk, referans uygulamalar), notlar |
 | **Kanban** | Geliştirme, test ve dağıtım aşamasındaki fikirler renkli sütunlarda. Kartı başka sütuna sürükleyince o adımın formu (ya da kısa bir onay) açılır; durum ancak gönderilince değişir |

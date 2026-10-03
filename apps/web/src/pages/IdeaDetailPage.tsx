@@ -49,6 +49,7 @@ import { formatDate, formatDateTime, formatPurgeDate } from "@/lib/format-date";
 import { SCORE_HELP } from "@/lib/score-help";
 import { canRenameIdea, categoryColorClasses, ideaSection, isInIdeaPool } from "@/lib/idea-colors";
 import { exportFileName, ideaToMarkdown } from "@/lib/export-markdown";
+import { Markdown } from "@/components/Markdown";
 import { ExportMenu } from "@/components/ExportMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -289,17 +290,7 @@ export function IdeaDetailPage() {
 
       {idea.status === "archived" && <ArchivedBanner idea={idea} onRestored={handleTriggered} />}
 
-      {idea.source_text && idea.scores == null && (
-        <Card className="min-w-0">
-          <CardHeader>
-            <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Senin açıklaman</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Claude bu açıklamadan fikrin alanlarını dolduracak ve puanlayacak.
-            </p>
-          </CardHeader>
-          <CardContent className="min-w-0 text-sm break-words whitespace-pre-wrap">{idea.source_text}</CardContent>
-        </Card>
-      )}
+      {idea.source_text && idea.scores == null && <SourceTextCard text={idea.source_text} />}
 
       <Card>
         <CardHeader>
@@ -808,5 +799,39 @@ function ArchivedBanner({ idea, onRestored }: { idea: Idea; onRestored: () => vo
         onConfirm={handleRestore}
       />
     </div>
+  );
+}
+
+// Elle eklenen fikrin açıklaması (yapıştırılmış ya da içe aktarılmış bir
+// Markdown belge olabilir). Uzunsa daraltılmış başlar.
+const SOURCE_TEXT_COLLAPSE_AT = 1500;
+
+function SourceTextCard({ text }: { text: string }) {
+  const long = text.length > SOURCE_TEXT_COLLAPSE_AT;
+  const [expanded, setExpanded] = useState(false);
+  const collapsed = long && !expanded;
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <CardTitle className="text-sm tracking-wide text-muted-foreground uppercase">Senin açıklaman</CardTitle>
+        <p className="text-xs text-muted-foreground">Claude bu açıklamadan fikrin alanlarını dolduracak ve puanlayacak.</p>
+      </CardHeader>
+      <CardContent className="flex min-w-0 flex-col gap-2">
+        <div
+          className={
+            collapsed
+              ? "relative max-h-64 overflow-hidden after:absolute after:inset-x-0 after:bottom-0 after:h-16 after:bg-gradient-to-t after:from-card after:to-transparent"
+              : undefined
+          }
+        >
+          <Markdown>{text}</Markdown>
+        </div>
+        {long && (
+          <Button variant="ghost" size="sm" className="w-fit" onClick={() => setExpanded((v) => !v)}>
+            {expanded ? "Daralt" : "Tamamını göster"}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
