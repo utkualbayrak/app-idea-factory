@@ -38,9 +38,22 @@ export type IdeaInput = z.infer<typeof ideaInputSchema>;
 
 // Grup 4: notlarla yeniden değerlendirme (apps/api/src/schema.ts'deki
 // reevaluationSchema ile aynı olmalı).
+// fields: not bir düzeltme veya pivot önerip metin alanlarından birini
+// değiştiriyorsa, yalnızca değişen alanlar (gerisi olduğu gibi kalır).
+export const reevaluationFieldsSchema = z
+  .object({
+    one_liner: z.string().min(1),
+    problem: z.string().min(1),
+    target_audience: z.string().min(1),
+    core_features: z.array(z.string().min(1)).min(1).max(10),
+    monetization: z.string().min(1),
+  })
+  .partial();
+
 export const reevaluationSchema = z.object({
   scores: ideaScoresSchema,
   tags: z.array(z.string().min(1)).min(1).optional(),
+  fields: reevaluationFieldsSchema.optional(),
   change_summary: z.string().min(1),
 });
 

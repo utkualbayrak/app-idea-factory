@@ -1662,6 +1662,14 @@ app.patch("/admin/cron-runs/:id", requireWorkflowSecret, async (req, res) => {
   res.json({ ok: true });
 });
 
+const REEVALUATION_FIELD_LABELS = {
+  one_liner: "tek cümle",
+  problem: "problem",
+  target_audience: "hedef kitle",
+  core_features: "temel özellikler",
+  monetization: "gelir modeli",
+} as const;
+
 // Grup 4: notlarla yeniden değerlendirme sonucunu yazar, last_reevaluated_at'i damgalar.
 app.patch("/admin/ideas/:id/reevaluate", requireWorkflowSecret, async (req, res) => {
   const parsed = reevaluationSchema.safeParse(req.body);
@@ -1679,20 +1687,39 @@ app.patch("/admin/ideas/:id/reevaluate", requireWorkflowSecret, async (req, res)
   const now = new Date().toISOString();
   const tags = parsed.data.tags ? JSON.stringify(parsed.data.tags) : existing.tags;
 
-  const summary = parsed.data.change_summary;
+  // Not bir metin alanını değiştirdiyse (ör. gelir modeli pivotu) yalnızca
+  // gönderilen alanlar yazılır; özet hangi alanların değiştiğini de söyler.
+  const fields = parsed.data.fields ?? {};
+  const textFields: Partial<Pick<IdeaRow, "one_liner" | "problem" | "target_audience" | "core_features" | "monetization">> =
+    {};
+  for (const key of ["one_liner", "problem", "target_audience", "monetization"] as const) {
+    const value = fields[key]?.trim();
+    if (value && value !== existing[key]) textFields[key] = value;
+  }
+  if (fields.core_features) {
+    const features = JSON.stringify(fields.core_features.map((f) => f.trim()));
+    if (features !== existing.core_features) textFields.core_features = features;
+  }
+  const changed = Object.keys(textFields) as (keyof typeof textFields)[];
+  const summary = changed.length
+    ? `${parsed.data.change_summary} Güncellenen alanlar: ${changed.map((k) => REEVALUATION_FIELD_LABELS[k]).join(", ")}.`
+    : parsed.data.change_summary;
 
+  const sets = changed.map((k, i) => `${k} = ?${i + 6}`);
   await db()
     .prepare(
       `UPDATE ideas SET scores = ?1, tags = ?2, last_reevaluated_at = ?3, last_reevaluation_summary = ?4,
          last_activity_at = ?3, last_activity_kind = 'reevaluated', last_activity_by = 'system'
+         ${sets.map((x) => `, ${x}`).join("")}
        WHERE id = ?5`,
     )
-    .bind(JSON.stringify(parsed.data.scores), tags, now, summary, req.params.id)
+    .bind(JSON.stringify(parsed.data.scores), tags, now, summary, req.params.id, ...changed.map((k) => textFields[k]))
     .run();
 
   res.json({
     idea: serializeIdea({
       ...existing,
+      ...textFields,
       scores: JSON.stringify(parsed.data.scores),
       tags,
       last_reevaluated_at: now,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, GitCompare, Hammer, Search, Sparkles } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, GitCompare, Hammer, Search, Sparkles } from "lucide-react";
 import {
   fetchIdea,
   fetchIdeas,
@@ -88,6 +88,7 @@ export function IdeaDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [noteExpanded, setNoteExpanded] = useState(false);
   const [otherIdeas, setOtherIdeas] = useState<Idea[] | null>(null);
   const [competitors, setCompetitors] = useState<Competitor[] | null>(null);
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
@@ -514,7 +515,21 @@ export function IdeaDetailPage() {
           <Label htmlFor="note" className="sr-only">
             Not
           </Label>
-          <Textarea id="note" value={note} onChange={(e) => setNote(e.target.value)} rows={4} placeholder="Kısa bir not ekle…" />
+          {/* Uzun notlar sayfayı uzatmasın: kapalıyken sabit yükseklik, içeride kaydırma. */}
+          <Textarea
+            id="note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={4}
+            placeholder="Kısa bir not ekle…"
+            className={noteExpanded ? undefined : "max-h-48 overflow-y-auto"}
+          />
+          {isLongNote(note) && (
+            <Button variant="ghost" size="sm" className="-mt-2 w-fit" onClick={() => setNoteExpanded((v) => !v)}>
+              {noteExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+              {noteExpanded ? "Notu daralt" : "Notun tamamını aç"}
+            </Button>
+          )}
           <Button onClick={handleSaveNote} disabled={saving} className="w-fit">
             {saving ? "Kaydediliyor…" : "Notu kaydet"}
           </Button>
@@ -856,4 +871,9 @@ function SourceTextCard({ text }: { text: string }) {
       </CardContent>
     </Card>
   );
+}
+
+// max-h-48 (~8 satır) kutusuna sığmayacak kadar uzun mu (kabaca).
+function isLongNote(note: string): boolean {
+  return note.split("\n").length > 8 || note.length > 600;
 }

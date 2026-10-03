@@ -313,9 +313,22 @@ export type TriggerWorkflow = z.infer<typeof triggerWorkflowSchema>;
 // gibi tüm fikri değil sadece puan+gerekçe+tag alanlarını günceller.
 // change_summary: prompts/reevaluate-idea.md'nin zorunlu kıldığı, notun nasıl
 // yorumlandığını ve hangi puanların neden değiştiğini özetleyen alan.
+// fields: not bir düzeltme veya pivot önerip metin alanlarından birini
+// değiştiriyorsa, yalnızca değişen alanlar (gerisi olduğu gibi kalır).
+export const reevaluationFieldsSchema = z
+  .object({
+    one_liner: z.string().min(1),
+    problem: z.string().min(1),
+    target_audience: z.string().min(1),
+    core_features: z.array(z.string().min(1)).min(1).max(10),
+    monetization: z.string().min(1),
+  })
+  .partial();
+
 export const reevaluationSchema = z.object({
   scores: ideaScoresSchema,
   tags: z.array(z.string().min(1)).min(1).optional(),
+  fields: reevaluationFieldsSchema.optional(),
   change_summary: z.string().min(1),
 });
 

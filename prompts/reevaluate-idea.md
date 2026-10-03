@@ -1,6 +1,6 @@
 # Fikri kullanıcı notuyla yeniden değerlendir
 
-`scripts/output/idea.json` dosyasındaki fikri ve `user_note` alanındaki kullanıcı notunu oku. Notu dikkate alarak `market`, `feasibility_solo_dev`, `originality` ve `overall` puanlarını ve gerekçelerini yeniden değerlendir.
+`scripts/output/idea.json` dosyasındaki fikri ve `user_note` alanındaki kullanıcı notunu oku. Notu dikkate alarak `market`, `feasibility_solo_dev`, `originality` ve `overall` puanlarını ve gerekçelerini yeniden değerlendir. Not fikrin bir metin alanını değiştiriyorsa (ör. yeni bir gelir modeli), o alanı da güncelle.
 
 ## 1. Girdiyi oku
 
@@ -17,7 +17,7 @@ Kullanıcının notu önemli bir girdidir ve dikkatle değerlendirilmelidir. Anc
 
 - **Yeni bilgi veya düzeltme**: Bir varsayımı düzeltiyor ya da bilmediğin bir bilgi veriyor (örn. "bu API artık ücretli", "X uygulaması tam olarak bunu yapıyor"). Makulse buna güçlü ağırlık ver.
 - **Görüş veya eleştiri**: Kullanıcının kişisel değerlendirmesi (örn. "bence kimse bunu kullanmaz"). Gerekçesi ikna ediciyse puanı değiştir; değilse değiştirmek zorunda değilsin.
-- **Yeni açı veya pivot önerisi**: Fikrin yönünü değiştiren bir öneri (örn. "bunu B2B yapsak?"). Bu durumda **notun önerdiği değişiklikle birlikte fikri** puanla ve bunu `change_summary`'de açıkça belirt.
+- **Yeni açı veya pivot önerisi**: Fikrin yönünü değiştiren bir öneri (örn. "bunu B2B yapsak?"). Bu durumda **notun önerdiği değişiklikle birlikte fikri** puanla, değişen metin alanlarını `fields` ile güncelle (bkz. 6. bölüm) ve bunu `change_summary`'de açıkça belirt.
 
 Kurallar:
 
@@ -71,7 +71,17 @@ Diğer üç puanın ortalaması olmak zorunda değil. Değerlendirirken `feasibi
 - Not, fikrin odağını değiştirmediyse mevcut `tags` alanını aynen kopyala.
 - Not bir pivot öneriyorsa ve bu öneriyi puanlamaya dahil ettiysen, etiketleri yeni odağa göre güncelle.
 
-## 6. Çıktı şeması
+## 6. Metin alanları
+
+Puanladığın fikir ile kayıttaki metin aynı olmalı. Not fikrin bir metin alanını değiştiriyorsa ve bu değişikliği puanlamaya dahil ettiysen, o alanın yeni halini `fields` içine yaz. Örnek: not "gelir modelini reklam + reklam kaldırma satın alımı yapalım" diyorsa, `fields.monetization` yeni gelir modelini anlatmalı. Puanlar yeni modele göre verilip metin eski kalırsa kayıt kendi içinde çelişir.
+
+- Güncellenebilen alanlar: `one_liner`, `problem`, `target_audience`, `core_features`, `monetization`. `name`, `category` ve diğer alanlar değiştirilmez.
+- Yalnızca notun gerçekten değiştirdiği alanları yaz. Değişmeyen alanı `fields`'a koyma; hiçbiri değişmiyorsa `fields` alanını hiç yazma.
+- Yazdığın alan, eski metnin yerine geçen **tam ve bağımsız** bir metindir: "notta belirtildiği gibi" gibi nota atıf yapma, eski metne ekleme notu düşme. Eski metindeki hâlâ geçerli kısımları koru.
+- Dil kuralları aynıdır: Türkçe, kısa ve somut. `core_features` 1–10 maddelik bir dizi; değiştirirsen listenin tamamını yaz.
+- Notu ikna edici bulmadıysan ve fikri eski haliyle puanladıysan alanı değiştirme; bunu gerekçede ve `change_summary`'de söyle.
+
+## 7. Çıktı şeması
 
 ```json
 {
@@ -86,6 +96,9 @@ Diğer üç puanın ortalaması olmak zorunda değil. Değerlendirirken `feasibi
     "overall_reason": "string (Türkçe)"
   },
   "tags": ["string"],
+  "fields": {
+    "monetization": "string (Türkçe, yalnızca değişen alanlar)"
+  },
   "change_summary": "string (Türkçe)"
 }
 ```
@@ -94,9 +107,10 @@ Alan kuralları:
 
 - `scores`: Dört puan ve dört gerekçenin hepsi zorunlu.
 - `tags`: 2–4 elemanlı dizi.
-- `change_summary`: Türkçe, 1–2 cümle. Notu nasıl yorumladığını (düzeltme, görüş veya pivot) ve hangi puanların neden değiştiğini özetle. Not bir pivot öneriyorsa ve fikri bu pivotla birlikte puanladıysan, bunu burada açıkça söyle.
+- `fields`: İsteğe bağlı; yalnızca değişen metin alanları (6. bölüm).
+- `change_summary`: Türkçe, 1–2 cümle. Notu nasıl yorumladığını (düzeltme, görüş veya pivot) ve hangi puanların neden değiştiğini özetle. Metin alanı güncellediysen hangisini güncellediğini de söyle. Not bir pivot öneriyorsa ve fikri bu pivotla birlikte puanladıysan, bunu burada açıkça söyle.
 
-## 7. Çıktıyı yaz
+## 8. Çıktıyı yaz
 
 - JSON nesnesini **`scripts/output/reevaluation.json`** dosyasına UTF-8 olarak yaz.
 - Dosyada başka hiçbir şey olmasın: açıklama, markdown, kod bloğu işareti veya yorum yok; yalnızca geçerli JSON.
@@ -106,4 +120,5 @@ Alan kuralları:
   - Hiçbir gerekçe eski gerekçenin birebir kopyası değil mi?
   - Değişen her puanın gerekçesi notla ilişkilendirilmiş mi?
   - `tags` 2–4 eleman mı?
+  - Puanlamada esas aldığın gelir modeli, özellikler ve hedef kitle kayıttakinden farklıysa `fields` ile güncellendi mi?
 - Bir sorun varsa düzelt ve dosyayı yeniden yaz.
