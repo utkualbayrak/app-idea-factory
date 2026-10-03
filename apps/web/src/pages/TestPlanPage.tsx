@@ -16,6 +16,7 @@ import {
   SUCCESS_CRITERIA_SUGGESTIONS,
   TEST_CHANNEL_LABELS,
   TEST_PLATFORM_LABELS,
+  TEST_PLATFORMS,
 } from "@/lib/test-labels";
 import { addDaysIso, formatBatchDate, todayIso } from "@/lib/format-date";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -79,7 +80,7 @@ export function TestPlanForm({ ideaId, onDone, onCancel, inDialog = false }: Tes
 
   function togglePlatform(platform: TestPlatform, checked: boolean) {
     setPlatforms((prev) =>
-      checked ? (["ios", "android"] as const).filter((p) => p === platform || prev.includes(p)) : prev.filter((p) => p !== platform),
+      checked ? TEST_PLATFORMS.filter((p) => p === platform || prev.includes(p)) : prev.filter((p) => p !== platform),
     );
   }
 
@@ -189,8 +190,8 @@ export function TestPlanForm({ ideaId, onDone, onCancel, inDialog = false }: Tes
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
             <Label>Platformlar</Label>
-            <div className="flex gap-4">
-              {(["ios", "android"] as const).map((platform) => (
+            <div className="flex flex-wrap gap-4">
+              {TEST_PLATFORMS.map((platform) => (
                 <div key={platform} className="flex items-center gap-2">
                   <Checkbox
                     id={`platform-${platform}`}

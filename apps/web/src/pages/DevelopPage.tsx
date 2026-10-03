@@ -9,6 +9,8 @@ import {
   type Task,
   type TaskAuth,
   type TaskBackend,
+  type TaskDensity,
+  type TaskGamification,
   type TaskParams,
   type TaskPlatform,
   type TaskStyle,
@@ -18,9 +20,12 @@ import {
 import {
   AUTH_LABELS,
   BACKEND_LABELS,
+  DENSITY_LABELS,
   FIXED_TARGETS,
+  GAMIFICATION_LABELS,
   PLATFORM_LABELS,
   REPLANNABLE_STATUSES,
+  STYLE_DESCRIPTIONS,
   STYLE_LABELS,
   TARGET_LABELS,
   TASK_STATUS_LABELS,
@@ -36,6 +41,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 
 const MAX_FEATURES = 10;
+// Expo/Flutter'da seçilebilen hedefler, gösterim sırasıyla.
+const CROSS_PLATFORM_TARGETS: TaskTarget[] = ["ios", "android", "web"];
 const SUGGESTED_MIN = 3;
 const SUGGESTED_MAX = 5;
 
@@ -44,7 +51,7 @@ const DEFAULT_PARAMS: Omit<TaskParams, "mvp_features"> = {
   targets: ["ios", "android"],
   backend: "none",
   auth: "none",
-  design: { theme: "both", style: "minimal" },
+  design: { theme: "both", style: "minimal", gamification: "none", density: "balanced" },
   notes: "",
 };
 
@@ -67,6 +74,9 @@ export function DevelopPage() {
   const [auth, setAuth] = useState<TaskAuth>(DEFAULT_PARAMS.auth);
   const [theme, setTheme] = useState<TaskTheme>(DEFAULT_PARAMS.design.theme);
   const [style, setStyle] = useState<TaskStyle>(DEFAULT_PARAMS.design.style);
+  const [gamification, setGamification] = useState<TaskGamification>(DEFAULT_PARAMS.design.gamification);
+  const [density, setDensity] = useState<TaskDensity>(DEFAULT_PARAMS.design.density);
+  const [references, setReferences] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [custom, setCustom] = useState<string[]>([]);
   const [customDraft, setCustomDraft] = useState("");
@@ -90,6 +100,9 @@ export function DevelopPage() {
           setAuth(params.auth);
           setTheme(params.design.theme);
           setStyle(params.design.style);
+          setGamification(params.design.gamification);
+          setDensity(params.design.density);
+          setReferences(params.design.references ?? "");
           setNotes(params.notes ?? "");
           setSelected(params.mvp_features.filter((f) => loadedIdea.core_features.includes(f)));
           setCustom(params.mvp_features.filter((f) => !loadedIdea.core_features.includes(f)));
@@ -107,7 +120,7 @@ export function DevelopPage() {
 
   function toggleTarget(target: TaskTarget, checked: boolean) {
     setTargets((prev) =>
-      checked ? (["ios", "android"] as const).filter((t) => t === target || prev.includes(t)) : prev.filter((t) => t !== target),
+      checked ? CROSS_PLATFORM_TARGETS.filter((t) => t === target || prev.includes(t)) : prev.filter((t) => t !== target),
     );
   }
 
@@ -139,7 +152,7 @@ export function DevelopPage() {
         backend,
         auth,
         mvp_features: features,
-        design: { theme, style },
+        design: { theme, style, gamification, density, references: references.trim() || undefined },
         notes: notes.trim() || undefined,
       });
       navigate(`/ideas/${id}`);
@@ -212,12 +225,12 @@ export function DevelopPage() {
             <Label>Hedef cihazlar</Label>
             {fixedTargets ? (
               <p className="text-sm text-muted-foreground">
-                Yalnızca {fixedTargets.map((t) => TARGET_LABELS[t]).join(", ")} — native platform seçimi hedefi belirliyor.
+                Yalnızca {fixedTargets.map((t) => TARGET_LABELS[t]).join(", ")} — platform seçimi hedefi belirliyor.
               </p>
             ) : (
               <>
-                <div className="flex gap-4">
-                  {(["ios", "android"] as const).map((target) => (
+                <div className="flex flex-wrap gap-4">
+                  {CROSS_PLATFORM_TARGETS.map((target) => (
                     <div key={target} className="flex items-center gap-2">
                       <Checkbox
                         id={`target-${target}`}
@@ -233,7 +246,7 @@ export function DevelopPage() {
                 <p className={targets.length === 0 ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
                   {targets.length === 0
                     ? "En az bir hedef seç."
-                    : "Çapraz platform araçla yalnızca seçtiğin cihaz(lar) için plan ve iskelet hazırlanır."}
+                    : "Çapraz platform araçla yalnızca seçtiğin hedef(ler) için plan ve iskelet hazırlanır. Web işaretlenirse aynı kod tarayıcıda da çalışır."}
                 </p>
               </>
             )}
@@ -331,7 +344,37 @@ export function DevelopPage() {
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <LabeledSelect label="Tema" value={theme} onChange={setTheme} options={THEME_LABELS} />
-          <LabeledSelect label="Stil" value={style} onChange={setStyle} options={STYLE_LABELS} />
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <LabeledSelect label="Görsel dil" value={style} onChange={setStyle} options={STYLE_LABELS} />
+            <p className="text-xs text-muted-foreground">{STYLE_DESCRIPTIONS[style]}</p>
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <LabeledSelect
+              label="Oyunlaştırma"
+              value={gamification}
+              onChange={setGamification}
+              options={GAMIFICATION_LABELS}
+            />
+            <p className="text-xs text-muted-foreground">
+              Bağlayıcıdır: "Yok" seçilirse fikirde seri/rozet/puan olsa bile MVP'ye girmez.
+            </p>
+          </div>
+          <LabeledSelect label="Bilgi yoğunluğu" value={density} onChange={setDensity} options={DENSITY_LABELS} />
+          <div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
+            <Label htmlFor="task-references">Referans uygulamalar (isteğe bağlı)</Label>
+            <Input
+              id="task-references"
+              value={references}
+              onChange={(e) => setReferences(e.target.value)}
+              maxLength={300}
+              placeholder="Örn. Things 3'ün sadeliği, Linear'ın yoğunluğu"
+            />
+          </div>
+          {style === "playful" && gamification === "none" && (
+            <p className="text-xs text-amber-700 sm:col-span-2 dark:text-amber-300">
+              Oyunsu görsel dil yalnızca görünümü etkiler; oyunlaştırma "Yok" kaldıkça seri, rozet veya puan eklenmez.
+            </p>
+          )}
         </CardContent>
       </Card>
 

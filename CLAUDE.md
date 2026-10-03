@@ -549,6 +549,22 @@ Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wi
 - `lib/export-markdown.ts` `ideaToMarkdown({ idea, competitors, task, documents, repo, devReports, testRounds })` exports whatever the detail page has loaded: idea + scores + note, then competitors, task params/repo/issue, the 4 plan docs (repo copy when synced and different, headings demoted under one `# Name`), dev reports and test rounds. `documentsToMarkdown()` is docs only.
 - `components/ExportMenu.tsx` is the shared "Dışa aktar" dropdown (copy to clipboard / download `.md`, content built on select so it's current). Used by the detail page's main button, `DevelopmentCard`'s "Tüm belgeleri dışa aktar", and each doc tab (exports the version on screen: draft while editing, repo or approved per the toggle) including extra repo `docs/*.md` tabs. File names via `exportFileName()` (`mealmate-prd.md`).
 
+## Web target + design language (2026-10-03)
+
+- **Nothing existing was removed; options were only added.** `TASK_PLATFORMS` gained `web` (React + Vite + TS, PWA). `TASK_TARGETS` gained `web`.
+  - `resolveTargets()` rules: `web` → `["web"]`; Expo/Flutter → the chosen targets, falling back to `["ios","android"]` (so old tasks are unchanged).
+- **Design fields.** `design.style` widened to `native/minimal/soft/colorful/editorial/professional/playful`; `minimal`/`colorful` keep their old values.
+  - New `design.gamification` (`none/light/full`), `design.density` (`airy/balanced/compact`) and optional `design.references`.
+  - Missing values are filled by `resolveDesign()` (`apps/api/src/schema.ts`), both on write and in `parseTaskParams` (`db.ts`) on read, so old tasks return the full shape. No migration was needed: params are stored as JSON.
+  - `scripts/lib/task-schema.ts` mirrors these as optional fields.
+- **Why gamification is a field, not a note:** `build-skeleton.md` never sees `notes`, it only reads the approved docs. `plan-idea.md` therefore treats the design fields as binding and writes a "Tasarım dili" item at the top of `screens.md`'s design notes; `build-skeleton.md` applies it.
+  - With `none`, no streaks, badges, points or leaderboards appear in the MVP, even if the idea's features list them.
+- **Web (UI):** `DevelopPage` shows a "Web" target for Expo/Flutter, plus the design selects with descriptions (`STYLE_DESCRIPTIONS`). `designSummary()` in `lib/task-labels.ts` is the one-line summary used by `DevelopmentCard` and the export.
+- **Test process:** `TEST_PLATFORMS`/`FINDING_PLATFORMS` gained `web`; the finding value `both` now means "all" (label "Tümü"). New channel `web_url`. `FindingsInput` takes `platforms` and only offers the tested ones plus "Tümü".
+- **`build-skeleton.yml`:**
+  - `web` gets the same Node Bash allowlist as Expo (90 turns).
+  - The verify gate runs for both Expo and web, and web additionally needs `npm run build`.
+
 ## What this project is
 
 A personal automation platform that:
@@ -647,7 +663,7 @@ Scores are 0.00-10.00, multiples of 0.25 only.
 
 ### Task form fields
 
-Platform (iOS/Swift, Android/Kotlin, cross-platform React Native/Expo or Flutter), backend need (none/Supabase/Firebase/custom API), auth (none/email/social), MVP feature selection (3-5 suggested) + free-text additions, design preference (light/dark, minimal/colorful), free-text notes.
+Platform (iOS/Swift, Android/Kotlin, cross-platform React Native/Expo or Flutter, web React + Vite PWA) with targets (iOS/Android/web, chosen for Expo/Flutter), backend need (none/Supabase/Firebase/custom API), auth (none/email/social), MVP feature selection (3-5 suggested) + free-text additions, design (theme light/dark/both; visual style native/minimal/soft/colorful/editorial/professional/playful; gamification none/light/full; density airy/balanced/compact; optional reference apps), free-text notes.
 
 ### Skeleton repo expectations
 

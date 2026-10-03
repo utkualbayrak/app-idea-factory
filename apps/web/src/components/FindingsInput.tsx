@@ -1,5 +1,5 @@
 import { Plus, X } from "lucide-react";
-import type { FindingKind, FindingPlatform, FindingSeverity, TestFinding } from "@/lib/api";
+import type { FindingKind, FindingPlatform, FindingSeverity, TestFinding, TestPlatform } from "@/lib/api";
 import { FINDING_KIND_LABELS, FINDING_PLATFORM_LABELS, SEVERITY_LABELS } from "@/lib/test-labels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,19 +7,26 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const MAX_FINDINGS = 100;
 
-// Test bulguları: her satır önem + tür (+ platform, iki platform test
-// edildiyse) + kısa açıklama.
+// Test bulguları: her satır önem + tür (+ platform, birden fazla platform
+// test edildiyse) + kısa açıklama. Platform seçenekleri test edilenler + "Tümü".
 export function FindingsInput({
   values,
   onChange,
-  showPlatform,
+  platforms,
   defaultPlatform,
 }: {
   values: TestFinding[];
   onChange: (values: TestFinding[]) => void;
-  showPlatform: boolean;
+  platforms: TestPlatform[];
   defaultPlatform: FindingPlatform;
 }) {
+  const showPlatform = platforms.length > 1;
+  const platformOptions = Object.fromEntries(
+    (Object.keys(FINDING_PLATFORM_LABELS) as FindingPlatform[])
+      .filter((p) => p === "both" || (platforms as FindingPlatform[]).includes(p))
+      .map((p) => [p, FINDING_PLATFORM_LABELS[p]]),
+  ) as Record<FindingPlatform, string>;
+
   function update(index: number, patch: Partial<TestFinding>) {
     onChange(values.map((f, i) => (i === index ? { ...f, ...patch } : f)));
   }
@@ -44,7 +51,7 @@ export function FindingsInput({
             {showPlatform && (
               <MiniSelect
                 value={finding.platform}
-                options={FINDING_PLATFORM_LABELS}
+                options={platformOptions}
                 onChange={(platform) => update(index, { platform })}
                 ariaLabel="Platform"
               />

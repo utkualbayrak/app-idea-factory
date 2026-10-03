@@ -237,7 +237,7 @@ export function TestResultForm({ ideaId, onDone, onCancel, inDialog = false, ini
           <FindingsInput
             values={findings}
             onChange={setFindings}
-            showPlatform={bothPlatforms}
+            platforms={plan.platforms}
             defaultPlatform={bothPlatforms ? "both" : plan.platforms[0]}
           />
         </CardContent>

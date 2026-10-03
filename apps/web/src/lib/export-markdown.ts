@@ -1,15 +1,14 @@
 import type { Competitor, DevReport, Idea, RepoState, Task, TaskDocument, TestRound } from "@/lib/api";
 import { STATUS_LABELS } from "@/lib/idea-colors";
 import {
+  designSummary,
   AUTH_LABELS,
   BACKEND_LABELS,
   DOCUMENT_LABELS,
   DOCUMENT_REPO_PATHS,
   PLATFORM_LABELS,
-  STYLE_LABELS,
   TARGET_LABELS,
   TASK_STATUS_LABELS,
-  THEME_LABELS,
 } from "@/lib/task-labels";
 import {
   FINDING_KIND_LABELS,
@@ -140,7 +139,8 @@ function taskSection(task: Task): string[] {
     `- Durum: ${TASK_STATUS_LABELS[task.status]}`,
     `- Platform: ${PLATFORM_LABELS[params.platform]} · Hedef: ${params.targets.map((t) => TARGET_LABELS[t]).join(", ")}`,
     `- Backend: ${BACKEND_LABELS[params.backend]} · Giriş: ${AUTH_LABELS[params.auth]}`,
-    `- Tasarım: ${THEME_LABELS[params.design.theme]}, ${STYLE_LABELS[params.design.style]}`,
+    `- Tasarım: ${designSummary(params.design)}`,
+    ...(params.design.references ? [`- Referans uygulamalar: ${params.design.references}`] : []),
   ];
   if (task.repo_url) lines.push(`- Repo: ${task.repo_url}`);
   if (task.issue_url) lines.push(`- Issue: ${task.issue_url}`);

@@ -14,16 +14,15 @@ import {
   type WorkflowRun,
 } from "@/lib/api";
 import {
+  designSummary,
   AUTH_LABELS,
   BACKEND_LABELS,
   DOCUMENT_LABELS,
   DOCUMENT_REPO_PATHS,
   PLATFORM_LABELS,
   REPLANNABLE_STATUSES,
-  STYLE_LABELS,
   TARGET_LABELS,
   TASK_STATUS_LABELS,
-  THEME_LABELS,
 } from "@/lib/task-labels";
 import { formatDateTime } from "@/lib/format-date";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -165,7 +164,7 @@ export function DevelopmentCard({
         <dl className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]">
           <dt className="text-muted-foreground">Platform</dt>
           <dd>{PLATFORM_LABELS[params.platform]}</dd>
-          <dt className="text-muted-foreground">Hedef cihazlar</dt>
+          <dt className="text-muted-foreground">Hedefler</dt>
           <dd>{params.targets.map((t) => TARGET_LABELS[t]).join(", ")}</dd>
           <dt className="text-muted-foreground">Backend</dt>
           <dd>{BACKEND_LABELS[params.backend]}</dd>
@@ -173,7 +172,10 @@ export function DevelopmentCard({
           <dd>{AUTH_LABELS[params.auth]}</dd>
           <dt className="text-muted-foreground">Tasarım</dt>
           <dd>
-            {THEME_LABELS[params.design.theme]} · {STYLE_LABELS[params.design.style]}
+            {designSummary(params.design)}
+            {params.design.references && (
+              <span className="block text-muted-foreground">Referans: {params.design.references}</span>
+            )}
           </dd>
           <dt className="text-muted-foreground">MVP özellikleri</dt>
           <dd className="min-w-0">

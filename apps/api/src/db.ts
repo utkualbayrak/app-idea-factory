@@ -1,4 +1,4 @@
-import { resolveTargets, type DocumentKind, type IdeaInput, type TaskParams, type TaskStatus } from "./schema";
+import { resolveDesign, resolveTargets, type DocumentKind, type IdeaInput, type TaskParams, type TaskStatus } from "./schema";
 
 // SQLite'ın datetime('now') default'u UTC ama "YYYY-MM-DD HH:MM:SS" formatında,
 // saat dilimi işareti olmadan yazıyor. Tarayıcı bunu yerel saat (TR, +3) sanıp
@@ -169,10 +169,14 @@ export interface Task extends Omit<TaskRow, "params"> {
   params: TaskParams;
 }
 
-// Grup 6'dan önceki görevlerde targets yok; platformdan türetilir.
+// Grup 6'dan önceki görevlerde targets, web/tasarım turundan öncekilerde
+// gamification/density yok; varsayılanlarla tamamlanır.
 function parseTaskParams(raw: string): TaskParams {
-  const params = JSON.parse(raw) as Omit<TaskParams, "targets"> & { targets?: TaskParams["targets"] };
-  return { ...params, targets: resolveTargets(params.platform, params.targets) };
+  const params = JSON.parse(raw) as Omit<TaskParams, "targets" | "design"> & {
+    targets?: TaskParams["targets"];
+    design: Parameters<typeof resolveDesign>[0];
+  };
+  return { ...params, targets: resolveTargets(params.platform, params.targets), design: resolveDesign(params.design) };
 }
 
 export function serializeTask(row: TaskRow): Task {

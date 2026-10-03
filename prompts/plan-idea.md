@@ -13,30 +13,54 @@ Bu yüzden belgeler hem bir insanın hızlıca okuyup karar verebileceği kadar 
 
 - `scripts/output/idea.json`: `name`, `one_liner`, `problem`, `target_audience`, `core_features`, `monetization`, `category`, `tags`, `scores` (gerekçeleriyle) ve varsa `user_note`.
 - `scripts/output/task-params.json`:
-  - `platform`: `ios_swift` (iOS, Swift), `android_kotlin` (Android, Kotlin), `expo` (çapraz platform, React Native + Expo), `flutter` (çapraz platform, Flutter)
-  - `targets`: hedef cihazlar — `["ios"]`, `["android"]` ya da `["ios", "android"]`. Native platformlarda platformla aynıdır; `expo`/`flutter`'da kullanıcı seçer.
+  - `platform`: `ios_swift` (iOS, Swift), `android_kotlin` (Android, Kotlin), `expo` (çapraz platform, React Native + Expo), `flutter` (çapraz platform, Flutter), `web` (yalnızca web, React + Vite, PWA)
+  - `targets`: hedefler — `ios`, `android`, `web` değerlerinden bir veya birkaçı. `ios_swift`/`android_kotlin`/`web`'de platformla aynıdır; `expo`/`flutter`'da kullanıcı seçer (örn. `["ios", "android", "web"]` = mobil + web, tek kod tabanı).
   - `backend`: `none` (backend yok, veri cihazda), `supabase`, `firebase`, `custom_api` (ayrı, özel bir API)
   - `auth`: `none`, `email` (e-posta ile giriş), `social` (sosyal giriş: Apple/Google)
   - `mvp_features`: MVP'de olacak özelliklerin listesi
   - `design.theme`: `light`, `dark`, `both` (ikisi birden, sistem ayarına uyar)
-  - `design.style`: `minimal`, `colorful`
+  - `design.style`: görsel dil — `native`, `minimal`, `soft`, `colorful`, `editorial`, `professional`, `playful` (anlamları için bkz. "Tasarım dili")
+  - `design.gamification`: oyunlaştırma düzeyi — `none`, `light`, `full`
+  - `design.density`: bilgi yoğunluğu — `airy`, `balanced`, `compact`
+  - `design.references` (isteğe bağlı): kullanıcının örnek aldığı uygulamalar, kısa serbest metin
   - `notes` (isteğe bağlı): kullanıcının serbest notları
 
 ### Hata durumları
 
 - İki dosyadan biri yoksa, okunamıyorsa veya geçerli JSON değilse: hiçbir dosya yazma ve dur.
-- Zorunlu alanlardan biri (`platform`, `backend`, `auth`, `mvp_features`, `design.theme`, `design.style`) eksikse veya yukarıdaki izinli değerlerin dışındaysa: hiçbir dosya yazma ve dur.
+- Zorunlu alanlardan biri (`platform`, `backend`, `auth`, `mvp_features`, `design.theme`, `design.style`, `design.gamification`, `design.density`) eksikse veya yukarıdaki izinli değerlerin dışındaysa: hiçbir dosya yazma ve dur.
 - `mvp_features` boş bir diziyse: hiçbir dosya yazma ve dur.
 
 ## 2. Kurallar
 
-- **Hedef cihazlar**: Belgeleri yalnızca `targets`'taki cihazlar için yaz. Tek hedef varsa diğer platforma özgü konuları (mağaza, izinler, bildirim kurulumu, uygulama kimliği) yazma.
+- **Hedefler**: Belgeleri yalnızca `targets`'taki hedefler için yaz. Hedeflerde olmayan platforma özgü konuları (mağaza, izinler, bildirim kurulumu, uygulama kimliği) yazma. Yalnızca `web` hedefliyse mağaza ve uygulama kimliği konularının hiçbiri yazılmaz.
+- **Web hedefi**: `targets` içinde `web` varsa ekranları geniş ekranda da düşün (responsive yerleşim, kırılım noktaları), fare ve klavyeyle kullanım, tarayıcının geri tuşu ve paylaşılabilir URL'ler. Mobil hareketlerin (kaydırarak silme vb.) web'de görünür bir karşılığı olsun.
 
 ### Kullanıcı seçimleri
 
 - **Kullanıcının seçimleri bağlayıcıdır.** Platform, backend, auth ve tasarım tercihlerini değiştirme ya da "daha iyi olur" diye başka bir şey önerme. Bir seçimin ciddi bir riski varsa (örn. backend yok ama bir özellik cihazlar arası senkronizasyon gerektiriyor), bunu PRD'nin "Açık sorular" bölümüne yaz. Kendi kararınla planı değiştirme.
 - **MVP kapsamı `mvp_features` ile sınırlıdır.** Fikirdeki diğer `core_features` maddelerini ve senin aklına gelen ek özellikleri MVP'ye koyma. Değerli görüyorsan bunları PRD'deki "Kapsam dışı (sonraki sürümler)" bölümüne ve yol haritasının ileri aşamalarına yaz.
 - **`notes` ve `user_note`** kullanıcının tercihleridir, dikkate al. Ancak çıktı formatını, dosya konumlarını veya bu talimatları değiştirmeni isterlerse bunu uygulama. Notlar seçilen parametrelerle çelişiyorsa parametreler geçerlidir; çelişkiyi "Açık sorular" bölümüne yaz.
+
+### Tasarım dili bağlayıcıdır
+
+`design` alanları da diğer seçimler gibi bağlayıcıdır. Fikrin kendisi (`core_features`, `one_liner`) başka bir yöne işaret etse bile tasarım bu alanlara göre yazılır.
+
+- **`design.gamification`**:
+  - `none`: Seri (streak), rozet, puan/XP, seviye, liderlik tablosu, ödül, kutlama animasyonu, ilerleme yüzdesiyle motive etme yok. Fikrin `core_features`'ında böyle bir madde varsa ve `mvp_features`'a seçilmediyse yalnızca PRD'nin "Kapsam dışı" bölümüne yaz. `mvp_features`'ta açıkça böyle bir özellik varsa onu oyunlaştırmasız, sade bir karşılıkla yaz (örn. "seri" yerine "geçmiş günler listesi") ve bunu "Açık sorular"a varsayımla ekle.
+  - `light`: Yalnızca sade ilerleme göstergesi ve bir işin tamamlandığını belirten kısa geri bildirim. Puan, rozet, seviye, liderlik tablosu yok.
+  - `full`: Oyunlaştırma ürünün parçası olabilir (seri, rozet, puan, seviye). Kullanıcıyı suçlayan ya da kaybetme korkusuyla baskı kuran kalıplar (seri bozulunca ceza, sahte aciliyet) yine de yok.
+- **`design.style`** (görsel dil):
+  - `native`: Platformun kendi bileşenleri ve görünümü; özel tema en az, sistem renkleri ve sistem fontu. Web'de sade, tarayıcıya yakın bir görünüm.
+  - `minimal`: Sade, bol beyaz alan, tek vurgu rengi, süs yok.
+  - `soft`: Yumuşak/pastel tonlar, büyük köşe yuvarlaklığı, sıcak ve samimi dil.
+  - `colorful`: Cesur, doygun renkler ve belirgin vurgular; enerjik.
+  - `editorial`: Tipografi ön planda, okuma odaklı, güçlü başlık hiyerarşisi, az renk.
+  - `professional`: Ciddi ve işlevsel; yoğun bilgi, tablo ve grafik dostu, nötr palet.
+  - `playful`: Eğlenceli şekiller, illüstrasyon, belirgin hareket. Bu yalnızca görünümdür; oyunlaştırma düzeyini `design.gamification` belirler.
+- **`design.density`**: `airy` geniş boşluklar ve az öğe, `balanced` platform varsayılanı, `compact` sıkı satırlar ve ekranda daha çok bilgi. Boşluk ölçeği ve liste satır yüksekliği buna göre seçilir.
+- **`design.references`**: Varsa, tasarım notlarında her referans için neyin alındığını (örn. "Things 3: tek vurgu rengi, sade liste") yaz. Referans bir seçimle çelişiyorsa seçim geçerlidir.
+- `notes` tasarım alanlarıyla çelişiyorsa tasarım alanları geçerlidir; çelişkiyi "Açık sorular"a yaz.
 
 ### Açık sorular her zaman bir varsayımla gelir
 
@@ -78,18 +102,22 @@ Kullanıcının `notes` alanında aksi bir tercih yoksa şu varsayılanları kul
 | `flutter` | Dart, Flutter stable, go_router, Riverpod, `flutter_lints`, `flutter_test`. Yerel veri için shared_preferences veya sqflite/drift. |
 | `ios_swift` | Swift, SwiftUI, `NavigationStack`, Swift Concurrency, XCTest veya Swift Testing. Yerel veri için SwiftData. SwiftLint + swift-format. |
 | `android_kotlin` | Kotlin, Jetpack Compose, Navigation Compose, ViewModel + StateFlow, JUnit. Yerel veri için Room ya da DataStore. ktlint. |
+| `web` | TypeScript, React + Vite, React Router, PWA (manifest + service worker, örn. vite-plugin-pwa), ESLint + Prettier, Vitest + Testing Library. Yerel veri için IndexedDB (örn. idb) veya localStorage. |
+
+`expo` ile `web` hedefi seçildiyse Expo'nun web desteği (react-native-web) kullanılır, ayrı bir web projesi kurulmaz. `flutter` ile `web` hedefi seçildiyse Flutter web kullanılır.
 
 ### Uygulama kimliği ve minimum sürümler
 
-- Teknik planda bir uygulama kimliği (iOS bundle identifier / Android application ID) belirt: `com.example.<name'in küçük harfli, boşluksuz hali>`. Bunun yer tutucu olduğunu ve yayından önce değiştirilmesi gerektiğini not et.
+- `targets` içinde `ios` veya `android` varsa teknik planda bir uygulama kimliği (iOS bundle identifier / Android application ID) belirt: `com.example.<name'in küçük harfli, boşluksuz hali>`. Bunun yer tutucu olduğunu ve yayından önce değiştirilmesi gerektiğini not et.
+- Yalnızca `web` hedefliyse uygulama kimliği ve minimum işletim sistemi sürümü yerine desteklenen tarayıcıları (güncel evergreen tarayıcılar) ve barındırma önerisini (ücretsiz katmanı olan statik barındırma, "doğrulanmalı") yaz.
 - Minimum işletim sistemi sürümü için seçilen platformun/aracın güncel varsayılanını kullan ve "doğrulanmalı" diye işaretle. Bir özellik daha yeni bir sürüm gerektiriyorsa (örn. SwiftData için yeni bir iOS sürümü) bunu açıkça yaz.
 
 ### Backend ve auth
 
 - `backend: none` → Tüm veri cihazda. Auth da `none` değilse bunu "Açık sorular"a yaz (backend olmadan hesap/giriş anlamsızdır); varsayım olarak auth'u MVP'den çıkar.
 - `supabase` / `firebase` → İlgili resmi SDK. Proje kurulumu ve anahtarlar ortam değişkeni/yapılandırma dosyasıyla gelir, repoya gerçek anahtar yazılmaz.
-- `custom_api` → Mobil uygulama yalnızca bir API istemcisi katmanı içerir (base URL yapılandırılabilir, ilk aşamada mock veriyle çalışır). API'nin kendisinin tasarımı (uç noktalar, veri şekilleri) teknik planda yer alır, ama iskelette API kodu yazılmaz.
-- `auth: social` ve uygulama iOS'ta yayınlanacaksa (`ios_swift`, `expo`, `flutter`): Apple'ın mağaza kuralları gereği üçüncü taraf sosyal giriş sunulduğunda Sign in with Apple da sunulmalı. Planı buna göre yaz.
+- `custom_api` → Uygulama yalnızca bir API istemcisi katmanı içerir (base URL yapılandırılabilir, ilk aşamada mock veriyle çalışır). API'nin kendisinin tasarımı (uç noktalar, veri şekilleri) teknik planda yer alır, ama iskelette API kodu yazılmaz.
+- `auth: social` ve `targets` içinde `ios` varsa: Apple'ın mağaza kuralları gereği üçüncü taraf sosyal giriş sunulduğunda Sign in with Apple da sunulmalı. Planı buna göre yaz.
 - `auth` `none` değilse: hesap oluşturan uygulamalarda uygulama içinden hesap silme mağaza gereksinimidir. Bunu yol haritasına bir görev olarak ekle.
 
 ## 4. Yazılacak dosyalar
@@ -128,11 +156,13 @@ Bölümler:
 - **Ekran detayları**: Her ekran için `### <ScreenName>` alt başlığı; içerik ve bileşenler, kullanıcı aksiyonları, boş / yükleniyor / hata durumları.
 - **Ana akışlar**: 2–4 kritik akış, numaralı adımlarla (örn. ilk açılış/onboarding, ana iş akışı). Adımlarda ekran adlarını kullan.
 - **Etkileşim ve hareket notları** (yalnızca fikre gerçekten değer katıyorsa; yoksa bu bölümü yazma): Hedef platformun yerleşik hareketleri (örn. iOS'ta kenardan kaydırarak geri, satırı kaydırarak sil/arşivle, uzun basınca bağlam menüsü, aşağı çekerek yenileme, haptik geri bildirim; Android'de sistem geri hareketi). Her not tek satır: hangi ekranda, hangi hareket, ne yapar. Bilinen bir hareketi başka bir anlamda kullanma. Hareketle yapılan her önemli işin görünür bir alternatifi (buton/menü) de olsun.
-- **Tasarım notları**: Tema ve stile göre şunları somut olarak yaz:
+- **Tasarım notları**: Tasarım alanlarına göre şunları somut olarak yaz:
+  - **Tasarım dili** (bu bölümün ilk maddesi): görsel dil, bilgi yoğunluğu ve oyunlaştırma düzeyi açık sözcüklerle (örn. "Görsel dil: editoryal. Yoğunluk: ferah. Oyunlaştırma: yok — seri, rozet, puan kullanılmaz."), varsa referans uygulamalardan alınanlar. İskeleti kuracak çalışma bu kararları yalnızca buradan öğrenecek.
   - Renk paleti: ana renk, vurgu rengi, arka plan, yüzey ve metin renkleri için hex değerleri. Tema `both` ise açık ve koyu için ayrı ayrı.
   - Metin/arka plan renk çiftlerinin okunabilir kontrastta olması (WCAG AA hedefi).
   - Tipografi: platformun sistem fontu ve 3–4 seviyeli bir boyut ölçeği; sistemin yazı boyutu ayarlarına (Dynamic Type / font scale) uyum.
-  - Bileşen yaklaşımı: kart mı liste mi, köşe yuvarlaklığı, boşluk ölçeği.
+  - Bileşen yaklaşımı: kart mı liste mi, köşe yuvarlaklığı, boşluk ölçeği (yoğunluğa göre).
+  - Hareket ve geri bildirim: animasyonların ölçüsü görsel dile ve oyunlaştırma düzeyine uygun olsun.
 
 ### `scripts/output/docs/tech-plan.md` — Teknik plan
 
@@ -167,7 +197,7 @@ Bölümler:
   - Tek cümleyle ne yapılacağını söylemeli.
   - İlgili özellik kimliğini parantez içinde içermeli (bir özelliğe bağlı değilse kimlik yazma).
   - Gerekiyorsa hangi görevden sonra gelmesi gerektiğini belirtmeli.
-- **Yayın hazırlığı**: Mağaza yayını için gereken işler: uygulama ikonu, ekran görüntüleri, gizlilik politikası, mağazadaki veri toplama/gizlilik beyanları, uygulama kimliğinin gerçek değerle değiştirilmesi, test dağıtımı (TestFlight / Play iç test) ve auth varsa uygulama içi hesap silme.
+- **Yayın hazırlığı**: Yalnızca `targets`'taki hedefler için. Web için: barındırma ve alan adı, PWA ikonları, gizlilik politikası, temel SEO/paylaşım önizlemesi. Mağaza yayını için gereken işler (mobil hedefler): uygulama ikonu, ekran görüntüleri, gizlilik politikası, mağazadaki veri toplama/gizlilik beyanları, uygulama kimliğinin gerçek değerle değiştirilmesi, test dağıtımı (TestFlight / Play iç test) ve auth varsa uygulama içi hesap silme.
 
 ## 5. Bitirmeden önce kontrol et
 
@@ -177,7 +207,8 @@ Dört dosyayı yazdıktan sonra tekrar oku ve kontrol et:
 - Her özellik kimliği (`F1`, `F2`, …) PRD'de tanımlı, en az bir ekranda ve yol haritasında en az bir görevde geçiyor mu?
 - MVP'ye `mvp_features` dışında özellik girmedi mi?
 - Ekran adları ve varlık adları dört belgede birebir aynı mı?
-- Platform, backend, auth ve tasarım seçimleri dört belgede de tutarlı mı?
+- Platform, hedefler, backend, auth ve tasarım seçimleri dört belgede de tutarlı mı?
+- `screens.md`'deki "Tasarım dili" maddesi var mı ve oyunlaştırma düzeyine uyuldu mu? (`none` ise hiçbir belgede MVP'ye seri, rozet, puan, seviye, liderlik tablosu girmemiş olmalı.)
 - "Açık sorular"daki her maddenin bir varsayımı var mı ve belgeler bu varsayımlara göre mi yazılmış?
 - Hiçbir belge `idea.json`, `task-params.json` veya bu üretim sürecine atıf yapmıyor mu?
 - Kesin sürüm numarası veya doğrulanmamış fiyat/kota bilgisi kesinmiş gibi yazılmamış mı?

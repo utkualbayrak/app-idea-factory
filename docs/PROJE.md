@@ -63,6 +63,8 @@ Her gün otomatik olarak 10 mobil uygulama fikri üreten, bunları telefondan er
 | Gözden düşen fikirler (2026-10-03) | Bakım puanı (kullanıcı puanı varsa %40 Claude + %60 kullanıcı, yoksa Claude `overall`) art arda 3 bakım koşusunda 7.00'ın altında kalan `new` fikir arşivlenir: yalnızca ad, özet, kategori, etiket ve puanlar kalır. `on_hold` korunur. Arşivlenen ve silinen fikirler Ayarlar'dan seçilen süre (varsayılan 90 gün) sonra kalıcı silinir; adları `retired_names`'te kalır. Arşivden "Geri getir", boşalan alanları `evaluate-idea.yml` ile yeniden doldurur. |
 | Elle tetikleme (2026-10-03) | Ayarlar ekranından deploy dışındaki tüm işler elle çalıştırılabilir: günlük fikir üretimi, havuz bakımı, ve seçilen bir fikir için değerlendirme, notlarla yeniden değerlendirme, rakip bulma, planlama belgelerini yeniden üretme, iskelet kurma/tekrar deneme ve repo senkronu. Ön koşulu sağlanmayan iş kapalı görünür ve nedeni yazılır. `merge-ideas.md` kullanıcı tarafından onaylandı; bakım zamanlaması açık. |
 | Fikri yeniden adlandırma (2026-10-03) | Ad yalnızca "Geliştirme bekliyor" aşamasında, detay sayfasındaki kalem butonuyla değiştirilebilir; iskelet repo'su bu addan türetildiği için geliştirmeye başladıktan sonra kapalıdır, belgeler üretilirken de beklenir. Yeni ad diğer fikirlerle ve kalıcı silinmiş adlarla çakışamaz. Belgeler hazırsa, isteğe bağlı olarak dört planlama belgesindeki eski ad da yeni adla değiştirilir (küçük harfli tek kelime hali de: bundle id, repo adı). Eski ad serbest kalır. |
+| Web hedefi (2026-10-03) | Mevcut platformlar kalır; yanına "Web — React + Vite (PWA)" eklenir. Expo ve Flutter'da hedefler iOS / Android / Web arasından seçilir (web+mobil tek kod tabanı). Web iskeleti Expo gibi CI'da doğrulanır (`npm install`, `tsc --noEmit`, `npm run build`). Test sürecine "Web" platformu ve "Web adresi / önizleme" kanalı eklenir. |
+| Tasarım dili (2026-10-03) | Tema aynen kalır. Stil, "görsel dil" olarak genişler: platforma özgü, minimal, yumuşak, canlı/renkli, editoryal, profesyonel, oyunsu (minimal ve renkli korunur). Yeni alanlar: oyunlaştırma düzeyi (yok / hafif / yoğun, varsayılan yok), bilgi yoğunluğu (ferah / dengeli / sıkı) ve isteğe bağlı referans uygulamalar. Bunlar notlardan farklı olarak bağlayıcıdır: planlama belgeleri `screens.md`'ye bir "Tasarım dili" maddesi yazar, iskelet de onu uygular. Notlar tasarım alanlarıyla çelişirse alanlar geçerlidir. |
 
 ## Bu kararların mimariye etkisi
 
@@ -193,11 +195,12 @@ Puanlar 0.00-10.00 arası, yalnızca 0.25'in katları (bkz. "Kesinleşen kararla
 
 ### 5. Görev formu alanları
 
-- Platform: iOS (Swift), Android (Kotlin), çapraz platform (React Native / Expo, Flutter)
+- Platform: iOS (Swift), Android (Kotlin), çapraz platform (React Native / Expo, Flutter), web (React + Vite, PWA)
+- Hedefler: çapraz platformda iOS / Android / Web arasından seçim
 - Backend gerekli mi: yok / Supabase / Firebase / özel API
 - Kimlik doğrulama: yok / e-posta / sosyal giriş
 - MVP özellikleri: fikirdeki özelliklerden seçim + serbest ekleme (3-5 önerilir)
-- Tasarım tercihi: açık/koyu tema, minimal/renkli
+- Tasarım tercihi: açık/koyu tema; görsel dil (platforma özgü, minimal, yumuşak, canlı/renkli, editoryal, profesyonel, oyunsu); oyunlaştırma düzeyi (yok/hafif/yoğun); bilgi yoğunluğu (ferah/dengeli/sıkı); referans uygulamalar
 - Ek notlar: serbest metin
 
 ### 6. İskelet reposu beklentileri

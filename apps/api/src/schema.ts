@@ -107,18 +107,19 @@ export const devReportSubmitSchema = z.object({
 });
 
 // Faz 3 sonrası tur, Grup 4: test turları.
-export const TEST_PLATFORMS = ["ios", "android"] as const;
-export const TEST_CHANNELS = ["testflight", "play_internal", "expo_go", "direct_install", "other"] as const;
+export const TEST_PLATFORMS = ["ios", "android", "web"] as const;
+export const TEST_CHANNELS = ["testflight", "play_internal", "expo_go", "direct_install", "web_url", "other"] as const;
 export const SCENARIO_RESULTS = ["passed", "partial", "failed", "skipped"] as const;
 export const FINDING_SEVERITIES = ["critical", "major", "minor"] as const;
 export const FINDING_KINDS = ["bug", "ux", "feature_request", "performance", "other"] as const;
-export const FINDING_PLATFORMS = ["ios", "android", "both"] as const;
+// "both" eski adıyla kalır; anlamı "tüm platformlar".
+export const FINDING_PLATFORMS = ["ios", "android", "web", "both"] as const;
 
 export const testPlanSchema = z.object({
   tester_count: z.number().int().min(1).max(1000),
   duration_days: z.number().int().min(1).max(365),
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD olmalı"),
-  platforms: z.array(z.enum(TEST_PLATFORMS)).min(1).max(2),
+  platforms: z.array(z.enum(TEST_PLATFORMS)).min(1).max(3),
   channel: z.enum(TEST_CHANNELS),
   scenarios: z.array(shortLine).min(1).max(30),
   success_criteria: z.array(shortLine).max(20),
@@ -417,28 +418,50 @@ export const workflowRunCreateSchema = z.object({
 // Faz 3A: "Geliştir" görev formu (docs/PROJE.md "Görev formu alanları") ve
 // Claude'un ürettiği planlama belgeleri. scripts/lib/task-schema.ts ile aynı
 // olmalı — paketler arası paylaşım yok, ikisini birlikte güncelle.
-export const TASK_PLATFORMS = ["ios_swift", "android_kotlin", "expo", "flutter"] as const;
+export const TASK_PLATFORMS = ["ios_swift", "android_kotlin", "expo", "flutter", "web"] as const;
 export const TASK_BACKENDS = ["none", "supabase", "firebase", "custom_api"] as const;
 export const TASK_AUTHS = ["none", "email", "social"] as const;
 export const TASK_THEMES = ["light", "dark", "both"] as const;
-export const TASK_STYLES = ["minimal", "colorful"] as const;
-// Faz 3 sonrası tur, Grup 6: hedef cihazlar. Native seçenekler hedefi kendisi
-// belirler; Expo/Flutter'da yalnızca iOS, yalnızca Android ya da ikisi.
-export const TASK_TARGETS = ["ios", "android"] as const;
+// minimal/colorful ilk iki değerdi; eski görevler için yerlerinde kalır.
+export const TASK_STYLES = ["native", "minimal", "soft", "colorful", "editorial", "professional", "playful"] as const;
+export const TASK_GAMIFICATIONS = ["none", "light", "full"] as const;
+export const TASK_DENSITIES = ["airy", "balanced", "compact"] as const;
+// Faz 3 sonrası tur, Grup 6: hedef cihazlar. Native seçenekler ve web hedefi
+// kendisi belirler; Expo/Flutter'da iOS, Android ve web'den istenenler.
+export const TASK_TARGETS = ["ios", "android", "web"] as const;
 export type TaskTarget = (typeof TASK_TARGETS)[number];
 
 export function resolveTargets(platform: (typeof TASK_PLATFORMS)[number], targets: readonly TaskTarget[] | undefined) {
   if (platform === "ios_swift") return ["ios"] as TaskTarget[];
   if (platform === "android_kotlin") return ["android"] as TaskTarget[];
-  const chosen = targets && targets.length > 0 ? targets : TASK_TARGETS;
+  if (platform === "web") return ["web"] as TaskTarget[];
+  const chosen: readonly TaskTarget[] = targets && targets.length > 0 ? targets : ["ios", "android"];
   return TASK_TARGETS.filter((t) => chosen.includes(t));
+}
+
+// Tasarım alanlarının bu turdan önceki görevlerde olmayanları varsayılanla doldurulur.
+export function resolveDesign(design: {
+  theme: (typeof TASK_THEMES)[number];
+  style: (typeof TASK_STYLES)[number];
+  gamification?: (typeof TASK_GAMIFICATIONS)[number];
+  density?: (typeof TASK_DENSITIES)[number];
+  references?: string;
+}) {
+  const references = design.references?.trim();
+  return {
+    theme: design.theme,
+    style: design.style,
+    gamification: design.gamification ?? "none",
+    density: design.density ?? "balanced",
+    ...(references ? { references } : {}),
+  };
 }
 
 export const taskParamsSchema = z
   .object({
     platform: z.enum(TASK_PLATFORMS),
     // Eski görevlerde yok; gönderilmezse platformdan türetilir (bkz. resolveTargets).
-    targets: z.array(z.enum(TASK_TARGETS)).max(2).optional(),
+    targets: z.array(z.enum(TASK_TARGETS)).max(3).optional(),
     backend: z.enum(TASK_BACKENDS),
     auth: z.enum(TASK_AUTHS),
     // Fikrin core_features'ından seçilenler + kullanıcının serbest eklemeleri
@@ -447,10 +470,17 @@ export const taskParamsSchema = z
     design: z.object({
       theme: z.enum(TASK_THEMES),
       style: z.enum(TASK_STYLES),
+      gamification: z.enum(TASK_GAMIFICATIONS).optional(),
+      density: z.enum(TASK_DENSITIES).optional(),
+      references: z.string().max(300).optional(),
     }),
     notes: z.string().max(4000).optional(),
   })
-  .transform((params) => ({ ...params, targets: resolveTargets(params.platform, params.targets) }));
+  .transform((params) => ({
+    ...params,
+    targets: resolveTargets(params.platform, params.targets),
+    design: resolveDesign(params.design),
+  }));
 
 export type TaskParams = z.infer<typeof taskParamsSchema>;
 

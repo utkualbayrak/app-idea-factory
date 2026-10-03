@@ -32,7 +32,10 @@ const PLATFORM_LABELS: Record<string, string> = {
   flutter: "Çapraz platform — Flutter",
   ios_swift: "iOS — Swift",
   android_kotlin: "Android — Kotlin",
+  web: "Web — React + Vite (PWA)",
 };
+
+const TARGET_LABELS: Record<string, string> = { ios: "iOS", android: "Android", web: "Web" };
 
 function repoSlug(name: string): string {
   const base = name
@@ -117,10 +120,11 @@ async function main() {
       "_Planlama belgeleri onaydan önce düzenlenmiş olabilir; kapsam ve kararlar için belgeler geçerlidir._",
       "",
       `- Platform: ${PLATFORM_LABELS[params.platform] ?? params.platform}`,
-      ...(params.targets ? [`- Hedef cihazlar: ${params.targets.map((t) => (t === "ios" ? "iOS" : "Android")).join(", ")}`] : []),
+      ...(params.targets ? [`- Hedef cihazlar: ${params.targets.map((t) => TARGET_LABELS[t] ?? t).join(", ")}`] : []),
       `- Backend: ${params.backend}`,
       `- Kimlik doğrulama: ${params.auth}`,
-      `- Tasarım: ${params.design.theme} · ${params.design.style}`,
+      `- Tasarım: ${params.design.theme} · ${params.design.style} · oyunlaştırma ${params.design.gamification ?? "none"} · yoğunluk ${params.design.density ?? "balanced"}`,
+      ...(params.design.references ? [`- Referans uygulamalar: ${params.design.references}`] : []),
       "- MVP özellikleri:",
       ...params.mvp_features.map((f) => `  - ${f}`),
       ...(params.notes ? ["", "**Notlar:**", params.notes] : []),

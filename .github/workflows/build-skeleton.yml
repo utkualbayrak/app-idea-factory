@@ -10,7 +10,7 @@ name: Build Skeleton
 # - Ana repo persist-credentials: false ile checkout edilir; iskelet reposu da
 #   token .git/config'e yazılmadan (tek seferlik extraheader ile) clone/push
 #   edilir — Claude'un okuyabileceği diskte token kalmaz.
-# - Bash yalnızca Expo'da ve install/typecheck için gereken komutlarla açılır.
+# - Bash yalnızca Expo ve web iskeletinde, install/typecheck/build için gereken komutlarla açılır.
 
 on:
   workflow_dispatch:
@@ -105,8 +105,11 @@ jobs:
       - name: Choose Claude Code permissions
         id: claude-args
         run: |
+          NODE_TOOLS='--allowedTools "Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(ls:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*),Bash(rm:*),Bash(cat:*),Bash(cd:*)"'
           if [ "$SKELETON_PLATFORM" = "expo" ]; then
-            echo 'args=--max-turns 120 --permission-mode acceptEdits --allowedTools "Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(ls:*),Bash(mkdir:*),Bash(cp:*),Bash(mv:*),Bash(rm:*),Bash(cat:*),Bash(cd:*)"' >> "$GITHUB_OUTPUT"
+            echo "args=--max-turns 120 --permission-mode acceptEdits $NODE_TOOLS" >> "$GITHUB_OUTPUT"
+          elif [ "$SKELETON_PLATFORM" = "web" ]; then
+            echo "args=--max-turns 90 --permission-mode acceptEdits $NODE_TOOLS" >> "$GITHUB_OUTPUT"
           else
             echo 'args=--max-turns 90 --permission-mode acceptEdits' >> "$GITHUB_OUTPUT"
           fi
@@ -114,7 +117,7 @@ jobs:
       # continue-on-error: action, Claude işi bitirse bile tur sınırı aşıldıysa
       # adımı başarısız sayıyor (2026-10-03: 146/120 turda bitmiş, kontrolleri
       # geçmiş bir iskelet bu yüzden düştü). Kararı aşağıdaki rapor kontrolü ve
-      # Expo doğrulama kapısı verir; rapor yoksa iş yine başarısız olur.
+      # Expo/web doğrulama kapısı verir; rapor yoksa iş yine başarısız olur.
       - name: Build skeleton with Claude Code
         id: claude
         continue-on-error: true
@@ -154,14 +157,18 @@ jobs:
         working-directory: scripts
         run: pnpm exec tsx finish-skeleton.ts check output
 
-      # Claude'un kendi kontrollerinden bağımsız son kapı (yalnızca Expo —
-      # diğer platformlarda toolchain kurulmuyor, bkz. docs/PROJE.md).
-      - name: Verify Expo skeleton (install + typecheck)
-        if: env.SKELETON_PLATFORM == 'expo'
+      # Claude'un kendi kontrollerinden bağımsız son kapı (Expo ve web —
+      # diğer platformlarda toolchain kurulmuyor, bkz. docs/PROJE.md). Web'de
+      # ayrıca üretim derlemesi (npm run build) de geçmeli.
+      - name: Verify Node skeleton (install + typecheck [+ build])
+        if: env.SKELETON_PLATFORM == 'expo' || env.SKELETON_PLATFORM == 'web'
         working-directory: skeleton
         run: |
           npm install --no-audit --no-fund || { echo "Doğrulama: npm install başarısız." > ../scripts/output/failure-reason.txt; exit 1; }
           npx tsc --noEmit || { echo "Doğrulama: tip kontrolü (tsc --noEmit) başarısız." > ../scripts/output/failure-reason.txt; exit 1; }
+          if [ "$SKELETON_PLATFORM" = "web" ]; then
+            npm run build || { echo "Doğrulama: web derlemesi (npm run build) başarısız." > ../scripts/output/failure-reason.txt; exit 1; }
+          fi
 
       - name: Report success (issue comment + task done)
         working-directory: scripts

@@ -296,12 +296,14 @@ export function fetchWorkflowRuns(options: { limit?: number; ideaId?: string } =
 
 // Faz 3A: "Geliştir" görev formu + Claude'un ürettiği planlama belgeleri.
 // apps/api/src/schema.ts taskParamsSchema ile aynı.
-export type TaskPlatform = "ios_swift" | "android_kotlin" | "expo" | "flutter";
+export type TaskPlatform = "ios_swift" | "android_kotlin" | "expo" | "flutter" | "web";
 export type TaskBackend = "none" | "supabase" | "firebase" | "custom_api";
 export type TaskAuth = "none" | "email" | "social";
 export type TaskTheme = "light" | "dark" | "both";
-export type TaskStyle = "minimal" | "colorful";
-export type TaskTarget = "ios" | "android";
+export type TaskStyle = "native" | "minimal" | "soft" | "colorful" | "editorial" | "professional" | "playful";
+export type TaskGamification = "none" | "light" | "full";
+export type TaskDensity = "airy" | "balanced" | "compact";
+export type TaskTarget = "ios" | "android" | "web";
 
 export interface TaskParams {
   platform: TaskPlatform;
@@ -310,7 +312,14 @@ export interface TaskParams {
   backend: TaskBackend;
   auth: TaskAuth;
   mvp_features: string[];
-  design: { theme: TaskTheme; style: TaskStyle };
+  /** gamification/density API'de eski görevler için de varsayılanla dolar. */
+  design: {
+    theme: TaskTheme;
+    style: TaskStyle;
+    gamification: TaskGamification;
+    density: TaskDensity;
+    references?: string;
+  };
   notes?: string;
 }
 
@@ -441,12 +450,12 @@ export function submitDevReport(ideaId: string, report: DevReportInput): Promise
 }
 
 // Faz 3 sonrası tur, Grup 4: test turları.
-export type TestPlatform = "ios" | "android";
-export type TestChannel = "testflight" | "play_internal" | "expo_go" | "direct_install" | "other";
+export type TestPlatform = "ios" | "android" | "web";
+export type TestChannel = "testflight" | "play_internal" | "expo_go" | "direct_install" | "web_url" | "other";
 export type ScenarioResult = "passed" | "partial" | "failed" | "skipped";
 export type FindingSeverity = "critical" | "major" | "minor";
 export type FindingKind = "bug" | "ux" | "feature_request" | "performance" | "other";
-export type FindingPlatform = "ios" | "android" | "both";
+export type FindingPlatform = "ios" | "android" | "web" | "both";
 
 export interface TestPlan {
   tester_count: number;

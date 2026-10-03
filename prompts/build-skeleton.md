@@ -1,6 +1,6 @@
 # Onaylı planlama belgelerinden uygulama iskeletini kur
 
-`skeleton/` klasöründeki repoya, `skeleton/docs/` altındaki onaylı planlama belgelerine göre çalışan bir mobil uygulama iskeleti kur.
+`skeleton/` klasöründeki repoya, `skeleton/docs/` altındaki onaylı planlama belgelerine göre çalışan bir uygulama iskeleti kur (mobil, web ya da ikisi; bkz. `targets`).
 
 Bu belgeleri kullanıcı okuyup gerekirse düzenledi ve onayladı. **Tek doğruluk kaynağı bu belgelerdir.** Belgelerde olmayan bir özelliği ekleme, belgelerdeki bir kararı kendi tercihinle değiştirme.
 
@@ -9,11 +9,11 @@ Bu belgeleri kullanıcı okuyup gerekirse düzenledi ve onayladı. **Tek doğrul
 Önce dört belgeyi baştan sona oku; kod yazmaya ancak ondan sonra başla.
 
 - `skeleton/docs/prd.md` — ürün belgesi: özellik kimlikleri (`F1`, `F2`, …), MVP kapsamı, kabul kriterleri, **"Açık sorular"** ve varsayımları
-- `skeleton/docs/screens.md` — ekranlar, navigasyon, akışlar, tasarım notları (renk paleti, tipografi)
+- `skeleton/docs/screens.md` — ekranlar, navigasyon, akışlar, tasarım notları (**"Tasarım dili"**: görsel dil, yoğunluk, oyunlaştırma düzeyi; renk paleti, tipografi)
 - `skeleton/docs/tech-plan.md` — stack, uygulama kimliği, klasör yapısı, veri modeli, test kurulumu ve **"İskeletin kapsamı"** bölümü
 - `skeleton/docs/roadmap.md` — iskelet sonrası işler (yalnızca bağlam için; bunları yapma)
 - `skeleton/IDEA.md` — fikrin tam hali (yalnızca arka plan bilgisi)
-- `scripts/output/task-params.json` — yalnızca `platform` ve `targets` alanlarını kullan; `targets` yoksa iki cihaz da
+- `scripts/output/task-params.json` — yalnızca `platform` ve `targets` alanlarını kullan; `targets` yoksa `["ios", "android"]` say (`web` platformunda `["web"]`)
 
 ### Hangi kaynak geçerli?
 
@@ -29,17 +29,18 @@ Bu belgeleri kullanıcı okuyup gerekirse düzenledi ve onayladı. **Tek doğrul
 
 ## 2. Sınırlar
 
-- **Yalnızca `skeleton/` içinde çalış.** İstisnalar: rapor dosyası `scripts/output/skeleton-report.json` ve (yalnızca Expo'da) depo kökündeki geçici `skeleton-work/` klasörü. Bu repodaki başka hiçbir dosyayı değiştirme.
+- **Yalnızca `skeleton/` içinde çalış.** İstisnalar: rapor dosyası `scripts/output/skeleton-report.json` ve (yalnızca Expo ve web'de) depo kökündeki geçici `skeleton-work/` klasörü. Bu repodaki başka hiçbir dosyayı değiştirme.
 - **Şunlara dokunma:** `skeleton/docs/`, `skeleton/IDEA.md` ve `skeleton/.git/` (varsa). Planlama belgeleri zaten `skeleton/docs/` altında; tech-plan.md'de "belgelerin `docs/` klasörüne kopyalanması" yazıyorsa bu adım yapılmış sayılır.
 - `skeleton/` içinde bunların dışında önceki bir denemeden kalmış dosyalar varsa, bunları silip baştan başlayabilirsin.
 - **Git komutu çalıştırma** (commit, push, init vb.). Commit ve push'u workflow yapar. Bir araç kendi `.git` klasörünü oluşturursa onu `skeleton/` içine taşıma veya kopyalama.
 - **Gizli bilgi yok.** Gerçek API anahtarı, token veya parola yazma. Gerekiyorsa `.env.example` gibi bir örnek dosya ve README'de açıklama.
+- **Tasarım dili = screens.md'deki "Tasarım dili".** Oyunlaştırma düzeyi "yok" ise seri, rozet, puan, seviye, liderlik tablosu, kutlama animasyonu ekleme; örnek/mock veride bile. Görsel dili ve yoğunluğu temaya (renk, köşe, boşluk ölçeği) yansıt.
 - **Kapsam = tech-plan.md'deki "İskeletin kapsamı".** Orada "yapılmayacak" denen şeyleri (gerçek backend bağlantısı, gerçek kimlik doğrulama, ödeme, analitik, bildirimler, yayın ayarları vb.) yapma. Bu servislerin SDK'larını da kurma; yalnızca bölüm 3'teki veri katmanı arayüzünü yaz.
-- Uygulamayı çalıştırma (`expo start`, emülatör vb.), `eas`, `prebuild` veya mağaza/yayın komutları kullanma.
+- Uygulamayı çalıştırma (`expo start`, `npm run dev`, emülatör vb.), `eas`, `prebuild`, deploy veya mağaza/yayın komutları kullanma. (`npm run build` yalnızca web doğrulaması için çalıştırılır.)
 
 ## 3. İskelette olması gerekenler
 
-1. **Çalışan proje yapısı**: tech-plan.md'deki stack ve klasör yapısı. Uygulama adı ve uygulama kimliği (bundle identifier / application ID) tech-plan.md'deki değerlerle ayarlanmış olmalı.
+1. **Çalışan proje yapısı**: tech-plan.md'deki stack ve klasör yapısı. Uygulama adı ve (mobil hedeflerde) uygulama kimliği (bundle identifier / application ID) tech-plan.md'deki değerlerle ayarlanmış olmalı.
 2. **Navigasyon**: screens.md'deki navigasyon yapısının tamamı.
 3. **MVP ekranları**: screens.md'deki her ekran, **belgedeki adıyla birebir aynı adla**, mock (sahte, kod içinde tanımlı) veriyle çalışan örnek haliyle.
    - Her ekranda belgede tarif edilen ana bileşenler ve aksiyonlar görünür olmalı.
@@ -50,7 +51,7 @@ Bu belgeleri kullanıcı okuyup gerekirse düzenledi ve onayladı. **Tek doğrul
    - Ekranlar veriye doğrudan değil, her zaman bir veri katmanı arayüzü (örn. repository/service) üzerinden erişir.
    - Bu arayüzün iskeletteki tek uygulaması mock veriyle çalışan, bellekte tutulan bir uygulamadır. Backend `none` olsa bile böyle yap; kalıcı yerel veri sonraki aşamaların işidir.
    - Mock veri ayrı bir yerde dursun (örn. `src/data/mock/`), böylece sonradan kolayca kaldırılabilsin.
-5. **Tema**: screens.md'deki tasarım notlarındaki renk paleti (hex değerleriyle), tipografi ölçeği ve bileşen yaklaşımı, tek bir yerde tanımlı. Tema açık+koyu ise sistem ayarına uymalı. Ekranlar renkleri doğrudan yazmaz, temadan alır.
+5. **Tema**: screens.md'deki tasarım notlarındaki renk paleti (hex değerleriyle), tipografi ölçeği, boşluk ölçeği (yoğunluğa göre) ve bileşen yaklaşımı, tek bir yerde tanımlı. Tema açık+koyu ise sistem ayarına uymalı. Ekranlar renkleri doğrudan yazmaz, temadan alır.
 6. **Testler**: tech-plan.md'deki test aracının kurulumu ve en az bir anlamlı örnek test (örn. mock repository'nin veri döndürdüğünü ya da bir ekranın boş durumunu doğrulayan bir test).
 7. **README.md** (Türkçe):
    - Fikrin kısa özeti.
@@ -75,7 +76,7 @@ Kod, dosya ve bileşen adları İngilizce; kullanıcıya görünen metinler, bel
 - `skeleton-work/.git` klasörü oluştuysa önce onu sil. Sonra oluşan dosyaları `skeleton/` içine kopyala (`skeleton/docs/`, `skeleton/IDEA.md` ve `skeleton/.git/`'in üzerine yazmadan).
 - Şablonun örnek ekranlarını, örnek bileşenlerini, örnek varlıklarını (asset) ve şablona özgü yardımcı script'leri (örn. projeyi sıfırlama script'i) kaldır; yerlerine belgelerdeki ekranları koy.
 - `app.json`/`app.config` içinde `name`, `slug`, `ios.bundleIdentifier` ve `android.package` değerlerini tech-plan.md'ye göre ayarla.
-- `targets` tek cihazsa `app.json`'da `platforms`'u o cihazla sınırla ve diğer platformun ayar bloğunu yazma.
+- `app.json`'da `platforms`'u `targets` ile birebir aynı yap (`ios`, `android`, `web`'den seçilenler) ve hedefte olmayan platformun ayar bloğunu yazma. `web` hedefteyse web için gereken paketleri (`react-dom`, `react-native-web`, `@expo/metro-runtime`) `npx expo install` ile ekle ve ekranların dar ve geniş tarayıcı penceresinde kullanılabilir olmasına dikkat et.
 - Ek paketleri `npx expo install <paket>` ile ekle (Expo SDK'sıyla uyumlu sürüm seçer).
 - `skeleton/` içinde sırayla çalıştır ve hataları düzelterek tekrarla:
   1. `npm install`
@@ -85,11 +86,27 @@ Kod, dosya ve bileşen adları İngilizce; kullanıcıya görünen metinler, bel
 - Tip kontrolü geçmeden işi bitirme. Workflow, raporundan bağımsız olarak `npm install` ve `npx tsc --noEmit` çalıştırır; başarısız olursa görev başarısız sayılır.
 - İş bitince depo kökündeki `skeleton-work/` klasörünü sil.
 
+### `web` (doğrulama yapılır)
+
+- Projeyi `create-vite` ile **`skeleton/` dışında geçici bir klasörde** oluştur (depo kökünde `skeleton-work/`), React + TypeScript şablonuyla (`npm create vite@latest skeleton-work -- --template react-ts`). Komut etkileşimli soru sormasın diye gerekli tüm seçenekleri komut satırında ver; emin değilsen önce `--help` ile bak.
+- Oluşan dosyaları `skeleton/` içine kopyala (`skeleton/docs/`, `skeleton/IDEA.md` ve `skeleton/.git/`'in üzerine yazmadan). Şablonun örnek sayaç bileşenini, örnek görselleri ve CSS'ini kaldır.
+- tech-plan.md'deki router, PWA (manifest + service worker), test (Vitest + Testing Library) ve lint araçlarını `npm install` ile ekle. Ekranlar tech-plan.md'deki URL yapısıyla route olarak tanımlansın; screens.md'deki adlar bileşen adı olarak kalsın (`...Screen`).
+- `index.html`'deki başlığı ve PWA manifest'teki uygulama adını tech-plan.md'ye göre ayarla.
+- Yerleşim responsive olsun: en az dar (telefon) ve geniş (masaüstü) genişlikte kullanılabilir.
+- `skeleton/` içinde sırayla çalıştır ve hataları düzelterek tekrarla:
+  1. `npm install`
+  2. `npx tsc --noEmit` (gerekirse `tsc -b` uyumlu bir `tsconfig` yapısıyla; `npx tsc --noEmit` kök dizinde hatasız çalışmalı)
+  3. Lint
+  4. Testler
+  5. `npm run build`
+- Tip kontrolü ve derleme geçmeden işi bitirme. Workflow, raporundan bağımsız olarak `npm install`, `npx tsc --noEmit` ve `npm run build` çalıştırır; biri başarısız olursa görev başarısız sayılır.
+- İş bitince depo kökündeki `skeleton-work/` klasörünü sil.
+
 ### `flutter`, `ios_swift`, `android_kotlin` (doğrulama yapılmaz)
 
 Bu ortamda bu platformların araçları kurulu değil ve bu platformlar için komut çalıştırma izni yok; dosyaları doğrudan yaz. Derlenemeyeceği için ekstra dikkatli ol: import'lar, paket adları, dosya yolları ve sözdizimi tutarlı olsun. Bilmediğin veya emin olmadığın bir API'yi kullanma; platformun yaygın, uzun süredir kararlı API'lerini tercih et.
 
-- **`flutter`**: `pubspec.yaml` (uygulama adı tech-plan.md'ye uygun), `analysis_options.yaml`, `lib/` altındaki kod ve `test/` altındaki örnek test. `android/`, `ios/` gibi platform klasörlerini elle yazma; README'de ilk adım olarak `flutter create --org <uygulama kimliğinin son parça hariç hali> --platforms=<targets, virgülle> .` ile üretileceğini ve ardından `flutter pub get` çalıştırılacağını belirt.
+- **`flutter`**: `pubspec.yaml` (uygulama adı tech-plan.md'ye uygun), `analysis_options.yaml`, `lib/` altındaki kod ve `test/` altındaki örnek test. `android/`, `ios/`, `web/` gibi platform klasörlerini elle yazma; README'de ilk adım olarak `flutter create --org <uygulama kimliğinin son parça hariç hali> --platforms=<targets, virgülle> .` ile üretileceğini ve ardından `flutter pub get` çalıştırılacağını belirt.
 - **`ios_swift`**: Xcode proje dosyasını (`.xcodeproj`) elle yazma. Bunun yerine [XcodeGen](https://github.com/yonaskolb/XcodeGen) için bir `project.yml` (bundle identifier ve minimum iOS sürümü tech-plan.md'ye göre; uygulama ve test hedefleriyle) ve kaynak dosyaları yaz; README'de `xcodegen generate` adımını anlat. SwiftLint için `.swiftlint.yml`.
 - **`android_kotlin`**: Gradle (Kotlin DSL) dosyaları (`applicationId` ve `minSdk` tech-plan.md'ye göre), `app/` modülü, kaynaklar ve örnek bir birim testi. İkili dosya olan `gradle-wrapper.jar`'ı yazma; README'de wrapper'ın `gradle wrapper` ile ya da Android Studio'da projeyi açarak üretileceğini anlat.
 
@@ -111,12 +128,13 @@ Bir hata makul sayıda denemeden sonra düzelmiyorsa, düzeltmeyi zorlamak yerin
 - PRD'deki her özellik kimliği (`F1`, `F2`, …) en az bir ekranda karşılık buluyor mu?
 - Veri modelindeki her varlık, belgedeki adıyla tanımlı mı ve ekranlar veriye yalnızca veri katmanı üzerinden mi erişiyor?
 - PRD'deki açık soruların varsayımlarına uyuldu mu?
-- Uygulama adı ve uygulama kimliği tech-plan.md'deki değerlerle ayarlı mı?
+- screens.md'deki "Tasarım dili" (görsel dil, yoğunluk, oyunlaştırma düzeyi) temaya ve ekranlara yansıdı mı? Oyunlaştırma "yok" ise hiçbir ekranda veya mock veride seri/rozet/puan yok mu?
+- Uygulama adı ve (mobil hedeflerde) uygulama kimliği tech-plan.md'deki değerlerle ayarlı mı?
 - Şablondan kalan örnek ekran, bileşen veya script kalmadı mı?
 - README.md ve CLAUDE.md var mı?
 - `skeleton/docs/`, `skeleton/IDEA.md` ve `skeleton/.git/` değişmeden duruyor mu?
 - Repoda gizli bilgi yok mu ve `node_modules` `.gitignore`'da mı? `skeleton-work/` silindi mi?
-- (Expo) `npx tsc --noEmit` hatasız geçiyor mu?
+- (Expo, web) `npx tsc --noEmit` hatasız geçiyor mu? (Web) `npm run build` hatasız geçiyor mu?
 - Bölüm 5'teki yasaklı yöntemlerin hiçbiri kullanılmadı mı?
 
 ## 7. Raporu yaz
@@ -137,7 +155,7 @@ En sonda `scripts/output/skeleton-report.json` dosyasını yaz:
 }
 ```
 
-- `status`: İskelet bölüm 3'teki gereksinimleri karşılıyorsa (ve Expo'da tip kontrolü geçiyorsa) `"ok"`, aksi halde `"failed"`. `failed` ise `notes` alanında nedenini açıkça yaz.
+- `status`: İskelet bölüm 3'teki gereksinimleri karşılıyorsa (ve Expo/web'de tip kontrolü, web'de ayrıca derleme geçiyorsa) `"ok"`, aksi halde `"failed"`. `failed` ise `notes` alanında nedenini açıkça yaz.
 - `checks` değerleri: `"passed"`, `"failed"` veya `"skipped"`. Doğrulama yapılmayan platformlarda dördü de `"skipped"`. Hiçbir şey kurulmadıysa (bölüm 1'deki hata durumları) dördü de `"skipped"`.
 - `summary`: Issue'ya yorum olarak eklenir; kısa ve somut tut. Neler kuruldu: stack, ekranlar (adlarıyla), veri katmanı, tema, testler.
 - `notes`: Şunları içersin (yoksa boş string):

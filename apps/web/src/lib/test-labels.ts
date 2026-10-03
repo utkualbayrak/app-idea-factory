@@ -12,13 +12,17 @@ import type {
 export const TEST_PLATFORM_LABELS: Record<TestPlatform, string> = {
   ios: "iOS",
   android: "Android",
+  web: "Web",
 };
+
+export const TEST_PLATFORMS = Object.keys(TEST_PLATFORM_LABELS) as TestPlatform[];
 
 export const TEST_CHANNEL_LABELS: Record<TestChannel, string> = {
   testflight: "TestFlight",
   play_internal: "Google Play dahili test",
   expo_go: "Expo Go",
   direct_install: "Doğrudan kurulum (APK / cihaz)",
+  web_url: "Web adresi / önizleme",
   other: "Diğer",
 };
 
@@ -59,7 +63,8 @@ export const FINDING_KIND_LABELS: Record<FindingKind, string> = {
 export const FINDING_PLATFORM_LABELS: Record<FindingPlatform, string> = {
   ios: "iOS",
   android: "Android",
-  both: "Her ikisi",
+  web: "Web",
+  both: "Tümü",
 };
 
 export const ROUND_STATUS_LABELS: Record<TestRound["status"], string> = {
@@ -83,8 +88,9 @@ export function defaultTestPlatforms(params: TaskParams | undefined): TestPlatfo
 }
 
 export function defaultTestChannel(params: TaskParams | undefined): TestChannel {
-  if (params?.platform === "expo") return "expo_go";
   const targets = defaultTestPlatforms(params);
+  if (targets.length === 1 && targets[0] === "web") return "web_url";
+  if (params?.platform === "expo") return "expo_go";
   if (targets.length === 1) return targets[0] === "ios" ? "testflight" : "play_internal";
   return "direct_install";
 }

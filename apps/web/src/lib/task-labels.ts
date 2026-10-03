@@ -2,10 +2,13 @@ import type {
   DocumentKind,
   TaskAuth,
   TaskBackend,
+  TaskDensity,
+  TaskGamification,
   TaskPlatform,
   TaskStatus,
   TaskStyle,
   TaskTarget,
+  TaskParams,
   TaskTheme,
 } from "@/lib/api";
 
@@ -15,12 +18,14 @@ import type {
 export const TARGET_LABELS: Record<TaskTarget, string> = {
   ios: "iOS",
   android: "Android",
+  web: "Web",
 };
 
-// Native seçenekler tek bir cihaz ailesine kilitli; çapraz platformda seçilir.
+// Native seçenekler ve web tek bir hedefe kilitli; çapraz platformda seçilir.
 export const FIXED_TARGETS: Partial<Record<TaskPlatform, TaskTarget[]>> = {
   ios_swift: ["ios"],
   android_kotlin: ["android"],
+  web: ["web"],
 };
 
 export const PLATFORM_LABELS: Record<TaskPlatform, string> = {
@@ -28,6 +33,7 @@ export const PLATFORM_LABELS: Record<TaskPlatform, string> = {
   flutter: "Çapraz platform — Flutter",
   ios_swift: "iOS — Swift",
   android_kotlin: "Android — Kotlin",
+  web: "Web — React + Vite (PWA)",
 };
 
 export const BACKEND_LABELS: Record<TaskBackend, string> = {
@@ -50,9 +56,46 @@ export const THEME_LABELS: Record<TaskTheme, string> = {
 };
 
 export const STYLE_LABELS: Record<TaskStyle, string> = {
+  native: "Platforma özgü",
   minimal: "Minimal",
-  colorful: "Renkli",
+  soft: "Yumuşak / sıcak",
+  colorful: "Canlı / renkli",
+  editorial: "Editoryal / tipografik",
+  professional: "Profesyonel / veri odaklı",
+  playful: "Oyunsu",
 };
+
+export const STYLE_DESCRIPTIONS: Record<TaskStyle, string> = {
+  native: "Sistem bileşenleri ve platformun kendi görünümü, özel tema en az.",
+  minimal: "Sade, bol beyaz alan, tek vurgu rengi.",
+  soft: "Yumuşak tonlar, yuvarlak köşeler, sakin ve samimi.",
+  colorful: "Cesur renkler ve belirgin vurgular, enerjik.",
+  editorial: "Tipografi ön planda, dergi/okuma deneyimi gibi.",
+  professional: "Ciddi, yoğun bilgi, tablo/grafik dostu, iş aracı hissi.",
+  playful: "Eğlenceli şekiller, illüstrasyon, hareket. Oyunlaştırma ayrı seçilir.",
+};
+
+export const GAMIFICATION_LABELS: Record<TaskGamification, string> = {
+  none: "Yok",
+  light: "Hafif (ilerleme, tamamlanma anı)",
+  full: "Yoğun (seri, rozet, puan)",
+};
+
+export const DENSITY_LABELS: Record<TaskDensity, string> = {
+  airy: "Ferah",
+  balanced: "Dengeli",
+  compact: "Sıkı",
+};
+
+// Kart ve dışa aktarmada tek satırlık tasarım özeti.
+export function designSummary(design: TaskParams["design"]): string {
+  return [
+    THEME_LABELS[design.theme],
+    STYLE_LABELS[design.style],
+    `oyunlaştırma: ${GAMIFICATION_LABELS[design.gamification].split(" (")[0].toLowerCase()}`,
+    `yoğunluk: ${DENSITY_LABELS[design.density].toLowerCase()}`,
+  ].join(" · ");
+}
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   planning: "Belgeler hazırlanıyor",
