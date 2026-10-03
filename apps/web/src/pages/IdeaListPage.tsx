@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Archive, Plus } from "lucide-react";
+import { Archive, ChevronDown, Plus, SlidersHorizontal } from "lucide-react";
 import { fetchIdeas, type Idea } from "@/lib/api";
 import { IdeaTable } from "@/components/IdeaTable";
 import { isInIdeaPool } from "@/lib/idea-colors";
@@ -68,6 +68,9 @@ export function IdeaListPage() {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(loadFilters);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Mobilde filtre paneli varsayılan kapalı, liste ekranın üstünde kalsın.
+  // Masaüstünde (md+) panel her zaman açık, bu state orada etkisiz.
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   useEffect(() => {
     fetchIdeas()
@@ -97,6 +100,13 @@ export function IdeaListPage() {
   }
 
   const isFiltered = useMemo(() => JSON.stringify(filters) !== JSON.stringify(DEFAULT_FILTERS), [filters]);
+
+  // Arama kutusu mobilde de görünür kaldığı için sayıma girmez; tarih aralığı tek filtre sayılır.
+  const activeFilterCount = useMemo(() => {
+    const keys = ["category", "status", "minRating", "onlyUnrated", "minMarket", "minFeasibility", "minOriginality"] as const;
+    const count = keys.filter((key) => filters[key] !== DEFAULT_FILTERS[key]).length;
+    return count + (filters.dateFrom || filters.dateTo ? 1 : 0);
+  }, [filters]);
 
   // Geliştirme/test akışına giren fikirler ana listeden tamamen çıkar,
   // kendi ekranlarında (/developed, /testing, /ready) görünür.
@@ -180,18 +190,36 @@ export function IdeaListPage() {
     <ListPageLayout>
       {header}
 
-      <div className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+      <div className="flex shrink-0 flex-col gap-3 rounded-lg border bg-card p-3 md:p-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="search">Ara</Label>
-          <Input
-            id="search"
-            placeholder="Ad, kategori veya etiket…"
-            value={filters.search}
-            onChange={(e) => set("search", e.target.value)}
-          />
+          <Label htmlFor="search" className="hidden md:block">
+            Ara
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="search"
+              placeholder="Ad, kategori veya etiket…"
+              value={filters.search}
+              onChange={(e) => set("search", e.target.value)}
+            />
+            <Button
+              variant="outline"
+              className="shrink-0 md:hidden"
+              aria-expanded={filtersOpen}
+              aria-controls="idea-filters"
+              onClick={() => setFiltersOpen((open) => !open)}
+            >
+              <SlidersHorizontal className="size-4" />
+              Filtre{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+              <ChevronDown className={`size-4 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+            </Button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <div
+          id="idea-filters"
+          className={`${filtersOpen ? "grid" : "hidden"} grid-cols-2 gap-3 sm:grid-cols-3 md:grid md:grid-cols-4 lg:grid-cols-5`}
+        >
           <div className="flex flex-col gap-1.5">
             <Label>Kategori</Label>
             <Select value={filters.category} onValueChange={(v) => set("category", v)}>
@@ -307,7 +335,7 @@ export function IdeaListPage() {
           </div>
         </div>
 
-        <div className="flex justify-end">
+        <div className={`${filtersOpen ? "flex" : "hidden"} justify-end md:flex`}>
           <Button variant="outline" size="sm" disabled={!isFiltered} onClick={() => setFilters(DEFAULT_FILTERS)}>
             Temizle
           </Button>
