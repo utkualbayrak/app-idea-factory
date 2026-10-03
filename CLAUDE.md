@@ -587,8 +587,8 @@ Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wi
 - **Web:**
   - `lib/image-prep.ts` resizes to 2000 px. PNG stays PNG if it fits, otherwise JPEG with descending quality.
   - `components/IdeaImagesCard.tsx` (detail page, anchor `#gorseller`): drag-drop/multi-select, role select, caption saved on blur, reorder, delete, lightbox.
-  - `lib/image-labels.ts` has the role labels and `imagesSummary()`.
-  - `DevelopPage` shows the image summary.
+  - `lib/image-labels.ts` has the role labels.
+  - `DevelopPage` embeds the same `IdeaImagesCard` (editable), so images can be checked and changed before (re)planning.
   - `DevelopmentCard` warns when `images_changed_at` is newer than the newest doc's `generated_at` while the task is `ready`.
 - **Workflows:**
   - `fetch-task.ts` downloads the images to `<out>/design/NN-<role>.<ext>` plus `design.json` for both `plan-idea.yml` (now 45 turns) and `build-skeleton.yml`.

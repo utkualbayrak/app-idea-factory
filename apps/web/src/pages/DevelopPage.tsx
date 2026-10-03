@@ -30,10 +30,11 @@ import {
   STYLE_DESCRIPTIONS,
   STYLE_LABELS,
   TARGET_LABELS,
+  TASK_IMAGE_LOCKED_STATUSES,
   TASK_STATUS_LABELS,
   THEME_LABELS,
 } from "@/lib/task-labels";
-import { imagesSummary } from "@/lib/image-labels";
+import { IdeaImagesCard } from "@/components/IdeaImagesCard";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -377,14 +378,11 @@ export function DevelopPage() {
               placeholder="Örn. Things 3'ün sadeliği, Linear'ın yoğunluğu"
             />
           </div>
-          <p className="text-xs text-muted-foreground sm:col-span-2">
-            {images.length > 0
-              ? `${imagesSummary(images)} planlamada kullanılacak; çelişirse ekran tasarımı görselleri görsel dil seçiminden önce gelir. `
-              : "Görsel eklenmedi. Ekran tasarımı, logo ya da ilham görselin varsa fikrin sayfasından ekleyebilirsin. "}
-            <Link to={`/ideas/${id}#gorseller`} className="text-primary underline underline-offset-4">
-              Görselleri düzenle
-            </Link>
-          </p>
+          {images.length > 0 && (
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Aşağıdaki görseller planlamada kullanılacak; çelişirse ekran tasarımı görselleri görsel dil seçiminden önce gelir.
+            </p>
+          )}
           {style === "playful" && gamification === "none" && (
             <p className="text-xs text-amber-700 sm:col-span-2 dark:text-amber-300">
               Oyunsu görsel dil yalnızca görünümü etkiler; oyunlaştırma "Yok" kaldıkça seri, rozet veya puan eklenmez.
@@ -392,6 +390,16 @@ export function DevelopPage() {
           )}
         </CardContent>
       </Card>
+
+      {id && (
+        <IdeaImagesCard
+          ideaId={id}
+          images={images}
+          onImagesChange={setImages}
+          locked={task != null && TASK_IMAGE_LOCKED_STATUSES.includes(task.status)}
+          onChanged={() => {}}
+        />
+      )}
 
       <Card>
         <CardHeader>
