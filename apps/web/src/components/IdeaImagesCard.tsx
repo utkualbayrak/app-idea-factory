@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import {
   deleteIdeaImage,
   ideaImageUrl,
@@ -44,6 +44,21 @@ export function IdeaImagesCard({
   const [uploads, setUploads] = useState<UploadState[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<IdeaImage | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  // Kapalıyken ızgara sabit yükseklikte; taşıyor mu diye ölçülür (sütun sayısı
+  // ekrana göre değiştiği için görsel sayısından tahmin edilemez).
+  const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = gridRef.current;
+    if (!node) return;
+    const measure = () => setOverflowing(node.scrollHeight > node.clientHeight + 1);
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    for (const child of node.children) observer.observe(child);
+    measure();
+    return () => observer.disconnect();
+  }, [images.length, expanded]);
   const uploading = uploads.some((u) => u.error === null);
   const remaining = MAX_IMAGES_PER_IDEA - images.length;
 
@@ -188,7 +203,12 @@ export function IdeaImagesCard({
         {images.length === 0 ? (
           locked && <p className="text-sm text-muted-foreground">Görsel eklenmemiş.</p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <>
+          {/* Çok görsel sayfayı uzatmasın: kapalıyken sabit yükseklik, içeride kaydırma. */}
+          <div
+            ref={gridRef}
+            className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${expanded ? "" : "max-h-[34rem] overflow-y-auto"}`}
+          >
             {images.map((image, index) => (
               <div key={image.id} className="flex min-w-0 flex-col gap-2 rounded-md border p-2">
                 <button
@@ -266,6 +286,13 @@ export function IdeaImagesCard({
               </div>
             ))}
           </div>
+          {(overflowing || expanded) && (
+            <Button variant="ghost" size="sm" className="w-fit" onClick={() => setExpanded((v) => !v)}>
+              {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+              {expanded ? "Görselleri daralt" : `Tüm görselleri aç (${images.length})`}
+            </Button>
+          )}
+          </>
         )}
       </CardContent>
 
