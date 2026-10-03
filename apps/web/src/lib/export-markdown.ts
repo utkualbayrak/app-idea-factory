@@ -1,5 +1,6 @@
-import type { Competitor, DevReport, Idea, RepoState, Task, TaskDocument, TestRound } from "@/lib/api";
+import type { Competitor, IdeaImage, DevReport, Idea, RepoState, Task, TaskDocument, TestRound } from "@/lib/api";
 import { STATUS_LABELS } from "@/lib/idea-colors";
+import { IMAGE_ROLE_LABELS } from "@/lib/image-labels";
 import {
   designSummary,
   AUTH_LABELS,
@@ -32,6 +33,7 @@ export interface IdeaExport {
   repo?: RepoState | null;
   devReports?: DevReport[];
   testRounds?: TestRound[];
+  images?: IdeaImage[];
 }
 
 const SIMILARITY_LABELS = { direct: "doğrudan", partial: "kısmi", alternative: "alternatif" } as const;
@@ -132,6 +134,15 @@ function competitorsSection(competitors: Competitor[]): string[] {
   ];
 }
 
+// Görsellerin kendisi değil, listesi (rol ve not).
+function imagesSection(images: IdeaImage[]): string[] {
+  return [
+    "## Görseller",
+    ...images.map((image, index) => `${index + 1}. ${IMAGE_ROLE_LABELS[image.role]}${image.caption ? ` — ${image.caption}` : ""}`),
+    "",
+  ];
+}
+
 function taskSection(task: Task): string[] {
   const { params } = task;
   const lines = [
@@ -228,9 +239,19 @@ function testRoundsSection(rounds: TestRound[]): string[] {
   return lines;
 }
 
-export function ideaToMarkdown({ idea, competitors, task, documents, repo, devReports, testRounds }: IdeaExport): string {
+export function ideaToMarkdown({
+  idea,
+  competitors,
+  task,
+  documents,
+  repo,
+  devReports,
+  testRounds,
+  images,
+}: IdeaExport): string {
   const lines = ideaSection(idea);
   if (competitors && competitors.length > 0) lines.push(...competitorsSection(competitors));
+  if (images && images.length > 0) lines.push(...imagesSection(images));
   if (task) lines.push(...taskSection(task));
   if (documents && documents.length > 0) lines.push(...documentsSection(documents, repo));
   if (devReports && devReports.length > 0) lines.push(...devReportsSection(devReports));

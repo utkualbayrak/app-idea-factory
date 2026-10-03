@@ -37,7 +37,7 @@ Ideas, tamamen ücretsiz planlar üzerinde çalışan kişisel ve otomatik bir f
 | **Gösterge paneli** | Anlık sayaçlar, kategori dağılımı, günlük ortalama puan trendi, son işler ve son trend çalışması |
 | **Fikirler** | Tek, sıralanabilir ve filtrelenebilir tablo (arama, kategori, durum, minimum puanlar, tarih aralığı), sayfa başına 20, 4'e kadar karşılaştırma |
 | **Fikir ekle** | Günlük taramanın bulamadığı bir fikri gir: serbestçe anlat (ya da başka bir yerde yazdığın PRD gibi bir Markdown belgeyi yapıştır / sürükle bırak), Claude alanları doldurup puanlasın; ya da formu kendin doldur, Claude sonra puanlasın |
-| **Fikir detayı** | Fikrin tamamı, Claude'un gerekçeleriyle puan dökümü, 0–10 puanın ve notun, rakipler, yeniden değerlendirme, Markdown dışa aktarma |
+| **Fikir detayı** | Fikrin tamamı, Claude'un gerekçeleriyle puan dökümü, 0–10 puanın ve notun, rakipler, yeniden değerlendirme, tasarım görselleri (ekran tasarımı, ilham, logo/ikon varlığı — planlama belgeleri ve iskelet bunları kullanır), Markdown dışa aktarma |
 | **Geliştir** | Fikir için görev formu: platform ve hedefler (iOS / Android / web), backend, auth, MVP özellikleri, tasarım (tema, görsel dil, oyunlaştırma düzeyi, yoğunluk, referans uygulamalar), notlar |
 | **Kanban** | Geliştirme, test ve dağıtım aşamasındaki fikirler renkli sütunlarda. Kartı başka sütuna sürükleyince o adımın formu (ya da kısa bir onay) açılır; durum ancak gönderilince değişir |
 | **Geliştirilenler** | Geliştirme akışındaki fikirler: planlama belgeleri onayını bekleyenler, iskeleti kurulanlar ya da kurulmuş olanlar, testten revizyona dönenler. Detay sayfasında belgeler (başlatana kadar düzenlenebilir), repo/issue linkleri, tekrar dene ve son commit'leri ve değişen Markdown dosyalarını çeken repo senkronu |
@@ -127,6 +127,7 @@ npx wrangler login
 ```bash
 cd apps/api
 npx wrangler d1 create app-idea-factory-db       # yazdırdığı database_id'yi kopyala
+npx wrangler kv namespace create app-idea-factory-images   # yazdırdığı id'yi kopyala (fikir tasarım görselleri)
 npx wrangler d1 migrations apply app-idea-factory-db --remote
 ```
 
@@ -134,7 +135,7 @@ npx wrangler d1 migrations apply app-idea-factory-db --remote
 
 | Dosya | Ne değişecek |
 |---|---|
-| `apps/api/wrangler.jsonc` | `database_id`; `routes` altındaki özel alan adı (ya da `routes`'u silip `"workers_dev": true` ekle); `WEB_ORIGIN` (web uygulamanın adres(ler)i, virgülle ayrılmış); `ACCESS_TEAM_DOMAIN` (`<takım>.cloudflareaccess.com`) ve `ACCESS_AUDS` (web ve API Access uygulamalarının AUD tag'leri, virgülle ayrılmış — "en son kim güncelledi" için Access JWT'sini doğrulamakta kullanılır) |
+| `apps/api/wrangler.jsonc` | `database_id`; `IMAGES` KV namespace `id`'si; `routes` altındaki özel alan adı (ya da `routes`'u silip `"workers_dev": true` ekle); `WEB_ORIGIN` (web uygulamanın adres(ler)i, virgülle ayrılmış); `ACCESS_TEAM_DOMAIN` (`<takım>.cloudflareaccess.com`) ve `ACCESS_AUDS` (web ve API Access uygulamalarının AUD tag'leri, virgülle ayrılmış — "en son kim güncelledi" için Access JWT'sini doğrulamakta kullanılır) |
 | `apps/web/wrangler.jsonc` | Farklı bir Worker adı istiyorsan `name`; `services[0].service` API Worker'ın `name`'iyle aynı olmalı |
 | `apps/api/src/app.ts` | `GITHUB_REPO` → `<sen>/app-idea-factory` (workflow tetiklemek için) |
 | `scripts/lib/api-client.ts` | Varsayılan `BASE_URL` → kendi API adresin (ya da workflow'larda `API_BASE_URL` env değişkeni ver) |

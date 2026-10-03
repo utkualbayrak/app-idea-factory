@@ -202,6 +202,35 @@ export async function fetchIdeaTask(ideaId: string): Promise<IdeaTaskResponse> {
   return fetchJson(`${BASE_URL}/ideas/${ideaId}/task`, { headers: authHeaders() });
 }
 
+// 0018: fikir görselleri (metadata + dosya).
+export interface IdeaImage {
+  id: string;
+  role: "screen" | "inspiration" | "asset";
+  caption: string | null;
+  mime: string;
+  width: number | null;
+  height: number | null;
+}
+
+export async function fetchIdeaImages(ideaId: string): Promise<IdeaImage[]> {
+  const body = await fetchJson<{ images: IdeaImage[] }>(`${BASE_URL}/ideas/${ideaId}/images`, {
+    headers: authHeaders(),
+  });
+  return body.images;
+}
+
+// fetchJson gibi: Access login sayfasına yönlenme 200 döndüğü için içerik
+// türü de kontrol edilir.
+export async function downloadIdeaImage(ideaId: string, imageId: string): Promise<Buffer> {
+  const url = `${BASE_URL}/ideas/${ideaId}/images/${imageId}`;
+  const res = await fetch(url, { headers: authHeaders() });
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!res.ok || !contentType.startsWith("image/")) {
+    throw new Error(`Görsel indirilemedi: ${url} status=${res.status} content-type=${contentType || "(yok)"} final_url=${res.url}`);
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
 // Faz 3C: build-skeleton.yml repo/issue adreslerini ve başarıyı bildirir.
 export async function reportTaskBuild(body: {
   idea_id: string;

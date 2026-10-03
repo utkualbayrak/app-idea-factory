@@ -37,7 +37,7 @@ Ideas is a personal, fully automated idea pipeline that runs on free tiers only:
 | **Dashboard** | Live counters, category distribution, daily average score trend, latest jobs and the latest trend run |
 | **Ideas** | One sortable, filterable table (search, category, status, score minimums, date range), 20 per page, compare up to 4 |
 | **Add idea** | Enter an idea the daily run did not find: describe it freely (or paste / drag in a Markdown document such as a PRD you wrote elsewhere) and let Claude fill in the fields and score it, or fill in the form yourself and have Claude score it later |
-| **Idea detail** | Full idea, score breakdown with Claude's reasoning, your 0–10 rating and note, competitors, re-evaluation, Markdown export |
+| **Idea detail** | Full idea, score breakdown with Claude's reasoning, your 0–10 rating and note, competitors, re-evaluation, design images (screen designs, inspiration, logo/icon assets — used by the planning docs and the skeleton), Markdown export |
 | **Develop** | Task form for an idea: platform and targets (iOS / Android / web), backend, auth, MVP features, design (theme, visual style, gamification level, density, reference apps), notes |
 | **Kanban** | Development, test and ready-to-ship ideas as color-coded columns. Dragging a card to another column opens that step's form (or a short confirmation); the status only changes once it is submitted |
 | **Developed** | Ideas in the development flow: awaiting your review of the planning docs, skeleton in progress or built, and ideas sent back from testing (rework). The detail page shows the docs (editable until you start), repo/issue links, retry, and a repo sync that pulls recent commits and changed Markdown files |
@@ -127,6 +127,7 @@ npx wrangler login
 ```bash
 cd apps/api
 npx wrangler d1 create app-idea-factory-db       # copy the database_id it prints
+npx wrangler kv namespace create app-idea-factory-images   # copy the id it prints (idea design images)
 npx wrangler d1 migrations apply app-idea-factory-db --remote
 ```
 
@@ -134,7 +135,7 @@ npx wrangler d1 migrations apply app-idea-factory-db --remote
 
 | File | What to change |
 |---|---|
-| `apps/api/wrangler.jsonc` | `database_id`; the `routes` custom domain (or remove `routes` and set `"workers_dev": true`); `WEB_ORIGIN` (your web app URL(s), comma-separated); `ACCESS_TEAM_DOMAIN` (`<team>.cloudflareaccess.com`) and `ACCESS_AUDS` (the AUD tags of the web and API Access applications, comma-separated — used to verify the Access JWT for "last updated by") |
+| `apps/api/wrangler.jsonc` | `database_id`; the `IMAGES` KV namespace `id`; the `routes` custom domain (or remove `routes` and set `"workers_dev": true`); `WEB_ORIGIN` (your web app URL(s), comma-separated); `ACCESS_TEAM_DOMAIN` (`<team>.cloudflareaccess.com`) and `ACCESS_AUDS` (the AUD tags of the web and API Access applications, comma-separated — used to verify the Access JWT for "last updated by") |
 | `apps/web/wrangler.jsonc` | `name` if you want a different Worker name; `services[0].service` must match the API Worker's `name` |
 | `apps/api/src/app.ts` | `GITHUB_REPO` → `<you>/app-idea-factory` (used to dispatch workflows) |
 | `scripts/lib/api-client.ts` | Default `BASE_URL` → your API URL (or set an `API_BASE_URL` env var in the workflows) |

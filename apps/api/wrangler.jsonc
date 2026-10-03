@@ -24,5 +24,12 @@
       "database_name": "app-idea-factory-db",
       "database_id": "05ca3282-5e95-4718-b02c-3e75a21a9f5e"
     }
+  ],
+  // 0018: fikir görsellerinin dosyaları (metadata D1'de idea_images).
+  "kv_namespaces": [
+    {
+      "binding": "IMAGES",
+      "id": "5e00fcb1a58a446899dff0ea07c77e3c"
+    }
   ]
 }

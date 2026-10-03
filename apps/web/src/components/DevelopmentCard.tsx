@@ -64,6 +64,8 @@ interface DevelopmentCardProps {
   lastBuildRun: WorkflowRun | undefined;
   /** İskelet reposunun son senkronu (yoksa null). */
   repo: RepoState | null;
+  /** Fikrin görselleri en son ne zaman değişti; belgelerden yeniyse uyarı. */
+  imagesChangedAt: string | null;
   onRepoSynced: (repo: RepoState) => void;
   /** Görev/fikir/iş listesi sunucudan tazelensin (başlatma, işaretleme sonrası). */
   onChanged: () => void;
@@ -81,6 +83,7 @@ export function DevelopmentCard({
   lastPlanRun,
   lastBuildRun,
   repo,
+  imagesChangedAt,
   onRepoSynced,
   onChanged,
 }: DevelopmentCardProps) {
@@ -219,6 +222,16 @@ export function DevelopmentCard({
         {task.repo_url && <RepoSyncPanel taskId={task.id} repo={repo} onSynced={onRepoSynced} />}
 
         <StatusMessage task={task} />
+
+        {editable && imagesChangedAfterDocs(imagesChangedAt, documents) && (
+          <p className="text-sm text-amber-700 dark:text-amber-300">
+            Görseller belgeler üretildikten sonra değişti; belgeler yeni görselleri görmedi.{" "}
+            <Link to={`/ideas/${ideaId}/develop`} className="underline underline-offset-4">
+              Geliştir formundan belgeleri yeniden üretebilirsin
+            </Link>
+            .
+          </p>
+        )}
 
         {docs.length > 0 && (
           <div className="flex justify-end">
@@ -551,4 +564,10 @@ function DocumentPanel({
       )}
     </div>
   );
+}
+
+function imagesChangedAfterDocs(imagesChangedAt: string | null, documents: TaskDocument[]): boolean {
+  if (!imagesChangedAt || documents.length === 0) return false;
+  const generated = documents.map((d) => d.generated_at).sort().at(-1);
+  return generated != null && imagesChangedAt > generated;
 }

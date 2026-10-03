@@ -130,3 +130,7 @@ export const REPLANNABLE_STATUSES: TaskStatus[] = ["planning_failed", "ready"];
 
 // Arka planda bir iş sürerken detay sayfası kendini yeniler.
 export const TASK_IN_PROGRESS_STATUSES: TaskStatus[] = ["planning", "queued", "running"];
+
+// İskelet aşamasında görseller kilitli (apps/api/src/schema.ts
+// TASK_IMAGE_LOCKED_STATUSES ile aynı).
+export const TASK_IMAGE_LOCKED_STATUSES: TaskStatus[] = ["queued", "running", "done", "failed"];

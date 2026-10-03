@@ -5,6 +5,8 @@ import {
   fetchIdea,
   fetchIdeas,
   fetchIdeaTask,
+  fetchIdeaImages,
+  type IdeaImage,
   fetchCompetitors,
   fetchDevReports,
   fetchTestRounds,
@@ -42,7 +44,7 @@ import { DevelopmentCard } from "@/components/DevelopmentCard";
 import { RenameIdeaButton } from "@/components/RenameIdeaButton";
 import { DevReportsCard } from "@/components/DevReportsCard";
 import { ReworkBanner, TestCard } from "@/components/TestCard";
-import { TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
+import { TASK_IMAGE_LOCKED_STATUSES, TASK_IN_PROGRESS_STATUSES } from "@/lib/task-labels";
 import { FeatureProposalCard, IdeaSummaryTile } from "@/components/ProposalCards";
 import { PageMessage } from "@/components/PageHeader";
 import { formatDate, formatDateTime, formatPurgeDate } from "@/lib/format-date";
@@ -50,6 +52,7 @@ import { SCORE_HELP } from "@/lib/score-help";
 import { canRenameIdea, categoryColorClasses, ideaSection, isInIdeaPool } from "@/lib/idea-colors";
 import { exportFileName, ideaToMarkdown } from "@/lib/export-markdown";
 import { Markdown } from "@/components/Markdown";
+import { IdeaImagesCard } from "@/components/IdeaImagesCard";
 import { ExportMenu } from "@/components/ExportMenu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,6 +93,7 @@ export function IdeaDetailPage() {
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
   const [task, setTask] = useState<Task | null>(null);
   const [documents, setDocuments] = useState<TaskDocument[]>([]);
+  const [images, setImages] = useState<IdeaImage[]>([]);
   const [repo, setRepo] = useState<RepoState | null>(null);
   const [devReports, setDevReports] = useState<DevReport[]>([]);
   const [testRounds, setTestRounds] = useState<TestRound[]>([]);
@@ -144,6 +148,9 @@ export function IdeaDetailPage() {
     fetchCompetitors(id)
       .then((res) => setCompetitors(res.competitors))
       .catch(() => setCompetitors([]));
+    fetchIdeaImages(id)
+      .then((res) => setImages(res.images))
+      .catch(() => setImages([]));
     loadRuns();
     loadTask();
     loadProposals();
@@ -186,7 +193,7 @@ export function IdeaDetailPage() {
     if (!target) return;
     scrolledFor.current = hash;
     target.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [hash, idea, task, testRounds]);
+  }, [hash, idea, task, testRounds, images]);
 
   const lastRun = (workflow: IdeaWorkflow) => runs.find((run) => run.workflow === workflow);
   // Aynı iş sıradayken/çalışırken butonu tekrar basılamaz (API de 409 döner).
@@ -350,6 +357,20 @@ export function IdeaDetailPage() {
         </CardContent>
       </Card>
 
+      {id && idea.status !== "archived" && idea.status !== "merged" && (
+        <IdeaImagesCard
+          ideaId={id}
+          images={images}
+          onImagesChange={setImages}
+          locked={task != null && TASK_IMAGE_LOCKED_STATUSES.includes(task.status)}
+          onChanged={() =>
+            fetchIdea(id)
+              .then((res) => setIdea(res.idea))
+              .catch(() => {})
+          }
+        />
+      )}
+
       {id && poolInfo && idea.origin === "merge" && (
         <MergedFromCard ideaId={id} info={poolInfo} onChanged={handleTriggered} />
       )}
@@ -364,6 +385,7 @@ export function IdeaDetailPage() {
           lastPlanRun={lastRun("plan-idea.yml")}
           lastBuildRun={lastRun("build-skeleton.yml")}
           repo={repo}
+          imagesChangedAt={idea.images_changed_at}
           onRepoSynced={setRepo}
           onChanged={handleTriggered}
         />
@@ -521,7 +543,7 @@ export function IdeaDetailPage() {
         <ExportMenu
           fileName={exportFileName(idea.name)}
           getContent={() =>
-            ideaToMarkdown({ idea, competitors, task, documents, repo, devReports, testRounds })
+            ideaToMarkdown({ idea, competitors, task, documents, repo, devReports, testRounds, images })
           }
         />
         <DropdownMenu onOpenChange={handleCompareMenuOpenChange}>

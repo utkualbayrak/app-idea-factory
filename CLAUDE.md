@@ -570,6 +570,33 @@ Plan: `/Users/utkualbayrak/.claude/plans/uygulamayla-ilgili-soyle-bir-velvety-wi
   - `web` gets the same Node Bash allowlist as Expo (90 turns).
   - The verify gate runs for both Expo and web, and web additionally needs `npm run build`.
 
+## Design images (2026-10-03)
+
+- **Storage.** Metadata is in D1 `idea_images` (migration `0018`, no FK); the files are in Workers KV (binding `IMAGES`, namespace `app-idea-factory-images`, key `img:<id>`).
+  - Not D1 BLOBs: D1 returns BLOBs as number arrays, and converting a 1–2 MB image could blow the free tier's 10 ms CPU limit.
+  - Not R2: it needs a card on file.
+  - `ideas.images_changed_at` is stamped on every add/patch/delete.
+- **API** (`app.ts`):
+  - `GET /ideas/:id/images` returns the list.
+  - `GET /ideas/:id/images/:imageId` returns the bytes, cached immutable. The browser loads it same-origin via the web Worker's `/api` proxy, so a plain `<img src>` works.
+  - `POST /ideas/:id/images?role=&caption=&w=&h=` takes a raw image body via route-level `express.raw`. Width/height come from the client; the Worker never decodes images.
+  - `PATCH` updates role/caption/position; `DELETE` removes the image.
+  - Limits: 12 per idea, 1.5 MB, png/jpeg/webp.
+  - Locked (`409 images_locked`) once the task is `queued`/`running`/`done`/`failed` (`TASK_IMAGE_LOCKED_STATUSES`, mirrored in web `lib/task-labels.ts`).
+  - `/admin/maintenance/finalize` step 4 deletes images of purged or archived ideas, at most 30 per run (each KV delete is a subrequest).
+- **Web:**
+  - `lib/image-prep.ts` resizes to 2000 px. PNG stays PNG if it fits, otherwise JPEG with descending quality.
+  - `components/IdeaImagesCard.tsx` (detail page, anchor `#gorseller`): drag-drop/multi-select, role select, caption saved on blur, reorder, delete, lightbox.
+  - `lib/image-labels.ts` has the role labels and `imagesSummary()`.
+  - `DevelopPage` shows the image summary.
+  - `DevelopmentCard` warns when `images_changed_at` is newer than the newest doc's `generated_at` while the task is `ready`.
+- **Workflows:**
+  - `fetch-task.ts` downloads the images to `<out>/design/NN-<role>.<ext>` plus `design.json` for both `plan-idea.yml` (now 45 turns) and `build-skeleton.yml`.
+  - `write-skeleton-files.ts` copies them to the skeleton repo's `docs/design/` and writes a `README.md` table there.
+  - Non-Node skeleton platforms get Bash `ls`/`mkdir`/`cp`, so Claude can copy binary asset files.
+  - Prompt rules: `screen` images are bound to screens in `screens.md` as `Tasarım görseli: docs/design/<file>`. Palette comes from the images first, and they override style/density but not gamification. `asset` files are copied into the app.
+- No in-app image generation: Claude can read images but not create raster ones, and OpenAI is paid.
+
 ## What this project is
 
 A personal automation platform that:
@@ -686,6 +713,7 @@ Private repo, name derived from the idea's English name (e.g. `mealmate-app`, su
 - **app_settings** (Grup 3): key, value, updated_at — key-value, a missing key means that setting is enabled (see `SOURCE_SETTING_KEYS` in `apps/api/src/schema.ts`)
 - **cron_runs** (Grup 3): id, started_at, finished_at (nullable), status (running / success / failed), source_breakdown (json, nullable), error (nullable)
 - **workflow_runs** (2nd round Grup C): id, workflow, idea_id, status (queued / running / success / failed), created_at, started_at, finished_at, run_url, error
+- **idea_images** (0018): id, idea_id, position, role (screen / inspiration / asset), caption, mime, width, height, bytes, created/updated at/by — no FK; file bytes in KV `img:<id>`
 - **idea_competitors** (Grup 4): id, idea_id, app_name, url (nullable), note (nullable), similarity (nullable, 2nd round Grup 0), created_at
 
 ## Planned folder structure

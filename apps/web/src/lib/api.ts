@@ -70,6 +70,8 @@ export interface Idea {
   stale_runs: number;
   archived_at: string | null;
   deleted_at: string | null;
+  /** 0018: görseller en son ne zaman değişti (planlama belgelerinden yeniyse uyarı). */
+  images_changed_at: string | null;
 }
 
 // apps/api/src/schema.ts ACTIVITY_KINDS ile aynı.
@@ -644,4 +646,58 @@ export function undoProposal(id: string): Promise<{ ok: true }> {
 // Özellik önerisini kabul eder; repo varsa issue_url dolu döner.
 export function acceptProposal(id: string): Promise<{ ok: true; issue_url: string | null }> {
   return request(`/proposals/${id}/accept`, { method: "POST" });
+}
+
+// 0018: fikir görselleri. Dosya web Worker'ın /api proxy'si üzerinden aynı
+// origin'den gelir, <img src> doğrudan kullanılabilir.
+export type ImageRole = "screen" | "inspiration" | "asset";
+
+export interface IdeaImage {
+  id: string;
+  idea_id: string;
+  position: number;
+  role: ImageRole;
+  caption: string | null;
+  mime: string;
+  width: number | null;
+  height: number | null;
+  bytes: number;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export function ideaImageUrl(ideaId: string, imageId: string): string {
+  return `${API_BASE_URL}/ideas/${ideaId}/images/${imageId}`;
+}
+
+export function fetchIdeaImages(ideaId: string): Promise<{ images: IdeaImage[] }> {
+  return request(`/ideas/${ideaId}/images`);
+}
+
+export function uploadIdeaImage(
+  ideaId: string,
+  file: { blob: Blob; width: number; height: number },
+  meta: { role: ImageRole; caption?: string },
+): Promise<{ image: IdeaImage }> {
+  const params = new URLSearchParams({ role: meta.role, w: String(file.width), h: String(file.height) });
+  if (meta.caption) params.set("caption", meta.caption);
+  return request(`/ideas/${ideaId}/images?${params}`, {
+    method: "POST",
+    headers: { "Content-Type": file.blob.type },
+    body: file.blob,
+  });
+}
+
+export function updateIdeaImage(
+  ideaId: string,
+  imageId: string,
+  patch: { role?: ImageRole; caption?: string | null; position?: number },
+): Promise<{ image: IdeaImage }> {
+  return request(`/ideas/${ideaId}/images/${imageId}`, { method: "PATCH", body: JSON.stringify(patch) });
+}
+
+export function deleteIdeaImage(ideaId: string, imageId: string): Promise<{ ok: true }> {
+  return request(`/ideas/${ideaId}/images/${imageId}`, { method: "DELETE" });
 }

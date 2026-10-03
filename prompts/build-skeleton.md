@@ -13,6 +13,7 @@ Bu belgeleri kullanıcı okuyup gerekirse düzenledi ve onayladı. **Tek doğrul
 - `skeleton/docs/tech-plan.md` — stack, uygulama kimliği, klasör yapısı, veri modeli, test kurulumu ve **"İskeletin kapsamı"** bölümü
 - `skeleton/docs/roadmap.md` — iskelet sonrası işler (yalnızca bağlam için; bunları yapma)
 - `skeleton/IDEA.md` — fikrin tam hali (yalnızca arka plan bilgisi)
+- `skeleton/docs/design/` (varsa) — kullanıcının yüklediği tasarım görselleri ve rollerini anlatan `README.md`. **Her görseli Read aracıyla aç ve incele.** Hangi görselin hangi ekrana ait olduğu `screens.md`'de yazar.
 - `scripts/output/task-params.json` — yalnızca `platform` ve `targets` alanlarını kullan; `targets` yoksa `["ios", "android"]` say (`web` platformunda `["web"]`)
 
 ### Hangi kaynak geçerli?
@@ -30,7 +31,7 @@ Bu belgeleri kullanıcı okuyup gerekirse düzenledi ve onayladı. **Tek doğrul
 ## 2. Sınırlar
 
 - **Yalnızca `skeleton/` içinde çalış.** İstisnalar: rapor dosyası `scripts/output/skeleton-report.json` ve (yalnızca Expo ve web'de) depo kökündeki geçici `skeleton-work/` klasörü. Bu repodaki başka hiçbir dosyayı değiştirme.
-- **Şunlara dokunma:** `skeleton/docs/`, `skeleton/IDEA.md` ve `skeleton/.git/` (varsa). Planlama belgeleri zaten `skeleton/docs/` altında; tech-plan.md'de "belgelerin `docs/` klasörüne kopyalanması" yazıyorsa bu adım yapılmış sayılır.
+- **Şunlara dokunma:** `skeleton/docs/` (`docs/design/` dahil), `skeleton/IDEA.md` ve `skeleton/.git/` (varsa). Planlama belgeleri zaten `skeleton/docs/` altında; tech-plan.md'de "belgelerin `docs/` klasörüne kopyalanması" yazıyorsa bu adım yapılmış sayılır.
 - `skeleton/` içinde bunların dışında önceki bir denemeden kalmış dosyalar varsa, bunları silip baştan başlayabilirsin.
 - **Git komutu çalıştırma** (commit, push, init vb.). Commit ve push'u workflow yapar. Bir araç kendi `.git` klasörünü oluşturursa onu `skeleton/` içine taşıma veya kopyalama.
 - **Gizli bilgi yok.** Gerçek API anahtarı, token veya parola yazma. Gerekiyorsa `.env.example` gibi bir örnek dosya ve README'de açıklama.
@@ -51,20 +52,22 @@ Bu belgeleri kullanıcı okuyup gerekirse düzenledi ve onayladı. **Tek doğrul
    - Ekranlar veriye doğrudan değil, her zaman bir veri katmanı arayüzü (örn. repository/service) üzerinden erişir.
    - Bu arayüzün iskeletteki tek uygulaması mock veriyle çalışan, bellekte tutulan bir uygulamadır. Backend `none` olsa bile böyle yap; kalıcı yerel veri sonraki aşamaların işidir.
    - Mock veri ayrı bir yerde dursun (örn. `src/data/mock/`), böylece sonradan kolayca kaldırılabilsin.
-5. **Tema**: screens.md'deki tasarım notlarındaki renk paleti (hex değerleriyle), tipografi ölçeği, boşluk ölçeği (yoğunluğa göre) ve bileşen yaklaşımı, tek bir yerde tanımlı. Tema açık+koyu ise sistem ayarına uymalı. Ekranlar renkleri doğrudan yazmaz, temadan alır.
-6. **Testler**: tech-plan.md'deki test aracının kurulumu ve en az bir anlamlı örnek test (örn. mock repository'nin veri döndürdüğünü ya da bir ekranın boş durumunu doğrulayan bir test).
-7. **README.md** (Türkçe):
+5. **Tasarım görselleri** (varsa): `screen` rolündeki görseli olan ekranları görsele olabildiğince yakın kur (yerleşim, bileşenler, renkler, boşluklar); mock veriyi de görseldeki içeriğe benzet. `asset` rolündeki dosyaları uygulamanın varlık klasörüne **kopyala** (taşıma; `docs/design/` olduğu gibi kalsın) ve screens.md'de yazdığı yerde kullan (örn. logo, boş durum görseli; uygulama ikonu olarak belirtilmişse platformun ikon ayarına bağla). `inspiration` görselleri yalnızca genel hava içindir.
+6. **Tema**: screens.md'deki tasarım notlarındaki renk paleti (hex değerleriyle), tipografi ölçeği, boşluk ölçeği (yoğunluğa göre) ve bileşen yaklaşımı, tek bir yerde tanımlı. Tema açık+koyu ise sistem ayarına uymalı. Ekranlar renkleri doğrudan yazmaz, temadan alır.
+7. **Testler**: tech-plan.md'deki test aracının kurulumu ve en az bir anlamlı örnek test (örn. mock repository'nin veri döndürdüğünü ya da bir ekranın boş durumunu doğrulayan bir test).
+8. **README.md** (Türkçe):
    - Fikrin kısa özeti.
    - Kurulum, çalıştırma, lint ve test komutları.
    - Mimari: klasör yapısı ve ana kararlar.
    - İskeletin kapsamı ve sınırları (mock veri, yapılmayanlar).
    - Planlama belgelerine `docs/` altından bağlantılar; sonraki adımlar için `docs/roadmap.md`'ye yönlendirme.
-8. **CLAUDE.md**: Bu repoda sonradan çalışacak Claude Code oturumları için kısa (30–60 satır) bir rehber:
+9. **CLAUDE.md**: Bu repoda sonradan çalışacak Claude Code oturumları için kısa (30–60 satır) bir rehber:
    - Planlama belgelerinin `docs/` altında olduğu ve tek doğruluk kaynağı olduğu; işe `docs/roadmap.md`'deki sıradaki görevden başlanacağı.
+   - (Varsa) tasarım görsellerinin `docs/design/` altında olduğu; yeni ekran çalışmasında önce ilgili görsele bakılacağı.
    - Kurulum, tip kontrolü, lint ve test komutları.
    - Klasör yapısı ve kurallar: ekranların veriye yalnızca veri katmanı üzerinden erişmesi, renklerin temadan alınması, adlandırma kuralları.
    - Gizli bilgilerin repoya yazılmayacağı.
-9. **Lint/format ayarları** ve uygun bir `.gitignore` (bağımlılık klasörleri, derleme çıktıları, `.env` dosyaları). Kilit dosyaları (örn. `package-lock.json`) `.gitignore`'a eklenmez.
+10. **Lint/format ayarları** ve uygun bir `.gitignore` (bağımlılık klasörleri, derleme çıktıları, `.env` dosyaları). Kilit dosyaları (örn. `package-lock.json`) `.gitignore`'a eklenmez.
 
 Kod, dosya ve bileşen adları İngilizce; kullanıcıya görünen metinler, belgelerde başka bir dil belirtilmediyse Türkçe.
 
@@ -104,7 +107,7 @@ Kod, dosya ve bileşen adları İngilizce; kullanıcıya görünen metinler, bel
 
 ### `flutter`, `ios_swift`, `android_kotlin` (doğrulama yapılmaz)
 
-Bu ortamda bu platformların araçları kurulu değil ve bu platformlar için komut çalıştırma izni yok; dosyaları doğrudan yaz. Derlenemeyeceği için ekstra dikkatli ol: import'lar, paket adları, dosya yolları ve sözdizimi tutarlı olsun. Bilmediğin veya emin olmadığın bir API'yi kullanma; platformun yaygın, uzun süredir kararlı API'lerini tercih et.
+Bu ortamda bu platformların araçları kurulu değil; komut olarak yalnızca `ls`, `mkdir` ve `cp` var (tasarım görsellerini varlık klasörüne kopyalamak için). Dosyaları doğrudan yaz. Derlenemeyeceği için ekstra dikkatli ol: import'lar, paket adları, dosya yolları ve sözdizimi tutarlı olsun. Bilmediğin veya emin olmadığın bir API'yi kullanma; platformun yaygın, uzun süredir kararlı API'lerini tercih et.
 
 - **`flutter`**: `pubspec.yaml` (uygulama adı tech-plan.md'ye uygun), `analysis_options.yaml`, `lib/` altındaki kod ve `test/` altındaki örnek test. `android/`, `ios/`, `web/` gibi platform klasörlerini elle yazma; README'de ilk adım olarak `flutter create --org <uygulama kimliğinin son parça hariç hali> --platforms=<targets, virgülle> .` ile üretileceğini ve ardından `flutter pub get` çalıştırılacağını belirt.
 - **`ios_swift`**: Xcode proje dosyasını (`.xcodeproj`) elle yazma. Bunun yerine [XcodeGen](https://github.com/yonaskolb/XcodeGen) için bir `project.yml` (bundle identifier ve minimum iOS sürümü tech-plan.md'ye göre; uygulama ve test hedefleriyle) ve kaynak dosyaları yaz; README'de `xcodegen generate` adımını anlat. SwiftLint için `.swiftlint.yml`.
@@ -128,6 +131,7 @@ Bir hata makul sayıda denemeden sonra düzelmiyorsa, düzeltmeyi zorlamak yerin
 - PRD'deki her özellik kimliği (`F1`, `F2`, …) en az bir ekranda karşılık buluyor mu?
 - Veri modelindeki her varlık, belgedeki adıyla tanımlı mı ve ekranlar veriye yalnızca veri katmanı üzerinden mi erişiyor?
 - PRD'deki açık soruların varsayımlarına uyuldu mu?
+- `docs/design/` varsa: `screen` görseli olan her ekran görsele yakın mı, `asset` dosyaları uygulamaya kopyalanıp kullanıldı mı ve `docs/design/` değişmeden duruyor mu?
 - screens.md'deki "Tasarım dili" (görsel dil, yoğunluk, oyunlaştırma düzeyi) temaya ve ekranlara yansıdı mı? Oyunlaştırma "yok" ise hiçbir ekranda veya mock veride seri/rozet/puan yok mu?
 - Uygulama adı ve (mobil hedeflerde) uygulama kimliği tech-plan.md'deki değerlerle ayarlı mı?
 - Şablondan kalan örnek ekran, bileşen veya script kalmadı mı?

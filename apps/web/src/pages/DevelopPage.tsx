@@ -4,7 +4,9 @@ import { ArrowLeft, Plus, X } from "lucide-react";
 import {
   createTask,
   fetchIdea,
+  fetchIdeaImages,
   fetchIdeaTask,
+  type IdeaImage,
   type Idea,
   type Task,
   type TaskAuth,
@@ -31,6 +33,7 @@ import {
   TASK_STATUS_LABELS,
   THEME_LABELS,
 } from "@/lib/task-labels";
+import { imagesSummary } from "@/lib/image-labels";
 import { PageHeader, PageMessage } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -65,6 +68,7 @@ export function DevelopPage() {
   const [idea, setIdea] = useState<Idea | null>(null);
   const [task, setTask] = useState<Task | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [images, setImages] = useState<IdeaImage[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [platform, setPlatform] = useState<TaskPlatform>(DEFAULT_PARAMS.platform);
@@ -86,6 +90,9 @@ export function DevelopPage() {
 
   useEffect(() => {
     if (!id) return;
+    fetchIdeaImages(id)
+      .then((res) => setImages(res.images))
+      .catch(() => {});
     Promise.all([fetchIdea(id), fetchIdeaTask(id)])
       .then(([ideaRes, taskRes]) => {
         const loadedIdea = ideaRes.idea;
@@ -370,6 +377,14 @@ export function DevelopPage() {
               placeholder="Örn. Things 3'ün sadeliği, Linear'ın yoğunluğu"
             />
           </div>
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            {images.length > 0
+              ? `${imagesSummary(images)} planlamada kullanılacak; çelişirse ekran tasarımı görselleri görsel dil seçiminden önce gelir. `
+              : "Görsel eklenmedi. Ekran tasarımı, logo ya da ilham görselin varsa fikrin sayfasından ekleyebilirsin. "}
+            <Link to={`/ideas/${id}#gorseller`} className="text-primary underline underline-offset-4">
+              Görselleri düzenle
+            </Link>
+          </p>
           {style === "playful" && gamification === "none" && (
             <p className="text-xs text-amber-700 sm:col-span-2 dark:text-amber-300">
               Oyunsu görsel dil yalnızca görünümü etkiler; oyunlaştırma "Yok" kaldıkça seri, rozet veya puan eklenmez.

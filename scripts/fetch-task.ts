@@ -1,6 +1,6 @@
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { fetchIdeaById, fetchIdeaTask } from "./lib/api-client";
+import { downloadIdeaImage, fetchIdeaById, fetchIdeaImages, fetchIdeaTask } from "./lib/api-client";
 import { PLAN_DOCUMENT_FILES, taskParamsSchema } from "./lib/task-schema";
 
 // Kullanım: tsx fetch-task.ts <idea id> <output dir> [docs dir]
@@ -11,6 +11,9 @@ import { PLAN_DOCUMENT_FILES, taskParamsSchema } from "./lib/task-schema";
 // belgeleri oraya yazılır. plan-idea.yml bunu bilerek vermez: eski belgeler
 // Claude'un çıktı klasörüne düşerse, Claude bir dosyayı yazamadığında
 // submit-plan-docs.ts eskisini yeni diye gönderirdi.
+// Fikrin görselleri her iki workflow için de <dir>/design/ altına
+// (NN-<rol>.<uzantı>) ve <dir>/design/design.json'a yazılır.
+const IMAGE_EXTENSIONS: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
 async function main() {
   const [ideaId, outDir, docsDir] = process.argv.slice(2);
   if (!ideaId || !outDir) throw new Error("Kullanım: fetch-task.ts <idea id> <output dir>");
@@ -32,6 +35,17 @@ async function main() {
     "utf-8",
   );
 
+  const images = await fetchIdeaImages(ideaId);
+  const designDir = path.join(outDir, "design");
+  await mkdir(designDir, { recursive: true });
+  const manifest = [];
+  for (const [index, image] of images.entries()) {
+    const file = `${String(index + 1).padStart(2, "0")}-${image.role}.${IMAGE_EXTENSIONS[image.mime] ?? "png"}`;
+    await writeFile(path.join(designDir, file), await downloadIdeaImage(ideaId, image.id));
+    manifest.push({ file, role: image.role, caption: image.caption, width: image.width, height: image.height });
+  }
+  await writeFile(path.join(designDir, "design.json"), JSON.stringify(manifest, null, 2), "utf-8");
+
   if (docsDir) {
     const missing = Object.keys(PLAN_DOCUMENT_FILES).filter((kind) => !documents.some((d) => d.kind === kind));
     if (missing.length > 0) {
@@ -44,7 +58,7 @@ async function main() {
       if (file) await writeFile(path.join(docsDir, file), doc.content.trimEnd() + "\n", "utf-8");
     }
   }
-  console.log(`Yazildi: ${outDir}/idea.json, task-params.json, task.json${docsDir ? `, ${documents.length} belge → ${docsDir}` : ""}`);
+  console.log(`Yazildi: ${outDir}/idea.json, task-params.json, task.json, ${manifest.length} görsel${docsDir ? `, ${documents.length} belge → ${docsDir}` : ""}`);
 }
 
 main().catch((err) => {

@@ -419,6 +419,31 @@ export const workflowRunCreateSchema = z.object({
 // Faz 3A: "Geliştir" görev formu (docs/PROJE.md "Görev formu alanları") ve
 // Claude'un ürettiği planlama belgeleri. scripts/lib/task-schema.ts ile aynı
 // olmalı — paketler arası paylaşım yok, ikisini birlikte güncelle.
+// 0018: fikir görselleri. screen = ekran tasarımı (birebir uygulanır),
+// inspiration = ilham (havası alınır), asset = uygulamada aynen kullanılacak
+// dosya (logo/ikon/illüstrasyon).
+export const IMAGE_ROLES = ["screen", "inspiration", "asset"] as const;
+export const IMAGE_MIMES = ["image/png", "image/jpeg", "image/webp"] as const;
+export const MAX_IMAGES_PER_IDEA = 12;
+export const MAX_IMAGE_BYTES = 1.5 * 1024 * 1024;
+// İskelet aşamasında görseller (belgeler gibi) kilitlidir.
+export const TASK_IMAGE_LOCKED_STATUSES = ["queued", "running", "done", "failed"] as const;
+
+export const imageUploadQuerySchema = z.object({
+  role: z.enum(IMAGE_ROLES).default("inspiration"),
+  caption: z.string().trim().max(200).optional(),
+  w: z.coerce.number().int().min(1).max(10000).optional(),
+  h: z.coerce.number().int().min(1).max(10000).optional(),
+});
+
+export const imagePatchSchema = z
+  .object({
+    role: z.enum(IMAGE_ROLES).optional(),
+    caption: z.string().trim().max(200).nullable().optional(),
+    position: z.number().int().min(0).max(1000).optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "Boş istek" });
+
 export const TASK_PLATFORMS = ["ios_swift", "android_kotlin", "expo", "flutter", "web"] as const;
 export const TASK_BACKENDS = ["none", "supabase", "firebase", "custom_api"] as const;
 export const TASK_AUTHS = ["none", "email", "social"] as const;

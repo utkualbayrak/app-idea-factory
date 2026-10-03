@@ -49,6 +49,8 @@ export interface IdeaRow {
   stale_runs: number;
   archived_at: string | null;
   deleted_at: string | null;
+  /** 0018: görsel eklendi/silindi/değişti. */
+  images_changed_at: string | null;
 }
 
 export interface Idea
@@ -72,6 +74,7 @@ export function serializeIdea(row: IdeaRow): Idea {
     updated_at: toUtcIso(row.updated_at),
     archived_at: toUtcIso(row.archived_at),
     deleted_at: toUtcIso(row.deleted_at),
+    images_changed_at: toUtcIso(row.images_changed_at),
     core_features: JSON.parse(row.core_features),
     inspiration_sources: JSON.parse(row.inspiration_sources),
     tags: JSON.parse(row.tags),
@@ -238,4 +241,25 @@ export function serializeProposal(row: ProposalRow): Proposal {
     created_at: toUtcIso(row.created_at),
     decided_at: toUtcIso(row.decided_at),
   };
+}
+
+// 0018: fikir görselleri (dosya KV'de).
+export interface IdeaImageRow {
+  id: string;
+  idea_id: string;
+  position: number;
+  role: "screen" | "inspiration" | "asset";
+  caption: string | null;
+  mime: string;
+  width: number | null;
+  height: number | null;
+  bytes: number;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export function serializeIdeaImage(row: IdeaImageRow): IdeaImageRow {
+  return { ...row, created_at: toUtcIso(row.created_at) ?? row.created_at, updated_at: toUtcIso(row.updated_at) ?? row.updated_at };
 }

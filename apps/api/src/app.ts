@@ -23,6 +23,8 @@ import {
   type WorkflowRunRow,
   serializeProposal,
   type ProposalRow,
+  serializeIdeaImage,
+  type IdeaImageRow,
 } from "./db";
 import {
   ideaBatchRequestSchema,
@@ -53,6 +55,12 @@ import {
   type MaintenanceSettingKey,
   type MergedIdea,
   triggerWorkflowSchema,
+  imageUploadQuerySchema,
+  imagePatchSchema,
+  IMAGE_MIMES,
+  MAX_IMAGES_PER_IDEA,
+  MAX_IMAGE_BYTES,
+  TASK_IMAGE_LOCKED_STATUSES,
   userNameEmailSchema,
   userNamePutSchema,
   reevaluationSchema,
@@ -76,6 +84,8 @@ import {
 
 interface Env {
   DB: D1Database;
+  /** 0018: fikir görsellerinin dosyaları (anahtar img:<id>). */
+  IMAGES: KVNamespace;
   WEB_ORIGIN: string;
   GH_WORKFLOW_DISPATCH_TOKEN?: string;
 }
@@ -107,6 +117,10 @@ app.use(resolveActor);
 
 function db() {
   return (env as unknown as Env).DB;
+}
+
+function images() {
+  return (env as unknown as Env).IMAGES;
 }
 
 function isIdeaWorkflow(workflow: string): workflow is IdeaWorkflow {
@@ -1690,6 +1704,171 @@ app.patch("/admin/ideas/:id/reevaluate", requireWorkflowSecret, async (req, res)
   });
 });
 
+// 0018: fikir görselleri. Metadata D1'de, dosya KV'de (D1 BLOB'u okumak sayı
+// dizisi döndürüyor; büyük görselde ücretsiz katmanın CPU sınırına takılır).
+// Tarayıcı dosyayı web Worker'ın /api proxy'si üzerinden aynı origin'den
+// çeker; workflow aynı ucu service token ile kullanır.
+const imageKey = (id: string) => `img:${id}`;
+
+// Görseller iskelet aşamasında (belgeler gibi) kilitlidir. Düzenlenebiliyorsa
+// null, değilse 409 gövdesi döner.
+async function imagesLockedReason(ideaId: string): Promise<string | null> {
+  const task = await db().prepare("SELECT status FROM tasks WHERE idea_id = ?1").bind(ideaId).first<{ status: string }>();
+  if (task && (TASK_IMAGE_LOCKED_STATUSES as readonly string[]).includes(task.status)) {
+    return "İskelet aşamasındaki fikrin görselleri değiştirilemez.";
+  }
+  return null;
+}
+
+function stampImagesChanged(ideaId: string, at: string, by: string | null) {
+  return db()
+    .prepare("UPDATE ideas SET images_changed_at = ?1, updated_at = ?1, updated_by = ?2 WHERE id = ?3")
+    .bind(at, by, ideaId);
+}
+
+app.get("/ideas/:id/images", async (req, res) => {
+  const { results } = await db()
+    .prepare("SELECT * FROM idea_images WHERE idea_id = ?1 ORDER BY position, created_at")
+    .bind(req.params.id)
+    .all<IdeaImageRow>();
+  res.json({ images: results.map(serializeIdeaImage) });
+});
+
+app.get("/ideas/:id/images/:imageId", async (req, res) => {
+  const row = await db()
+    .prepare("SELECT mime FROM idea_images WHERE id = ?1 AND idea_id = ?2")
+    .bind(req.params.imageId, req.params.id)
+    .first<{ mime: string }>();
+  const data = row ? await images().get(imageKey(req.params.imageId), "arrayBuffer") : null;
+  if (!row || !data) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  // id değişmez, içerik de değişmez: tarayıcı süresiz önbellekleyebilir.
+  res.set("Cache-Control", "private, max-age=31536000, immutable");
+  res.type(row.mime).send(Buffer.from(data));
+});
+
+app.post(
+  "/ideas/:id/images",
+  express.raw({ type: [...IMAGE_MIMES], limit: "2mb" }),
+  async (req, res) => {
+    const query = imageUploadQuerySchema.safeParse(req.query);
+    const mime = (req.headers["content-type"] ?? "").split(";")[0].trim();
+    if (!query.success || !(IMAGE_MIMES as readonly string[]).includes(mime) || !Buffer.isBuffer(req.body)) {
+      res.status(400).json({ error: "invalid_body", message: "PNG, JPEG ya da WebP görsel gönderilmeli." });
+      return;
+    }
+    const body = req.body as Buffer;
+    if (body.length === 0 || body.length > MAX_IMAGE_BYTES) {
+      res.status(413).json({ error: "too_large", message: "Görsel en fazla 1,5 MB olabilir." });
+      return;
+    }
+    const idea = await db().prepare("SELECT id FROM ideas WHERE id = ?1").bind(req.params.id).first();
+    if (!idea) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    const locked = await imagesLockedReason(req.params.id);
+    if (locked) {
+      res.status(409).json({ error: "images_locked", message: locked });
+      return;
+    }
+    const stats = await db()
+      .prepare("SELECT COUNT(*) AS n, COALESCE(MAX(position), -1) AS maxPos FROM idea_images WHERE idea_id = ?1")
+      .bind(req.params.id)
+      .first<{ n: number; maxPos: number }>();
+    if ((stats?.n ?? 0) >= MAX_IMAGES_PER_IDEA) {
+      res.status(409).json({ error: "too_many", message: `Bir fikre en fazla ${MAX_IMAGES_PER_IDEA} görsel eklenebilir.` });
+      return;
+    }
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const by = actorOf(res);
+    // Önce dosya: D1 kaydı varsa dosya da vardır (tersi, yetim bir KV değeri
+    // olur ki zararsız).
+    await images().put(imageKey(id), body);
+    await db().batch([
+      db()
+        .prepare(
+          `INSERT INTO idea_images (id, idea_id, position, role, caption, mime, width, height, bytes, created_at, created_by, updated_at, updated_by)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?10, ?11)`,
+        )
+        .bind(
+          id,
+          req.params.id,
+          (stats?.maxPos ?? -1) + 1,
+          query.data.role,
+          query.data.caption || null,
+          mime,
+          query.data.w ?? null,
+          query.data.h ?? null,
+          body.length,
+          now,
+          by,
+        ),
+      stampImagesChanged(req.params.id, now, by),
+    ]);
+    const row = await db().prepare("SELECT * FROM idea_images WHERE id = ?1").bind(id).first<IdeaImageRow>();
+    res.status(201).json({ image: row ? serializeIdeaImage(row) : null });
+  },
+);
+
+app.patch("/ideas/:id/images/:imageId", async (req, res) => {
+  const parsed = imagePatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_body" });
+    return;
+  }
+  const locked = await imagesLockedReason(req.params.id);
+  if (locked) {
+    res.status(409).json({ error: "images_locked", message: locked });
+    return;
+  }
+  const row = await db()
+    .prepare("SELECT * FROM idea_images WHERE id = ?1 AND idea_id = ?2")
+    .bind(req.params.imageId, req.params.id)
+    .first<IdeaImageRow>();
+  if (!row) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  const now = new Date().toISOString();
+  const by = actorOf(res);
+  const next = {
+    role: parsed.data.role ?? row.role,
+    caption: parsed.data.caption === undefined ? row.caption : parsed.data.caption || null,
+    position: parsed.data.position ?? row.position,
+  };
+  await db().batch([
+    db()
+      .prepare("UPDATE idea_images SET role = ?1, caption = ?2, position = ?3, updated_at = ?4, updated_by = ?5 WHERE id = ?6")
+      .bind(next.role, next.caption, next.position, now, by, row.id),
+    stampImagesChanged(req.params.id, now, by),
+  ]);
+  res.json({ image: serializeIdeaImage({ ...row, ...next, updated_at: now, updated_by: by }) });
+});
+
+app.delete("/ideas/:id/images/:imageId", async (req, res) => {
+  const locked = await imagesLockedReason(req.params.id);
+  if (locked) {
+    res.status(409).json({ error: "images_locked", message: locked });
+    return;
+  }
+  const now = new Date().toISOString();
+  const [result] = await db().batch([
+    db().prepare("DELETE FROM idea_images WHERE id = ?1 AND idea_id = ?2").bind(req.params.imageId, req.params.id),
+    stampImagesChanged(req.params.id, now, actorOf(res)),
+  ]);
+  if (result.meta.changes === 0) {
+    res.status(404).json({ error: "not_found" });
+    return;
+  }
+  await images().delete(imageKey(req.params.imageId));
+  res.json({ ok: true });
+});
+
 // Grup 4: rakip/benzer uygulamalar. Her "rakipleri bul" çalışması o fikrin
 // önceki sonuçlarının yerine geçer (tekrar tekrar biriktirmesin diye).
 app.get("/ideas/:id/competitors", async (req, res) => {
@@ -2331,6 +2510,7 @@ app.post("/proposals/:id/accept", async (req, res) => {
 // 3. stale_runs 3'e ulaşan fikir arşivlenir: yalnızca ad, özet, kategori,
 //    etiket ve puan sayıları kalır; rakipler ve iş geçmişi silinir.
 const MAX_PURGE_PER_RUN = 100;
+const MAX_IMAGE_CLEANUP_PER_RUN = 30;
 
 app.post("/admin/maintenance/finalize", requireWorkflowSecret, async (req, res) => {
   const parsed = maintenanceFinalizeSchema.safeParse(req.body ?? {});
@@ -2436,9 +2616,24 @@ app.post("/admin/maintenance/finalize", requireWorkflowSecret, async (req, res) 
   }
   if (statements.length > 0) await db().batch(statements);
 
+  // 4. Görsel temizliği: kalıcı silinen ya da arşivlenen fikirlerin görselleri.
+  // KV silmeleri subrequest sayar; kalanlar sonraki koşuya kalır.
+  const { results: orphanImages } = await db()
+    .prepare(
+      `SELECT im.id FROM idea_images im LEFT JOIN ideas i ON i.id = im.idea_id
+       WHERE i.id IS NULL OR i.status = 'archived' LIMIT ?1`,
+    )
+    .bind(MAX_IMAGE_CLEANUP_PER_RUN)
+    .all<{ id: string }>();
+  for (const image of orphanImages) await images().delete(imageKey(image.id));
+  if (orphanImages.length > 0) {
+    await db().batch(orphanImages.map((image) => db().prepare("DELETE FROM idea_images WHERE id = ?1").bind(image.id)));
+  }
+
   res.json({
     purged: toPurge.length,
     archived,
+    images_removed: orphanImages.length,
     approaching: counted.filter((c) => c.staleRuns > 0 && c.staleRuns < ARCHIVE_AFTER_RUNS).length,
   });
 });

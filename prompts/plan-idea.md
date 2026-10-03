@@ -24,6 +24,11 @@ Bu yüzden belgeler hem bir insanın hızlıca okuyup karar verebileceği kadar 
   - `design.density`: bilgi yoğunluğu — `airy`, `balanced`, `compact`
   - `design.references` (isteğe bağlı): kullanıcının örnek aldığı uygulamalar, kısa serbest metin
   - `notes` (isteğe bağlı): kullanıcının serbest notları
+- `scripts/output/design/design.json`: kullanıcının yüklediği tasarım görsellerinin listesi — `[{ file, role, caption, width, height }]`. Boş dizi olabilir. Her `file` aynı klasördedir (`scripts/output/design/<file>`); **her görseli Read aracıyla aç ve incele.** Roller:
+  - `screen` — Ekran tasarımı: yerleşim, renkler ve bileşenler bu görsele olabildiğince yakın uygulanacak.
+  - `inspiration` — İlham: yalnızca ton ve hava; birebir kopyalanmaz.
+  - `asset` — Varlık: logo, ikon ya da illüstrasyon; dosya uygulamada aynen kullanılacak.
+  - `caption` kullanıcının görsele yazdığı kısa nottur (örn. "ana ekran"); görselin hangi ekrana ait olduğunu anlamak için kullan.
 
 ### Hata durumları
 
@@ -61,6 +66,16 @@ Bu yüzden belgeler hem bir insanın hızlıca okuyup karar verebileceği kadar 
 - **`design.density`**: `airy` geniş boşluklar ve az öğe, `balanced` platform varsayılanı, `compact` sıkı satırlar ve ekranda daha çok bilgi. Boşluk ölçeği ve liste satır yüksekliği buna göre seçilir.
 - **`design.references`**: Varsa, tasarım notlarında her referans için neyin alındığını (örn. "Things 3: tek vurgu rengi, sade liste") yaz. Referans bir seçimle çelişiyorsa seçim geçerlidir.
 - `notes` tasarım alanlarıyla çelişiyorsa tasarım alanları geçerlidir; çelişkiyi "Açık sorular"a yaz.
+
+### Tasarım görselleri
+
+`design.json` boş değilse görseller tasarımın birincil kaynağıdır:
+
+- **`screen` görselleri**: Her birini `screens.md`'deki bir ekrana bağla (notu ve içeriğine bakarak). O ekranın yerleşimini, bileşenlerini ve metin hiyerarşisini görselden çıkar. Görselde `mvp_features` dışında kalan bir özellik görünüyorsa onu MVP'ye ekleme; "Kapsam dışı"na yaz. Bir `screen` görseli hiçbir ekrana uymuyorsa bunu "Açık sorular"a yaz.
+- **Renk paleti ve tipografi**: Hex değerlerini öncelikle `screen` görsellerinden, yoksa `inspiration` görsellerinden çıkar. Görseller `design.style` ya da `design.density` ile çelişirse görseller geçerlidir; çelişkiyi "Açık sorular"a varsayımla yaz. `design.gamification` ise görsellerden de önce gelir: görselde rozet/puan varsa ve oyunlaştırma `none` ise bunlar uygulanmaz.
+- **`inspiration` görselleri**: Yalnızca genel hava; "Tasarım dili" maddesinde neyin alındığını bir cümleyle yaz.
+- **`asset` görselleri**: Hangi dosyanın ne olarak kullanılacağını yaz (örn. uygulama ikonu, açılış ekranı logosu, boş durum illüstrasyonu).
+- Belgelerde görsellere her zaman iskelet reposundaki yoluyla atıf yap: `docs/design/<file>` (`scripts/output/...` değil). Görseller iskelet kurulurken bu yola kopyalanacak.
 
 ### Açık sorular her zaman bir varsayımla gelir
 
@@ -153,11 +168,11 @@ Bölümler:
 
 - **Navigasyon yapısı**: Sekme/stack düzeni, kısa bir ağaç olarak (kod bloğu içinde).
 - **Ekran listesi**: Tablo — ekran adı, amacı, ilgili özellik kimliği(leri). Ayarlar veya onboarding gibi bir özelliğe bağlı olmayan ekranlar için "—" yaz.
-- **Ekran detayları**: Her ekran için `### <ScreenName>` alt başlığı; içerik ve bileşenler, kullanıcı aksiyonları, boş / yükleniyor / hata durumları.
+- **Ekran detayları**: Her ekran için `### <ScreenName>` alt başlığı; içerik ve bileşenler, kullanıcı aksiyonları, boş / yükleniyor / hata durumları. Ekranın bir `screen` görseli varsa ilk satır: `Tasarım görseli: docs/design/<file>`.
 - **Ana akışlar**: 2–4 kritik akış, numaralı adımlarla (örn. ilk açılış/onboarding, ana iş akışı). Adımlarda ekran adlarını kullan.
 - **Etkileşim ve hareket notları** (yalnızca fikre gerçekten değer katıyorsa; yoksa bu bölümü yazma): Hedef platformun yerleşik hareketleri (örn. iOS'ta kenardan kaydırarak geri, satırı kaydırarak sil/arşivle, uzun basınca bağlam menüsü, aşağı çekerek yenileme, haptik geri bildirim; Android'de sistem geri hareketi). Her not tek satır: hangi ekranda, hangi hareket, ne yapar. Bilinen bir hareketi başka bir anlamda kullanma. Hareketle yapılan her önemli işin görünür bir alternatifi (buton/menü) de olsun.
 - **Tasarım notları**: Tasarım alanlarına göre şunları somut olarak yaz:
-  - **Tasarım dili** (bu bölümün ilk maddesi): görsel dil, bilgi yoğunluğu ve oyunlaştırma düzeyi açık sözcüklerle (örn. "Görsel dil: editoryal. Yoğunluk: ferah. Oyunlaştırma: yok — seri, rozet, puan kullanılmaz."), varsa referans uygulamalardan alınanlar. İskeleti kuracak çalışma bu kararları yalnızca buradan öğrenecek.
+  - **Tasarım dili** (bu bölümün ilk maddesi): görsel dil, bilgi yoğunluğu ve oyunlaştırma düzeyi açık sözcüklerle (örn. "Görsel dil: editoryal. Yoğunluk: ferah. Oyunlaştırma: yok — seri, rozet, puan kullanılmaz."), varsa referans uygulamalardan ve görsellerden alınanlar. Görsel varsa her birini rolüyle tek satırda listele (`docs/design/<file>` — rol — ne için kullanılacak). İskeleti kuracak çalışma bu kararları yalnızca buradan öğrenecek.
   - Renk paleti: ana renk, vurgu rengi, arka plan, yüzey ve metin renkleri için hex değerleri. Tema `both` ise açık ve koyu için ayrı ayrı.
   - Metin/arka plan renk çiftlerinin okunabilir kontrastta olması (WCAG AA hedefi).
   - Tipografi: platformun sistem fontu ve 3–4 seviyeli bir boyut ölçeği; sistemin yazı boyutu ayarlarına (Dynamic Type / font scale) uyum.
@@ -208,6 +223,7 @@ Dört dosyayı yazdıktan sonra tekrar oku ve kontrol et:
 - MVP'ye `mvp_features` dışında özellik girmedi mi?
 - Ekran adları ve varlık adları dört belgede birebir aynı mı?
 - Platform, hedefler, backend, auth ve tasarım seçimleri dört belgede de tutarlı mı?
+- Görsel varsa: her `screen` görseli bir ekrana bağlandı mı, her görsel "Tasarım dili" listesinde mi ve atıflar `docs/design/<file>` biçiminde mi?
 - `screens.md`'deki "Tasarım dili" maddesi var mı ve oyunlaştırma düzeyine uyuldu mu? (`none` ise hiçbir belgede MVP'ye seri, rozet, puan, seviye, liderlik tablosu girmemiş olmalı.)
 - "Açık sorular"daki her maddenin bir varsayımı var mı ve belgeler bu varsayımlara göre mi yazılmış?
 - Hiçbir belge `idea.json`, `task-params.json` veya bu üretim sürecine atıf yapmıyor mu?

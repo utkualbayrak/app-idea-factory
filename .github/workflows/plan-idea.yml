@@ -60,8 +60,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: "Read prompts/plan-idea.md and follow its instructions exactly for the idea in scripts/output/idea.json and the task parameters in scripts/output/task-params.json. Do not ask for confirmation or clarification — complete the task end to end and write all four output files."
-          claude_args: "--max-turns 30 --permission-mode acceptEdits"
+          prompt: "Read prompts/plan-idea.md and follow its instructions exactly for the idea in scripts/output/idea.json and the task parameters in scripts/output/task-params.json (design images, if any, are listed in scripts/output/design/design.json). Do not ask for confirmation or clarification — complete the task end to end and write all four output files."
+          claude_args: "--max-turns 45 --permission-mode acceptEdits"
 
       - name: Submit planning documents
         working-directory: scripts

@@ -10,7 +10,8 @@ name: Build Skeleton
 # - Ana repo persist-credentials: false ile checkout edilir; iskelet reposu da
 #   token .git/config'e yazılmadan (tek seferlik extraheader ile) clone/push
 #   edilir — Claude'un okuyabileceği diskte token kalmaz.
-# - Bash yalnızca Expo ve web iskeletinde, install/typecheck/build için gereken komutlarla açılır.
+# - Bash Expo ve web iskeletinde install/typecheck/build için gereken komutlarla,
+#   diğer platformlarda yalnızca ls/mkdir/cp (tasarım görsellerini kopyalamak) ile açılır.
 
 on:
   workflow_dispatch:
@@ -111,7 +112,9 @@ jobs:
           elif [ "$SKELETON_PLATFORM" = "web" ]; then
             echo "args=--max-turns 90 --permission-mode acceptEdits $NODE_TOOLS" >> "$GITHUB_OUTPUT"
           else
-            echo 'args=--max-turns 90 --permission-mode acceptEdits' >> "$GITHUB_OUTPUT"
+            # Araç zinciri yok; yalnızca tasarım görsellerini (ikili dosya, Write
+            # ile yazılamaz) uygulamanın varlık klasörüne kopyalamak için.
+            echo 'args=--max-turns 90 --permission-mode acceptEdits --allowedTools "Bash(ls:*),Bash(mkdir:*),Bash(cp:*)"' >> "$GITHUB_OUTPUT"
           fi
 
       # continue-on-error: action, Claude işi bitirse bile tur sınırı aşıldıysa
