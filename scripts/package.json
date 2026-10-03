@@ -10,6 +10,7 @@
     "collect:producthunt": "tsx collect-producthunt.ts",
     "collect:hackernews": "tsx collect-hackernews.ts",
     "fetch-recent-names": "tsx fetch-recent-names.ts",
+    "summarize-history": "tsx summarize-history.ts",
     "fetch-settings": "tsx fetch-settings.ts",
     "start-cron-run": "tsx start-cron-run.ts",
     "finish-cron-run": "tsx finish-cron-run.ts",

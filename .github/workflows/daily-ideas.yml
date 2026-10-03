@@ -59,6 +59,10 @@ jobs:
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 
+      - name: Summarize idea history (doygun alanlar, kullanılmış ilham URL'leri)
+        working-directory: scripts
+        run: pnpm exec tsx summarize-history.ts output/recent-names.json output/history-summary.json
+
       - name: Collect trend data (Reddit, App Store, Product Hunt, Hacker News)
         working-directory: scripts
         run: pnpm exec tsx collect-trends.ts output/trends.json

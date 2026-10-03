@@ -197,6 +197,18 @@ A second `notes.txt` feedback list (10 items) is being worked through in 6 group
     - name format (ASCII, no spaces, at most 20 chars)
     - score distribution and category count
 - **`GET /ideas/recent-names` now also returns `ideas: [{name, one_liner, category}]`**, which the prompt uses to avoid repeating a concept under a new name. `names` is kept for backward compatibility.
+  - Since 2026-10-03 each `ideas` row also carries `batch_date`, `origin`, `status`, `tags` and `inspiration_sources`. A new `daily-ideas.yml` step, `scripts/summarize-history.ts`, turns it into `output/history-summary.json`, which the prompt reads instead of scanning the raw ~900-row list. It contains:
+    - category counts (14/30 days) and `saturated_categories_14d` (3+ in 14 days)
+    - top tags and the last 30 days' ideas
+    - every inspiration URL already used, with the ideas that used it
+
+    `merged` sources are left out of the counts but not out of the URL list.
+  - **Why (anti-repetition, 2026-10-03):** production showed near-duplicates (PocketConvert/LocalConvert) and clusters, e.g. one AnkiMobile App Store URL feeding 6 flashcard ideas. The prompt now:
+    - defines a duplicate as sharing 2 of 3 axes (who / job / mechanism)
+    - bans repeating a mechanism or user theme within a batch
+    - caps saturated areas at 2 ideas and tracker/journal-format ideas at 3
+    - requires at least 2 non-consumer ideas and 1 fun/creative/social idea
+    - treats the first `inspiration_sources` URL as the main signal, which may not be a URL already in `used_inspiration_urls`
   - It also fixes a latent bug: the `created_at` cutoff used to be compared against `datetime('now', ...)` (space-separated format) while `created_at` is stored as ISO (`T`/`Z`). The cutoff is now computed as ISO in JS.
 - **Turn limits and timeouts were raised for the longer prompts.** In GitHub Actions minutes this is free (the repo is public), but it does count against the Pro usage limits.
 

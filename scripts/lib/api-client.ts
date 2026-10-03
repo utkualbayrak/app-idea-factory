@@ -48,6 +48,12 @@ export interface RecentIdea {
   name: string;
   one_liner: string;
   category: string;
+  // API'nin eski sürümü bunları döndürmez.
+  batch_date?: string;
+  origin?: string;
+  status?: string;
+  tags?: string[];
+  inspiration_sources?: string[];
 }
 
 export async function fetchRecentNames(days = 90): Promise<{ names: string[]; ideas: RecentIdea[] }> {

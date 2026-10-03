@@ -260,6 +260,16 @@ app.get("/ideas", async (req, res) => {
   res.json({ ideas: (await withSeen(results, actorOf(res))).map(serializeIdea) });
 });
 
+// Bozuk/eksik JSON dizi sütunu tüm listeyi düşürmesin.
+function parseJsonArray(value: string | null): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 app.get("/ideas/recent-names", requireWorkflowSecret, async (req, res) => {
   const days = Number(req.query.days ?? 90);
   const safeDays = Number.isFinite(days) && days > 0 ? days : 90;
@@ -269,13 +279,33 @@ app.get("/ideas/recent-names", requireWorkflowSecret, async (req, res) => {
   // eşik değeri de ISO'ya çevrilip bağlanıyor.
   const since = new Date(Date.now() - safeDays * 24 * 60 * 60 * 1000).toISOString();
   const { results } = await db()
-    .prepare(`SELECT name, one_liner, category FROM ideas WHERE created_at >= ?1 ORDER BY created_at DESC`)
+    .prepare(
+      `SELECT name, one_liner, category, batch_date, origin, status, tags, inspiration_sources
+       FROM ideas WHERE created_at >= ?1 ORDER BY created_at DESC`,
+    )
     .bind(since)
-    .all<{ name: string; one_liner: string; category: string }>();
+    .all<{
+      name: string;
+      one_liner: string;
+      category: string;
+      batch_date: string;
+      origin: string;
+      status: string;
+      tags: string;
+      inspiration_sources: string;
+    }>();
 
   // names: geriye dönük uyumluluk + isim tekrarı kontrolü (validate-ideas.ts).
-  // ideas: prompts/daily-ideas.md'nin konsept tekrarını önlemek için okuduğu liste.
-  res.json({ names: [...new Set(results.map((row) => row.name))], ideas: results });
+  // ideas: konsept tekrarı + scripts/summarize-history.ts'nin geçmiş özeti
+  // (doygun kategoriler, daha önce kullanılmış ilham URL'leri).
+  res.json({
+    names: [...new Set(results.map((row) => row.name))],
+    ideas: results.map((row) => ({
+      ...row,
+      tags: parseJsonArray(row.tags),
+      inspiration_sources: parseJsonArray(row.inspiration_sources),
+    })),
+  });
 });
 
 app.get("/ideas/:id", async (req, res) => {
